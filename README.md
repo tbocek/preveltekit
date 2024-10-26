@@ -18,8 +18,8 @@ The inspiration for this project comes from the Vue SSR example in the [Rspack e
 - ⚡️ **Svelte 5** - Latest version of the Svelte framework
 - 🔥 **TypeScript** - Full type safety and modern JavaScript features
 - 📦 **Rsbuild** - Fast and flexible build tool with dual environment support
-- 🎯 **SSR Support** - Server-side rendering for improved performance and SEO
-- 🛠️ **Development Server** - Hot module replacement and fast refresh
+- 🎯 **Pre-rendered SSR Support** - Pre-rendered Server-side rendering for improved performance and SEO
+- 🛠️ **Development Server** - Live reload and fast refresh
 - 🎨 **CSS Support** - Built-in CSS processing with PostCSS
 
 ## Prerequisites
