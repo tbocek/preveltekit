@@ -2,7 +2,7 @@
 
 A Svelte 5 application template featuring Server-Side Rendering (SSR) using [Rsbuild](https://rsbuild.dev/) as the build tool.
 
-This project was created to fill a gap in the Svelte ecosystem. While there are many SSR solutions for Svelte (SvelteKit, Elder.js, etc.), there wasn't a lightweight example showing how to implement SSR using Rsbuild - a powerful and flexible build tool that's gaining popularity in the JavaScript community.
+This project was created to fill a gap in the Svelte ecosystem. While there is a go-to solution for SSR for Svelte (SvelteKit), there isn't a lightweight example showing how to implement SSR using Rsbuild - a fast build tool.
 
 The inspiration for this project comes from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). This project adapts those concepts for Svelte, providing a minimal yet production-ready setup for server-side rendering with Svelte and Rsbuild.
 
