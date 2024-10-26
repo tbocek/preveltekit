@@ -1,10 +1,18 @@
 # Svelte 5 SSR with Rsbuild
 
-A Svelte 5 application template featuring Server-Side Rendering (SSR) using [Rsbuild](https://rsbuild.dev/) as the build tool.
+A Svelte 5 application template featuring Server-Side Pre Rendering (SSPR) using [Rsbuild](https://rsbuild.dev/) as the build tool.
 
-This project was created to fill a gap in the Svelte ecosystem. While there is a go-to solution for SSR for Svelte (SvelteKit), there isn't a lightweight example showing how to implement SSR using Rsbuild - a fast build tool.
+This project was created to fill a gap in the Svelte ecosystem. While there is a go-to solution for SSR for Svelte (SvelteKit), there isn't a lightweight example showing how to implement SSPR using Rsbuild - a fast build tool.
 
-The inspiration for this project comes from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). This project adapts those concepts for Svelte, providing a minimal yet production-ready setup for server-side rendering with Svelte and Rsbuild.
+The inspiration for this project comes from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). This project adapts those concepts for Svelte, providing a minimal setup for server-side pre-rendering with Svelte and Rsbuild.
+
+## Modern Web Rendering Approaches: SSR vs. SSG vs. SSPR
+
+Web applications can be rendered in several ways, each with distinct characteristics and use cases. Server-Side Rendering (SSR), as implemented in frameworks like SvelteKit, generates HTML dynamically on each request. The server executes the application code, produces HTML with initial state, and sends it to the client along with JavaScript for hydration, enabling interactivity after the page loads.
+
+Static Site Generation (SSG) takes a different approach by generating plain HTML files at build time. These static files are deployed directly to a web server, making them extremely fast to serve. However, SSG typically doesn't include hydration, meaning the pages remain static without client-side interactivity.
+
+Since I did not find a proper term to describe a mix of both, I call it Server-Side Pre Rendering (SSPR). Like SSG, it pre-renders content at build time, but unlike SSG, it includes hydration code. The result is a set of static HTML, JavaScript, and CSS files that can be served by any standard web server (Caddy, Nginx, Apache). This approach provides fast initial page loads like SSG, while maintaining the ability to become fully interactive like SSR.
 
 ## Why Rsbuild + Svelte SSR?
 
