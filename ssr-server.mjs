@@ -34,11 +34,14 @@ function setupMockLocation(url = 'http://localhost:3000') {
 }
 
 // Implement SSR rendering function
-const serverRender = (serverAPI) => async (_req, res) => {
+const serverRender = (serverAPI) => async (req, res) => {
     // Load SSR bundle
     const indexModule = await serverAPI.environments.ssr.loadBundle('server');
-    const {head, body} = await indexModule.
-    render();
+
+    const fullUrl1 = `http://${req.headers.host}`;
+    setupMockLocation(fullUrl1);
+
+    const {head, body} = await indexModule.render();
     const template = await serverAPI.environments.web.getTransformedHtml('index');
 
     // Insert SSR rendering content into HTML template
@@ -75,9 +78,6 @@ async function startDevServer() {
         }
 
         try {
-            const fullUrl = `http://${req.headers.host}${req.url}`;
-            setupMockLocation(fullUrl);
-
             await serverRenderMiddleware(req, res);
         } catch (err) {
             console.error('SSR render error, downgrade to CSR...\n', err);

@@ -10,17 +10,17 @@ importers:
     dependencies:
       '@mateothegreat/svelte5-router':
         specifier: ^0.0.14
-        version: 0.0.14(svelte@5.1.5)
+        version: 0.0.14(svelte@5.1.6)
       svelte:
-        specifier: ^5.1.5
-        version: 5.1.5
+        specifier: ^5.1.6
+        version: 5.1.6
     devDependencies:
       '@rsbuild/core':
         specifier: ^1.0.19
         version: 1.0.19
       '@rsbuild/plugin-svelte':
         specifier: ^1.0.3
-        version: 1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)
+        version: 1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.6)(typescript@5.6.3)
       '@tsconfig/svelte':
         specifier: ^5.0.4
         version: 5.0.4
@@ -32,7 +32,7 @@ importers:
         version: 4.21.1
       svelte-check:
         specifier: ^4.0.5
-        version: 4.0.5(svelte@5.1.5)(typescript@5.6.3)
+        version: 4.0.5(svelte@5.1.6)(typescript@5.6.3)
       svelte-server:
         specifier: ^0.4.2
         version: 0.4.2
@@ -1536,8 +1536,8 @@ packages:
     resolution: {integrity: sha512-vzSyuGr3eEoAtT/A6bmajosJZIUWySzY2CzB3w2pgPvnkUjGqlDnsNnA0PMO+mMAhuyMul6C2uuZzY6ELSkzyA==}
     engines: {node: '>= 8'}
 
-  svelte@5.1.5:
-    resolution: {integrity: sha512-AyYondx6wS0g8mmBMfwJVnOYYBswjBv6L4bc99awfbET2KozWvVwxe8NSN7fhx7Pgr7pOfOXIv7K8+Impc0OoQ==}
+  svelte@5.1.6:
+    resolution: {integrity: sha512-bYS/DpkqXk0j5UZgiNXrEjZYPRZ4Ncd87w4KUSbcZGyojA0+i/Ls9OGUjETHmdLe8RcQ0G8SX/T0PypPpAA/ew==}
     engines: {node: '>=18'}
 
   terser@4.8.1:
@@ -2319,9 +2319,9 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@mateothegreat/svelte5-router@0.0.14(svelte@5.1.5)':
+  '@mateothegreat/svelte5-router@0.0.14(svelte@5.1.6)':
     dependencies:
-      svelte: 5.1.5
+      svelte: 5.1.6
 
   '@module-federation/runtime-tools@0.5.1':
     dependencies:
@@ -2380,11 +2380,11 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  '@rsbuild/plugin-svelte@1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)':
+  '@rsbuild/plugin-svelte@1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.6)(typescript@5.6.3)':
     dependencies:
       '@rsbuild/core': 1.0.19
-      svelte-loader: 3.2.4(svelte@5.1.5)
-      svelte-preprocess: 6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)
+      svelte-loader: 3.2.4(svelte@5.1.6)
+      svelte-preprocess: 6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.6)(typescript@5.6.3)
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -3276,34 +3276,34 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@4.0.5(svelte@5.1.5)(typescript@5.6.3):
+  svelte-check@4.0.5(svelte@5.1.6)(typescript@5.6.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       chokidar: 4.0.1
       fdir: 6.4.2
       picocolors: 1.1.1
       sade: 1.8.1
-      svelte: 5.1.5
+      svelte: 5.1.6
       typescript: 5.6.3
     transitivePeerDependencies:
       - picomatch
 
   svelte-dev-helper@1.1.9: {}
 
-  svelte-hmr@0.14.12(svelte@5.1.5):
+  svelte-hmr@0.14.12(svelte@5.1.6):
     dependencies:
-      svelte: 5.1.5
+      svelte: 5.1.6
 
-  svelte-loader@3.2.4(svelte@5.1.5):
+  svelte-loader@3.2.4(svelte@5.1.6):
     dependencies:
       loader-utils: 2.0.4
-      svelte: 5.1.5
+      svelte: 5.1.6
       svelte-dev-helper: 1.1.9
-      svelte-hmr: 0.14.12(svelte@5.1.5)
+      svelte-hmr: 0.14.12(svelte@5.1.6)
 
-  svelte-preprocess@6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3):
+  svelte-preprocess@6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.6)(typescript@5.6.3):
     dependencies:
-      svelte: 5.1.5
+      svelte: 5.1.6
     optionalDependencies:
       '@babel/core': 7.26.0
       postcss: 8.4.47
@@ -3337,7 +3337,7 @@ snapshots:
 
   svelte@3.59.2: {}
 
-  svelte@5.1.5:
+  svelte@5.1.6:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@jridgewell/sourcemap-codec': 1.5.0
