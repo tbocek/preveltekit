@@ -8,16 +8,22 @@ importers:
 
   .:
     dependencies:
+      '@mateothegreat/svelte5-router':
+        specifier: ^0.0.14
+        version: 0.0.14(svelte@5.1.5)
       svelte:
-        specifier: ^5.0.5
-        version: 5.1.2
+        specifier: ^5.1.5
+        version: 5.1.5
     devDependencies:
       '@rsbuild/core':
-        specifier: ^1.0.16
-        version: 1.0.17
+        specifier: ^1.0.19
+        version: 1.0.19
       '@rsbuild/plugin-svelte':
-        specifier: ^1.0.2
-        version: 1.0.2(@babel/core@7.26.0)(@rsbuild/core@1.0.17)(svelte@5.1.2)(typescript@5.6.3)
+        specifier: ^1.0.3
+        version: 1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)
+      '@tsconfig/svelte':
+        specifier: ^5.0.4
+        version: 5.0.4
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -26,7 +32,7 @@ importers:
         version: 4.21.1
       svelte-check:
         specifier: ^4.0.5
-        version: 4.0.5(svelte@5.1.2)(typescript@5.6.3)
+        version: 4.0.5(svelte@5.1.5)(typescript@5.6.3)
       svelte-server:
         specifier: ^0.4.2
         version: 0.4.2
@@ -551,6 +557,11 @@ packages:
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
+  '@mateothegreat/svelte5-router@0.0.14':
+    resolution: {integrity: sha512-Xoc8JonxgyP4Z6pr+6BIkA91tLhXT4Cv8MmNCsWemYsVUVbZ19SnVjhFB4QGk1qGd81R5Cjqv+jWe6BBAqfI/g==}
+    peerDependencies:
+      svelte: ^5.0.0
+
   '@module-federation/runtime-tools@0.5.1':
     resolution: {integrity: sha512-nfBedkoZ3/SWyO0hnmaxuz0R0iGPSikHZOAZ0N/dVSQaIzlffUo35B5nlC2wgWIc0JdMZfkwkjZRrnuuDIJbzg==}
 
@@ -587,15 +598,15 @@ packages:
     peerDependencies:
       rollup: ^1.20.0||^2.0.0
 
-  '@rsbuild/core@1.0.17':
-    resolution: {integrity: sha512-XbRrFsX5YiYrArD2f27a+WGhRWvoYgogaTMX/kiL7xcZOFuV+PbPBdU0e2o00NROGLRyVn7cTfkIkyMSr1B9Vg==}
+  '@rsbuild/core@1.0.19':
+    resolution: {integrity: sha512-63DAPvYfRBoUrb51BUPb4Xoqx48MHQ0yLcmnCiqZGpMeKYtTWzD+lyx5va4cr9qvdnIFTAX2BMuYC/j5iSrtTA==}
     engines: {node: '>=16.7.0'}
     hasBin: true
 
-  '@rsbuild/plugin-svelte@1.0.2':
-    resolution: {integrity: sha512-4YsDW83hBEKUIbYe6I7KKkgYrm0wtK4Gnp9CLrWM5YJrBFcdaibeyKSOIUW2/0Yn8qHl58pzDyuNbJOkI8FvWQ==}
+  '@rsbuild/plugin-svelte@1.0.3':
+    resolution: {integrity: sha512-pH3AW2aBicnB7cdKmkoNGn7+ZOFt9RuevCYA3oTxHsaXMX0nKXXZSiBR4Die5ob5Zp6NxbVGMaspRdlL9/3BNA==}
     peerDependencies:
-      '@rsbuild/core': 1.x || ^1.0.1-rc.0
+      '@rsbuild/core': 1.x
 
   '@rspack/binding-darwin-arm64@1.0.14':
     resolution: {integrity: sha512-dHvlF6T6ctThGDIdvkSdacroA1xlCxfteuppBj8BX/UxzLPr4xsaEtNilfJmFfd2/J02UQyTQauN/9EBuA+YkA==}
@@ -661,14 +672,17 @@ packages:
   '@swc/helpers@0.5.13':
     resolution: {integrity: sha512-UoKGxQ3r5kYI9dALKJapMmuK+1zWM/H17Z1+iwnNmzcJRnfFuevZs375TA5rW31pu4BS4NoSy1fRsexDXfWn5w==}
 
+  '@tsconfig/svelte@5.0.4':
+    resolution: {integrity: sha512-BV9NplVgLmSi4mwKzD8BD/NQ8erOY/nUE/GpgWe2ckx+wIQF5RyRirn/QsSSCPeulVpc3RA/iJt6DpfTIZps0Q==}
+
   '@types/estree@0.0.39':
     resolution: {integrity: sha512-EYNwp3bU+98cpU4lAWYYL7Zz+2gryWH1qbdDTidVd6hkiR6weksdbMadyXKXNPEkQFhXM+hVO9ZygomHXp+AIw==}
 
   '@types/estree@1.0.6':
     resolution: {integrity: sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw==}
 
-  '@types/node@22.8.0':
-    resolution: {integrity: sha512-84rafSBHC/z1i1E3p0cJwKA+CfYDNSXX9WSZBRopjIzLET8oNt6ht2tei4C7izwDeEiLLfdeSVBv1egOH916hg==}
+  '@types/node@22.8.4':
+    resolution: {integrity: sha512-SpNNxkftTJOPk0oN+y2bIqurEXHTA2AOZ3EJDDKeJ5VzkvvORSvmQXGQarcOzWV1ac7DCaPBEdMDxBsM+d8jWw==}
 
   '@types/resolve@0.0.8':
     resolution: {integrity: sha512-auApPaJf3NPfe18hSoJkp8EbZzer2ISk7o8mCC3M9he/a04+gbMF97NkpD2S8riMGvm4BMRI59/SZQSaLTKpsQ==}
@@ -1231,6 +1245,11 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
+  nanoid@3.3.7:
+    resolution: {integrity: sha512-eSRppjcPIatRIMC1U6UngP8XFcz8MQWGQdt1MTBQ7NaAmvXDfvNxbvWV3x2y6CdEUciCSsDHDQZbhYaB8QEo2g==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   negotiator@0.6.3:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
@@ -1280,6 +1299,10 @@ packages:
   portfinder@1.0.32:
     resolution: {integrity: sha512-on2ZJVVDXRADWE6jnQaX0ioEylzgBpQk8r55NE4wjXW1ZxO+BgDlY6DXwj20i0V8eB4SenDQ00WEaxfiIQPcxg==}
     engines: {node: '>= 0.12.0'}
+
+  postcss@8.4.47:
+    resolution: {integrity: sha512-56rxCq7G/XfB4EkXq9Egn5GCqugWvDFjafDOThIdMBsI15iqPqR5r15TfSr1YPYeEI19YeaXMCbY6u88Y76GLQ==}
+    engines: {node: ^10 || ^12 || >=14}
 
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
@@ -1411,6 +1434,10 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
+  source-map-js@1.2.1:
+    resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+    engines: {node: '>=0.10.0'}
+
   source-map-support@0.5.21:
     resolution: {integrity: sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==}
 
@@ -1509,8 +1536,8 @@ packages:
     resolution: {integrity: sha512-vzSyuGr3eEoAtT/A6bmajosJZIUWySzY2CzB3w2pgPvnkUjGqlDnsNnA0PMO+mMAhuyMul6C2uuZzY6ELSkzyA==}
     engines: {node: '>= 8'}
 
-  svelte@5.1.2:
-    resolution: {integrity: sha512-IovgkB3eQq0CdqQB1rd1F4SZbg8Z7VBSbAqhD2eE9t8l0KfJXZ/iHmfqnW5pxs5Lr89/cpIZTLU5buemsydYRw==}
+  svelte@5.1.5:
+    resolution: {integrity: sha512-AyYondx6wS0g8mmBMfwJVnOYYBswjBv6L4bc99awfbET2KozWvVwxe8NSN7fhx7Pgr7pOfOXIv7K8+Impc0OoQ==}
     engines: {node: '>=18'}
 
   terser@4.8.1:
@@ -2292,6 +2319,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
+  '@mateothegreat/svelte5-router@0.0.14(svelte@5.1.5)':
+    dependencies:
+      svelte: 5.1.5
+
   '@module-federation/runtime-tools@0.5.1':
     dependencies:
       '@module-federation/runtime': 0.5.1
@@ -2340,7 +2371,7 @@ snapshots:
       picomatch: 2.3.1
       rollup: 2.79.2
 
-  '@rsbuild/core@1.0.17':
+  '@rsbuild/core@1.0.19':
     dependencies:
       '@rspack/core': 1.0.14(@swc/helpers@0.5.13)
       '@rspack/lite-tapable': 1.0.1
@@ -2349,11 +2380,11 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  '@rsbuild/plugin-svelte@1.0.2(@babel/core@7.26.0)(@rsbuild/core@1.0.17)(svelte@5.1.2)(typescript@5.6.3)':
+  '@rsbuild/plugin-svelte@1.0.3(@babel/core@7.26.0)(@rsbuild/core@1.0.19)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)':
     dependencies:
-      '@rsbuild/core': 1.0.17
-      svelte-loader: 3.2.4(svelte@5.1.2)
-      svelte-preprocess: 6.0.3(@babel/core@7.26.0)(svelte@5.1.2)(typescript@5.6.3)
+      '@rsbuild/core': 1.0.19
+      svelte-loader: 3.2.4(svelte@5.1.5)
+      svelte-preprocess: 6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3)
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -2421,17 +2452,19 @@ snapshots:
     dependencies:
       tslib: 2.8.0
 
+  '@tsconfig/svelte@5.0.4': {}
+
   '@types/estree@0.0.39': {}
 
   '@types/estree@1.0.6': {}
 
-  '@types/node@22.8.0':
+  '@types/node@22.8.4':
     dependencies:
       undici-types: 6.19.8
 
   '@types/resolve@0.0.8':
     dependencies:
-      '@types/node': 22.8.0
+      '@types/node': 22.8.4
 
   accepts@1.3.8:
     dependencies:
@@ -3009,6 +3042,9 @@ snapshots:
 
   ms@2.1.3: {}
 
+  nanoid@3.3.7:
+    optional: true
+
   negotiator@0.6.3: {}
 
   node-releases@2.0.18: {}
@@ -3046,6 +3082,13 @@ snapshots:
       mkdirp: 0.5.6
     transitivePeerDependencies:
       - supports-color
+
+  postcss@8.4.47:
+    dependencies:
+      nanoid: 3.3.7
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+    optional: true
 
   proxy-addr@2.0.7:
     dependencies:
@@ -3207,6 +3250,9 @@ snapshots:
 
   slash@3.0.0: {}
 
+  source-map-js@1.2.1:
+    optional: true
+
   source-map-support@0.5.21:
     dependencies:
       buffer-from: 1.1.2
@@ -3230,36 +3276,37 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@4.0.5(svelte@5.1.2)(typescript@5.6.3):
+  svelte-check@4.0.5(svelte@5.1.5)(typescript@5.6.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       chokidar: 4.0.1
       fdir: 6.4.2
       picocolors: 1.1.1
       sade: 1.8.1
-      svelte: 5.1.2
+      svelte: 5.1.5
       typescript: 5.6.3
     transitivePeerDependencies:
       - picomatch
 
   svelte-dev-helper@1.1.9: {}
 
-  svelte-hmr@0.14.12(svelte@5.1.2):
+  svelte-hmr@0.14.12(svelte@5.1.5):
     dependencies:
-      svelte: 5.1.2
+      svelte: 5.1.5
 
-  svelte-loader@3.2.4(svelte@5.1.2):
+  svelte-loader@3.2.4(svelte@5.1.5):
     dependencies:
       loader-utils: 2.0.4
-      svelte: 5.1.2
+      svelte: 5.1.5
       svelte-dev-helper: 1.1.9
-      svelte-hmr: 0.14.12(svelte@5.1.2)
+      svelte-hmr: 0.14.12(svelte@5.1.5)
 
-  svelte-preprocess@6.0.3(@babel/core@7.26.0)(svelte@5.1.2)(typescript@5.6.3):
+  svelte-preprocess@6.0.3(@babel/core@7.26.0)(postcss@8.4.47)(svelte@5.1.5)(typescript@5.6.3):
     dependencies:
-      svelte: 5.1.2
+      svelte: 5.1.5
     optionalDependencies:
       '@babel/core': 7.26.0
+      postcss: 8.4.47
       typescript: 5.6.3
 
   svelte-server@0.4.2:
@@ -3290,7 +3337,7 @@ snapshots:
 
   svelte@3.59.2: {}
 
-  svelte@5.1.2:
+  svelte@5.1.5:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@jridgewell/sourcemap-codec': 1.5.0

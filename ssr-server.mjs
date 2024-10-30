@@ -3,11 +3,42 @@
 import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
 
+function setupMockLocation(url = 'http://localhost:3000') {
+    const parsedUrl = new URL(url);
+
+    global.location = {
+        pathname: parsedUrl.pathname,
+        search: parsedUrl.search,
+        hash: parsedUrl.hash,
+        href: parsedUrl.href,
+        origin: parsedUrl.origin,
+        protocol: parsedUrl.protocol,
+        host: parsedUrl.host,
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port
+    };
+
+    // Mock window
+    global.window = {
+        location: global.location,
+        addEventListener: () => {},
+        history: {
+            pushState: () => {},
+            replaceState: () => {},
+            back: () => {},
+            forward: () => {},
+            go: () => {}
+        },
+    };
+
+}
+
 // Implement SSR rendering function
 const serverRender = (serverAPI) => async (_req, res) => {
     // Load SSR bundle
     const indexModule = await serverAPI.environments.ssr.loadBundle('server');
-    const {head, body} = await indexModule.render();
+    const {head, body} = await indexModule.
+    render();
     const template = await serverAPI.environments.web.getTransformedHtml('index');
 
     // Insert SSR rendering content into HTML template
@@ -36,8 +67,17 @@ async function startDevServer() {
     const serverRenderMiddleware = serverRender(rsbuildServer);
 
     // SSR rendering when accessing /index.html
-    app.get('/', async (req, res, next) => {
+    app.get('*', async (req, res, next) => {
+
+        // Skip SSR for static files and HMR endpoints
+        if (req.url.includes('/static/') || req.url.includes('/__rsbuild_hmr')) {
+            return next();
+        }
+
         try {
+            const fullUrl = `http://${req.headers.host}${req.url}`;
+            setupMockLocation(fullUrl);
+
             await serverRenderMiddleware(req, res);
         } catch (err) {
             console.error('SSR render error, downgrade to CSR...\n', err);
@@ -45,7 +85,12 @@ async function startDevServer() {
         }
     });
 
-    app.use(rsbuildServer.middlewares);
+    // Fallback middleware
+    app.use((req, res, next) => {
+        if (!res.headersSent) {
+            rsbuildServer.middlewares(req, res, next);
+        }
+    });
 
     const httpServer = app.listen(rsbuildServer.port, async () => {
         await rsbuildServer.afterListen();

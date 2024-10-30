@@ -4,7 +4,4 @@ WORKDIR /app
 RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml rsbuild.config.ts ssr-prod.mjs ssr-server.mjs tsconfig.json ./
 RUN pnpm install
-COPY src ./src
-COPY public ./public
-RUN pnpm run build
 ENTRYPOINT ["pnpm", "run", "dev"]

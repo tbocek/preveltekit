@@ -7,7 +7,6 @@ RUN pnpm install
 COPY src ./src
 COPY public ./public
 RUN pnpm build
-RUN find dist -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" \) -print0 | parallel -0 -j+0 'gzip -9k {}; brotli -k {}; zstd -19k {}'
 
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile

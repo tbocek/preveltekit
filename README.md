@@ -65,3 +65,19 @@ The production build:
 - Optimizes assets for production
 
 **Note**: The development server prioritizes fast rebuilds and developer experience, while the production build focuses on optimization and performance. Always test your application with a production build before deploying.
+
+4. Using Docker
+
+To build with docker in production mode, use
+
+```bash
+docker build . -t tag
+docker run -p3000:3000 tag
+```
+
+To run in dev mode, run
+
+```bash
+docker build -f Dockerfile.dev . -t tag
+docker run -p3000:3000 -v./src:/app/src -v./public:/app/public tag
+```

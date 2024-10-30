@@ -1,22 +1,23 @@
 {
-  "name": "test",
-  "private": true,
-  "version": "1.0.0",
+  "name": "svelte5-rsbuild-ssr-template",
+  "version": "0.0.1",
   "scripts": {
     "dev": "node ssr-server.mjs",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
-    "build": "NODE_ENV=production rsbuild build && node ssr-prod.mjs -s dist/server.js -c dist/index.html -o dist/index.html"
+    "build": "NODE_ENV=production rsbuild build && node ssr-prod.mjs -s dist/server.js -c dist/index.html -o dist/index.html && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'"
   },
   "dependencies": {
-    "svelte": "^5.0.5"
+    "@mateothegreat/svelte5-router": "^0.0.14",
+    "svelte": "^5.1.5"
   },
   "devDependencies": {
-    "@rsbuild/core": "^1.0.16",
-    "@rsbuild/plugin-svelte": "^1.0.2",
+    "@rsbuild/core": "^1.0.19",
+    "@rsbuild/plugin-svelte": "^1.0.3",
+    "@tsconfig/svelte": "^5.0.4",
+    "commander": "^12.1.0",
     "express": "^4.21.1",
     "svelte-check": "^4.0.5",
     "svelte-server": "^0.4.2",
-    "typescript": "^5.6.3",
-    "commander": "^12.1.0"
+    "typescript": "^5.6.3"
   }
 }

@@ -8,8 +8,40 @@ import { createRequire } from "node:module";
 const program = new Command();
 const require = createRequire(import.meta.url);
 
+function setupMockLocation(url = 'http://localhost:3000') {
+    const parsedUrl = new URL(url);
+
+    global.location = {
+        pathname: parsedUrl.pathname,
+        search: parsedUrl.search,
+        hash: parsedUrl.hash,
+        href: parsedUrl.href,
+        origin: parsedUrl.origin,
+        protocol: parsedUrl.protocol,
+        host: parsedUrl.host,
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port
+    };
+
+    // Mock window
+    global.window = {
+        location: global.location,
+        addEventListener: () => {},
+        history: {
+            pushState: () => {},
+            replaceState: () => {},
+            back: () => {},
+            forward: () => {},
+            go: () => {}
+        },
+    };
+}
+
 async function generateSSRHtml({ server, client, outputHtml }) {
     try {
+        const fullUrl = `http://localhost/`;
+        setupMockLocation(fullUrl);
+
         const remotesPath = path.join(process.cwd(), server);
         const importedApp = require(remotesPath);
         const { head, body } = await importedApp.render();
@@ -48,7 +80,6 @@ program
     .option('-s, --server <name>', 'Name to the Rsbuild server entry file')
     .option('-c, --client <name>', 'Name to the Rsbuild client entry file')
     .option('-o, --output-html <path>', 'Output file path for the generated HTML')
-    .option('-d, --output-dir <path>', 'Output file path for the static assets')
     .action(async (options) => {
         try {
             await generateSSRHtml(options);
