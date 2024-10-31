@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@mateothegreat/svelte5-router':
-        specifier: ^0.0.14
-        version: 0.0.14(svelte@5.1.6)
+        specifier: git+https://github.com/tbocek/svelte5-router.git#build&path:dist
+        version: https://codeload.github.com/tbocek/svelte5-router/tar.gz/c57d74843c53d969162d66162c48be08f2db5ff7#path:dist(svelte@5.1.6)
       svelte:
         specifier: ^5.1.6
         version: 5.1.6
@@ -557,8 +557,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
-  '@mateothegreat/svelte5-router@0.0.14':
-    resolution: {integrity: sha512-Xoc8JonxgyP4Z6pr+6BIkA91tLhXT4Cv8MmNCsWemYsVUVbZ19SnVjhFB4QGk1qGd81R5Cjqv+jWe6BBAqfI/g==}
+  '@mateothegreat/svelte5-router@https://codeload.github.com/tbocek/svelte5-router/tar.gz/c57d74843c53d969162d66162c48be08f2db5ff7#path:dist':
+    resolution: {path: dist, tarball: https://codeload.github.com/tbocek/svelte5-router/tar.gz/c57d74843c53d969162d66162c48be08f2db5ff7}
+    version: 0.0.14
     peerDependencies:
       svelte: ^5.0.0
 
@@ -2319,7 +2320,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@mateothegreat/svelte5-router@0.0.14(svelte@5.1.6)':
+  '@mateothegreat/svelte5-router@https://codeload.github.com/tbocek/svelte5-router/tar.gz/c57d74843c53d969162d66162c48be08f2db5ff7#path:dist(svelte@5.1.6)':
     dependencies:
       svelte: 5.1.6
 

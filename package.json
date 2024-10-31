@@ -7,7 +7,7 @@
     "build": "NODE_ENV=production rsbuild build && node ssr-prod.mjs -s dist/server.js -c dist/index.html -o dist/index.html && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'"
   },
   "dependencies": {
-    "@mateothegreat/svelte5-router": "^0.0.14",
+    "@mateothegreat/svelte5-router": "git+https://github.com/tbocek/svelte5-router.git#build&path:dist",
     "svelte": "^5.1.6"
   },
   "devDependencies": {
