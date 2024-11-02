@@ -46,5 +46,4 @@
     <a use:route href="/email">Email</a>
 </nav>
 
-Needs https://github.com/mateothegreat/svelte5-router/pull/2 to work properly
 <Router {routes} />
