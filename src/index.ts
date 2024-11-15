@@ -1,6 +1,6 @@
 import { hydrate } from 'svelte';
 import App from './App.svelte';
-import './index.css';
+import 'picnic';
 
 hydrate(App, {
     target: document.getElementById('root')!,

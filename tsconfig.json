@@ -1,27 +1,26 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
-    "moduleResolution": "bundler",
-    "target": "ESNext",
-    "module": "ESNext",
-    "resolveJsonModule": true,
-    "allowJs": true,
-    "checkJs": true,
-    "esModuleInterop": true,
+    "lib": ["DOM", "ES2020"],
+    "target": "ES2020",
+    "noEmit": true,
     "skipLibCheck": true,
-    "sourceMap": true,
-    "strict": true,
+    // svelte-preprocess cannot figure out whether you have a value or a type, so tell TypeScript
+    // to enforce using `import type` instead of `import` for Types.
+    "verbatimModuleSyntax": true,
+    "useDefineForClassFields": true,
+
+    /* modules */
+    "module": "ESNext",
     "isolatedModules": true,
-    "types": [
-      "node"
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    }
+    "resolveJsonModule": true,
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+
+    /* type checking */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
-  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte", "rsbuild.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"],
 }

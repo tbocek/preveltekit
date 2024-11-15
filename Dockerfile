@@ -6,7 +6,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install
 COPY src ./src
 COPY public ./public
-COPY rsbuild.config.ts ssr-prod.mjs ssr-server.mjs tsconfig.json ./
+COPY rsbuild.config.ts ssr.mjs tsconfig.json ./
 RUN pnpm build
 
 FROM caddy:2-alpine

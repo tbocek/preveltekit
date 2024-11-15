@@ -2,22 +2,27 @@
   "name": "svelte5-rsbuild-ssr-template",
   "version": "0.0.1",
   "scripts": {
-    "dev": "node ssr-server.mjs",
+    "dev": "node ssr.mjs -d",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
-    "build": "NODE_ENV=production rsbuild build && node ssr-prod.mjs -s dist/server.js -c dist/index.html -o dist/index.html && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'"
+    "build": "NODE_ENV=production node ssr.mjs -p && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'",
+    "stage": "NODE_ENV=production node ssr.mjs -p && npx serve -s dist"
   },
   "dependencies": {
-    "@mateothegreat/svelte5-router": "0.0.21",
-    "svelte": "^5.1.6"
+    "@mateothegreat/svelte5-router": "^0.0.25",
+    "svelte": "^5.2.0",
+    "picnic": "^7.1.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "^1.0.19",
-    "@rsbuild/plugin-svelte": "^1.0.3",
+    "@rsbuild/core": "1.0.19",
+    "@rsbuild/plugin-svelte": "1.0.3",
+    "@rsbuild/plugin-css-minimizer": "^1.0.2",
     "@tsconfig/svelte": "^5.0.4",
+    "@types/node": "^22.9.0",
     "commander": "^12.1.0",
     "express": "^4.21.1",
-    "svelte-check": "^4.0.5",
-    "svelte-server": "^0.4.2",
+    "jsdom": "^25.0.1",
+    "serve": "^14.2.4",
+    "svelte-check": "^4.0.7",
     "typescript": "^5.6.3"
   }
 }
