@@ -81,3 +81,13 @@ To run in dev mode, run
 docker build -f Dockerfile.dev . -t tag
 docker run -p3000:3000 -v./src:/app/src -v./public:/app/public tag
 ```
+
+### Hint: linking in pnpm does not work if there are peerDependencies
+
+Solution
+
+```
+npm run build 
+rm -rf path/svelte5-rsbuild-ssr-template/node_modules/@mateothegreat/svelte5-router
+cp -R dist path/svelte5-rsbuild-ssr-template/node_modules/@mateothegreat/svelte5-router
+```
