@@ -1,2 +1,4 @@
-<script lang="ts"></script>
-Dash
+<script lang="ts">
+    //comment
+</script>
+<h1>Dash</h1>

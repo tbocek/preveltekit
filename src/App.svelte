@@ -40,11 +40,13 @@
           }
       }
   ];
+
+  $effect(() => {
+      console.log("Router wrapper initialized");
+  });
 </script>
 <style>
-    nav {
-        position: relative;
-    }
+
 </style>
 <div>
 <nav>

@@ -1,6 +1,7 @@
 {
   "name": "svelte5-rsbuild-ssr-template",
   "version": "0.0.1",
+  "type": "module",
   "scripts": {
     "dev": "node ssr.mjs -d",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
@@ -8,21 +9,21 @@
     "stage": "NODE_ENV=production node ssr.mjs -p && npx serve -s dist"
   },
   "dependencies": {
-    "@mateothegreat/svelte5-router": "^0.0.25",
-    "svelte": "^5.2.0",
-    "picnic": "^7.1.0"
+    "svelte": "5.5.3",
+    "@mateothegreat/svelte5-router": "github:tbocek/svelte5-router-dist"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.0.19",
-    "@rsbuild/plugin-svelte": "1.0.3",
+    "@rsbuild/core": "1.1.8",
     "@rsbuild/plugin-css-minimizer": "^1.0.2",
+    "@rsbuild/plugin-svelte": "1.0.5",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^22.9.0",
+    "@types/node": "^22.10.1",
     "commander": "^12.1.0",
     "express": "^4.21.1",
     "jsdom": "^25.0.1",
     "serve": "^14.2.4",
-    "svelte-check": "^4.0.7",
-    "typescript": "^5.6.3"
+    "svelte-check": "^4.1.1",
+    "tsconfig-to-swcconfig": "^2.8.1",
+    "typescript": "^5.7.2"
   }
 }

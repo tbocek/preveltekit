@@ -2,6 +2,10 @@ import {defineConfig} from '@rsbuild/core';
 import {pluginSvelte} from '@rsbuild/plugin-svelte';
 import * as process from "node:process";
 import {pluginCssMinimizer} from "@rsbuild/plugin-css-minimizer";
+import { convert } from 'tsconfig-to-swcconfig';
+
+const swcConfig = convert("tsconfig.json"); // This will look for tsconfig.json in the current directory
+swcConfig.env = null;
 
 export default defineConfig({
     environments: {
@@ -25,6 +29,8 @@ export default defineConfig({
     dev: {
         hmr: false,
         liveReload: true,
-    }
-    //TODO npx run stage fails with root: './src'. This makes no sense
+    },
+    tools: {
+        swc: swcConfig,
+    },
 });
