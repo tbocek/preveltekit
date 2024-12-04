@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    //since we use tsconfig-to-swcconfig, case sensitivity matters as swc can only handle lowercase...
-    "lib": ["dom", "es2022"],
-    "target": "es2022",
+    "lib": ["DOM", "ES2022"],
+    "target": "ES2022",
     "noEmit": true,
     "skipLibCheck": true,
     // svelte-preprocess cannot figure out whether you have a value or a type, so tell TypeScript
@@ -11,7 +10,7 @@
     "useDefineForClassFields": true,
 
     /* modules */
-    "module": "esnext",
+    "module": "ESNext",
     "isolatedModules": true,
     "resolveJsonModule": true,
     "moduleResolution": "Bundler",
