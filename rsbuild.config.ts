@@ -17,7 +17,11 @@ export default defineConfig({
             ],
             source: {
                 entry: {
+                    //add here your static URLs, e.g., https://example.com/email
+                    //should have the entry email: ''
+                    //there is no support for subdirectories yet.
                     index: './src/index.ts',
+                    email: './src/index.ts',
                 }
             },
             output: {
@@ -27,10 +31,12 @@ export default defineConfig({
         }
     },
     dev: {
-        hmr: false,
-        liveReload: true,
+        hmr: false
     },
     tools: {
         swc: swcConfig,
+    },
+    html: {
+        template: './static/index.html',
     },
 });

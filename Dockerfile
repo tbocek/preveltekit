@@ -12,3 +12,7 @@ RUN pnpm build
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=base /app/dist/ /var/www/html
+
+# run with:
+# docker build . -t tag
+# docker run -p3000:3000 tag

@@ -60,8 +60,11 @@ async function fakeBrowser(ssrUrl, html, resourceFolder) {
         pretendToBeVisual: true,
         runScripts: 'dangerously',
         resources: new LocalResourceLoader(resourceFolder),
-        virtualConsole
+        virtualConsole,
     });
+
+    // Set HYDRATE so that the svelte file knows if its run in JSDOM
+    dom.window.JSDOM = true;
 
     return new Promise((resolve, reject) => {
         let isResolved = false;
@@ -174,7 +177,9 @@ async function generateSSRHtml() {
     console.log('Starting SSR HTML generation...');
     try {
         const promises = Object.keys(config.environments.web.source.entry).map(async entryName => {
-            const fullUrl = `http://localhost/`; //here it does not matter, as we can get everything from disk
+            const fullUrl = entryName === 'index'
+                ? 'http://localhost/'
+                : `http://localhost/${entryName}`;
             const fileName = `${config.output.distPath.root}/${entryName}.html`;
             const html = await fs.promises.readFile(path.join(process.cwd(), fileName), "utf-8");
             const dom = await fakeBrowser(fullUrl, html, config.output.distPath.root);
@@ -198,28 +203,25 @@ async function generateSSRHtml() {
 }
 
 const mapUrlToEntry = (url, entrySourceMap, basePath) => {
-    const urlParts = url === '/' ? [] : url.split('/').filter(Boolean);
+    // Remove leading slash and get first path segment
+    const urlPart = url.split('/').filter(Boolean)[0] || 'index';
 
-    while (urlParts.length >= 0) {
-        const currentPath = '/' + (urlParts.length ? urlParts.join('/') : '');
+    // First try direct match from map
+    if (entrySourceMap.has(urlPart)) {
+        return {
+            entry: urlPart,
+            value: entrySourceMap.get(urlPart),
+            currentPath: urlPart
+        };
+    }
 
-        const entryName = urlParts.length ? `${urlParts.join('_')}_index` : 'index';
-        const value = entrySourceMap.get(entryName);
-        if (value !== undefined) {
-            return { entry: entryName, value, currentPath };
-        }
-
-        const sourcePathSlash = basePath + urlParts.length ? `${urlParts.join('/')}/index.ts` : 'index.ts';
-        const sourcePathUnderscore = basePath + urlParts.length ? `${urlParts.join('_')}_index.ts` : 'index.ts';
-
-        for (const [entry, source] of entrySourceMap.entries()) {
-            if (source === sourcePathSlash || source === sourcePathUnderscore) {
-                return { entry, value: source, currentPath };
-            }
-        }
-
-        if (urlParts.length === 0) break;
-        urlParts.pop();
+    // Fallback to index if no match
+    if (entrySourceMap.has('index')) {
+        return {
+            entry: 'index',
+            value: entrySourceMap.get('index'),
+            currentPath: ''
+        };
     }
 
     throw new Error(`No valid entry found for URL: ${url}`);
@@ -232,6 +234,10 @@ const serverRender = (serverAPI) => async (req, res) => {
         entrySourceMap.set(entry, source);
     });
     const entry = await mapUrlToEntry(req.url, entrySourceMap, './src');
+
+    console.log("entrySourceMap", entrySourceMap);
+    console.log("req.url", req.url);
+    console.log("entry", entry);
 
     const template = await serverAPI.environments.web.getTransformedHtml(entry.entry);
 
@@ -336,6 +342,23 @@ async function devServer() {
     return httpServer;
 }
 
+async function stageServer() {
+    app.use(express.static('dist'))
+    app.get('/:page', (req, res, next) => {
+        const htmlFile = path.join(process.cwd(), 'dist', `${req.params.page}.html`)
+        res.sendFile(htmlFile, err => {
+            if (err) {
+                // File doesn't exist, serve index.html instead
+                res.sendFile(path.join(process.cwd(), 'dist', 'index.html'))
+            }
+        })
+    })
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(process.cwd(), 'dist', 'index.html'))
+    })
+    app.listen(3000)
+}
+
 const app = express();
 program
     .name('ssr-generator')
@@ -345,6 +368,7 @@ program
 program
     .option('-p, --prod-build', 'Run the prod build, then exit')
     .option('-d, --dev-server', 'Run the dev server')
+    .option('-s, --stage-server', 'Run the stage server')
     .action(async (options) => {
         try {
             if (options.prodBuild) {
@@ -352,6 +376,8 @@ program
                 process.exit(0);
             } else if (options.devServer) {
                 await devServer();
+            } else if (options.stageServer) {
+                await stageServer();
             } else {
                 console.log('Please specify either --prod-build or --dev-server');
                 program.help();

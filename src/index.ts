@@ -1,7 +1,7 @@
 import { hydrate } from 'svelte';
-import App from './App.svelte';
+import Index from './Index.svelte';
 
-hydrate(App, {
+hydrate(Index, {
     target: document.getElementById('root')!,
     props: {},
 });
