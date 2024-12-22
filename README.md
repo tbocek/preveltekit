@@ -38,12 +38,14 @@ Make sure you have the following installed:
 
 ## 🚦 Quick Start
 
-### Install dependencies:
+### Install
 ```bash
+git clone https://github.com/tbocek/lightkit.git
+cd lightkit
 pnpm install
 ```
 
-### Start the development server:
+### Start the development server
 ```bash
 pnpm dev
 ```
@@ -52,7 +54,7 @@ This starts an Express development server with:
 - No optimization for faster builds
 - Ideal for rapid development
 
-### Build for production:
+### Build for production
 ```bash
 pnpm build
 ```
