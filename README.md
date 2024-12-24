@@ -1,8 +1,8 @@
-# 🚀 LightKit
+# 🚀 PrevelteKit
 
-LightKit is a lightweight, high-performance web application framework built on Svelte 5, featuring Server-Side Pre Rendering (SSPR) using [Rsbuild](https://rsbuild.dev/) as the build tool.
+PrevelteKit is a lightweight, high-performance web application framework built on Svelte 5, featuring Server-Side Pre Rendering (SSPR) using [Rsbuild](https://rsbuild.dev/) as the build tool.
 
-## 🌟 Why LightKit?
+## 🌟 Why PrevelteKit?
 This project was created to fill a gap in the Svelte ecosystem. While there is a go-to solution for SSR for Svelte (SvelteKit), there isn't a lightweight example showing how to implement SSPR using Rsbuild.
 
 The inspiration for this project comes from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). This project adapts those concepts for Svelte, providing a minimal setup for server-side pre-rendering with Svelte and Rsbuild.
@@ -40,8 +40,8 @@ Make sure you have the following installed:
 
 ### Install
 ```bash
-git clone https://github.com/tbocek/lightkit.git
-cd lightkit
+git clone https://github.com/tbocek/preveltekit.git
+cd preveltekit
 pnpm install
 ```
 
@@ -78,19 +78,19 @@ pnpm stage
 To build with docker in production mode, use
 
 ```bash
-docker build . -t lightkit
-docker run -p3000:3000 lightkit
+docker build . -t preveltekit
+docker run -p3000:3000 preveltekit
 ```
 
 To run in development mode, run
 
 ```bash
-docker build -f Dockerfile.dev . -t lightkit-dev
-docker run -p3000:3000 -v./src:/app/src -v./public:/app/public lightkit-dev
+docker build -f Dockerfile.dev . -t preveltekit-dev
+docker run -p3000:3000 -v./src:/app/src -v./public:/app/public preveltekit-dev
 ```
 
 ## 📚 Technical Details
-LightKit uses SSPR (Server-Side Pre-Rendering) to generate static HTML at build time while maintaining full interactivity through hydration. This approach offers:
+PrevelteKit uses SSPR (Server-Side Pre-Rendering) to generate static HTML at build time while maintaining full interactivity through hydration. This approach offers:
 
  * Better SEO: Search engines see fully rendered content
  * Faster Initial Load: Users see content immediately
@@ -98,7 +98,7 @@ LightKit uses SSPR (Server-Side Pre-Rendering) to generate static HTML at build 
  * Simple Deployment: Deploy to any static hosting
 
 ## 🔧 Configuration
-LightKit is configured through rsbuild.config.ts and supports multiple deployment targets:
+PrevelteKit is configured through rsbuild.config.ts and supports multiple deployment targets:
 
  * Development: Hot reload enabled, unminified for debugging
  * Staging: Production build with local server
