@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head>
+    <title>Test Project</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script defer="" src="/static/js/586.2f96c23b.js"></script><script defer="" src="/static/js/doc.3229badd.js"></script><link href="/static/css/doc.c54e1dbd.css" rel="stylesheet"></head>
+<body>
+<div id="root"><div class="app svelte-1nf5ts3"><nav class="svelte-1nf5ts3"><div class="nav-content svelte-1nf5ts3"><div class="nav-items svelte-1nf5ts3"><span class="logo svelte-1nf5ts3">PrevelteKit</span> <div class="nav-links svelte-1nf5ts3"><a href="/" class="svelte-1nf5ts3">Home</a> <a href="/doc" class="svelte-1nf5ts3">Documentation</a> <a href="/example" class="svelte-1nf5ts3">Example</a></div></div></div></nav> <main class="svelte-1nf5ts3"><div class="content svelte-1nf5ts3"><div><div class="docs svelte-2orxox"><header class="svelte-2orxox"><h1 class="svelte-2orxox">PrevelteKit Documentation</h1> <p class="render-info svelte-2orxox">(Server Pre-Rendered)</p></header> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Getting Started</h2> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">git clone https://github.com/tbocek/preveltekit.git
+cd preveltekit
+pnpm install
+pnpm dev    # Development mode
+pnpm build  # Production build</code></pre></div></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Core Features</h2> <h3 class="svelte-2orxox">📦 Server-Side Pre-Rendering (SSPR)</h3> <p class="svelte-2orxox">Unlike traditional SSR or SSG, SSPR pre-renders your app at build time while maintaining full interactivity through hydration.
+            This gives you the best of both worlds: fast initial loads and dynamic functionality.</p> <h3 class="svelte-2orxox">⚡ Build System</h3> <p class="svelte-2orxox">Built on Rsbuild for lightning-fast builds. The system automatically handles:</p> <ul class="svelte-2orxox"><li class="svelte-2orxox">TypeScript compilation and type checking</li> <li class="svelte-2orxox">Asset optimization and bundling</li> <li class="svelte-2orxox">CSS processing and minification</li> <li class="svelte-2orxox">Production optimizations like code splitting</li></ul> <h3 class="svelte-2orxox">🔄 Development Workflow</h3> <p class="svelte-2orxox">Three modes available to suit your needs:</p> <ul class="svelte-2orxox"><li class="svelte-2orxox"><strong class="svelte-2orxox">Development (pnpm dev)</strong>: Express server with fast rebuilds and hot module replacement</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">Staging (pnpm stage)</strong>: Production build with local preview server</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">Production (pnpm build)</strong>: Optimized build with pre-compression (Brotli, Gzip, Zstandard)</li></ul></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">SSPR Development</h2> <h3 class="svelte-2orxox">🔍 Detecting Server Pre-Rendering</h3> <p class="svelte-2orxox">PrevelteKit uses <code class="svelte-2orxox">window.JSDOM</code> to indicate when code is running during server pre-rendering.
+            This is crucial for handling client-side-only code like API calls and intervals.</p> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">// Basic detection
+let renderInfo = "Client Rendered";
+if (window?.JSDOM) {
+    renderInfo = "Server Pre-Rendered";
+}</code></pre></div> <h3 class="svelte-2orxox">🔄 Handling Client-Side Operations</h3> <p class="svelte-2orxox">When working with APIs, timers, or browser-specific features, wrap them in a JSDOM check to prevent execution during pre-rendering:</p> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">$effect(() =&gt; {
+    if (!window?.JSDOM) {
+        fetchBitcoinPrice();
+        // Set up refresh interval
+        const interval = setInterval(fetchBitcoinPrice, 60000);
+        return () =&gt; clearInterval(interval);
+    }
+});</code></pre></div> <p class="svelte-2orxox"><strong class="svelte-2orxox">Common use cases for JSDOM checks:</strong></p> <ul class="svelte-2orxox"><li class="svelte-2orxox">API calls and data fetching</li> <li class="svelte-2orxox">Browser APIs (localStorage, sessionStorage)</li> <li class="svelte-2orxox">Timers and intervals</li> <li class="svelte-2orxox">DOM manipulation</li> <li class="svelte-2orxox">Browser-specific features (geolocation, notifications)</li></ul></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Static Site Configuration</h2> <p class="svelte-2orxox">To add static routes to your application, configure them in <code class="svelte-2orxox">rsbuild.config.ts</code>.
+            Each route needs an entry in the configuration. For example, to add routes for <code class="svelte-2orxox">/doc</code> and <code class="svelte-2orxox">/example</code>:</p> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">export default defineConfig({
+    environments: {
+        web: {
+            plugins: [
+                pluginSvelte(),
+                pluginCssMinimizer()
+            ],
+            source: {
+                entry: {
+                    // Each entry corresponds to a static route
+                    index: './src/index.ts',    // https://example.com/
+                    doc: './src/index.ts',      // https://example.com/doc
+                    example: './src/index.ts',  // https://example.com/example
+                }
+            },
+            output: {
+                target: 'web',
+                minify: process.env.NODE_ENV === 'production',
+            }
+        }
+    }
+});</code></pre></div> <p class="svelte-2orxox"><strong class="svelte-2orxox">Important Notes:</strong></p> <ul class="svelte-2orxox"><li class="svelte-2orxox">Each entry key becomes a URL path in your application</li> <li class="svelte-2orxox">Subdirectories are not currently supported</li> <li class="svelte-2orxox">All entries point to the same <code class="svelte-2orxox">index.ts</code> file</li> <li class="svelte-2orxox">The router in your application will handle the actual component rendering</li></ul></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Docker Support</h2> <p class="svelte-2orxox">Development environment:</p> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">docker build -f Dockerfile.dev . -t preveltekit-dev
+docker run -p3000:3000 -v./src:/app/src -v./public:/app/public preveltekit-dev</code></pre></div> <p class="svelte-2orxox">Production build:</p> <div class="code-block svelte-2orxox"><pre class="svelte-2orxox"><code class="svelte-2orxox">docker build . -t preveltekit
+docker run -p3000:3000 preveltekit</code></pre></div></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Project Structure</h2> <ul class="svelte-2orxox"><li class="svelte-2orxox"><strong class="svelte-2orxox">/src</strong>: Application source code</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">/public</strong>: Static assets</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">/dist</strong>: Production build output</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">rsbuild.config.ts</strong>: Build configuration</li> <li class="svelte-2orxox"><strong class="svelte-2orxox">ssr.mjs</strong>: SSPR implementation</li></ul></section> <section class="svelte-2orxox"><h2 class="svelte-2orxox">Deployment</h2> <p class="svelte-2orxox">The production build generates static files with pre-compressed variants:</p> <ul class="svelte-2orxox"><li class="svelte-2orxox">Standard files (.js, .css, .html)</li> <li class="svelte-2orxox">Brotli compressed (.br)</li> <li class="svelte-2orxox">Gzip compressed (.gz)</li> <li class="svelte-2orxox">Zstandard compressed (.zst)</li></ul> <p class="svelte-2orxox">Deploy to any static hosting or web server that supports serving compressed assets.</p></section></div></div><!----></div></main> <footer class="svelte-1nf5ts3"><div class="footer-content svelte-1nf5ts3"><p><span class="highlight">PrevelteKit</span> • Lightning fast builds • Pre-rendered SPA • Pure HTML/CSS/JS output</p></div></footer></div></div>
+
+</body></html>
