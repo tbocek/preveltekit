@@ -69,6 +69,14 @@
         color: #2b6cb0;
     }
 
+    .server-side-indicator {
+        color: #93c5fd;
+        font-size: 0.875rem;
+        margin-left: 0.5rem;
+        align-items: center;
+        display: flex;
+    }
+
     main {
         max-width: 80rem;
         margin: 0 auto;
@@ -103,6 +111,7 @@
                     <a href="./">Home</a>
                     <a href="./doc">Documentation</a>
                     <a href="./example">Example</a>
+                    <div class="server-side-indicator">(these links are server-side routed links)</div>
                 </div>
             </div>
         </div>

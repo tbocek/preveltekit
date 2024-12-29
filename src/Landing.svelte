@@ -7,33 +7,6 @@
     }
 </script>
 
-<div class="hero">
-    <h1>{message}</h1>
-    <p class="subtitle">A Modern Framework for Building Fast, SEO-Friendly Web Applications</p>
-
-    <div class="cta-buttons">
-        <a use:route href="doc" class="cta-button primary">View Documentation</a>
-        <a use:route href="example" class="cta-button secondary">Try Bitcoin Demo</a>
-    </div>
-
-    <div class="features">
-        <div class="feature">
-            <h3>⚡️ Lightning Fast</h3>
-            <p>Pre-rendered pages with hydration for optimal performance</p>
-        </div>
-
-        <div class="feature">
-            <h3>📈 Real-time Data</h3>
-            <p>Seamless integration with external APIs and live updates</p>
-        </div>
-
-        <div class="feature">
-            <h3>🔄 SSPR Support</h3>
-            <p>Server-Side Pre-Rendering for better SEO</p>
-        </div>
-    </div>
-</div>
-
 <style>
     .hero {
         text-align: center;
@@ -132,4 +105,41 @@
             font-size: 1.25rem;
         }
     }
+
+    .server-side-indicator {
+        color: #93c5fd;
+        font-size: 0.875rem;
+        margin-left: 0.5rem;
+        align-items: center;
+        display: flex;
+    }
 </style>
+
+<div class="hero">
+    <h1>{message}</h1>
+    <p class="subtitle">A Modern Framework for Building Fast, SEO-Friendly Web Applications</p>
+
+    <div class="cta-buttons">
+        <a use:route href="doc" class="cta-button primary">View Documentation</a>
+        <a use:route href="example" class="cta-button secondary">Try Bitcoin Demo</a>
+        <div class="server-side-indicator">(these links are client-side routed links)</div>
+    </div>
+
+    <div class="features">
+        <div class="feature">
+            <h3>⚡️ Lightning Fast</h3>
+            <p>Pre-rendered pages with hydration for optimal performance</p>
+        </div>
+
+        <div class="feature">
+            <h3>📈 Real-time Data</h3>
+            <p>Seamless integration with external APIs and live updates</p>
+        </div>
+
+        <div class="feature">
+            <h3>🔄 SSPR Support</h3>
+            <p>Server-Side Pre-Rendering for better SEO</p>
+        </div>
+    </div>
+</div>
+
