@@ -7,7 +7,7 @@
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
     "build": "NODE_ENV=production node ssr.mjs -p && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'",
     "stage": "NODE_ENV=production node ssr.mjs -p && node ssr.mjs -s",
-    "docs" : "pnpm run build && rm -rf docs && mkdir -p docs && (cd dist && find . -type f ! -name '*.gz' ! -name '*.br' ! -name '*.zst' -exec cp --parents {} ../docs/ \\;)"
+    "docs" : "NODE_ENV=production node ssr.mjs -p && rm -rf docs && mkdir -p docs && cp -r dist/* docs"
   },
   "dependencies": {
     "svelte": "5.16.0",
