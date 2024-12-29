@@ -100,9 +100,9 @@
             <div class="nav-items">
                 <span class="logo">PrevelteKit</span>
                 <div class="nav-links">
-                    <a href="/">Home</a>
-                    <a href="/doc">Documentation</a>
-                    <a href="/example">Example</a>
+                    <a href="./">Home</a>
+                    <a href="./doc">Documentation</a>
+                    <a href="./example">Example</a>
                 </div>
             </div>
         </div>

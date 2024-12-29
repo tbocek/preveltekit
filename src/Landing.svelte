@@ -12,8 +12,8 @@
     <p class="subtitle">A Modern Framework for Building Fast, SEO-Friendly Web Applications</p>
 
     <div class="cta-buttons">
-        <a use:route href="/doc" class="cta-button primary">View Documentation</a>
-        <a use:route href="/example" class="cta-button secondary">Try Bitcoin Demo</a>
+        <a use:route href="./doc" class="cta-button primary">View Documentation</a>
+        <a use:route href="./example" class="cta-button secondary">Try Bitcoin Demo</a>
     </div>
 
     <div class="features">
