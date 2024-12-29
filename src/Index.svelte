@@ -7,16 +7,16 @@
 
     const routes: Route[] = [
         {
-            path: "/",
-            component: Landing
-        },
-        {
-            path: "doc",
+            path: "(.*?)/doc",
             component: Documentation
         },
         {
-            path: "example",
+            path: "(.*?)/example",
             component: Example
+        },
+        {
+            path: "(.*?)/",
+            component: Landing
         }
     ];
 </script>
