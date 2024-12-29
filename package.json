@@ -1,5 +1,5 @@
 {
-  "name": "lightkit",
+  "name": "preveltekit",
   "version": "0.0.1",
   "type": "module",
   "scripts": {
@@ -9,11 +9,11 @@
     "stage": "NODE_ENV=production node ssr.mjs -p && node ssr.mjs -s"
   },
   "dependencies": {
-    "svelte": "5.15.0",
+    "svelte": "5.16.0",
     "@mateothegreat/svelte5-router": "0.1.38"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.1.11",
+    "@rsbuild/core": "1.1.13",
     "@rsbuild/plugin-css-minimizer": "^1.0.2",
     "@rsbuild/plugin-svelte": "1.0.7",
     "@tsconfig/svelte": "^5.0.4",

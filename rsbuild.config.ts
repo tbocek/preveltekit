@@ -21,7 +21,8 @@ export default defineConfig({
                     //should have the entry email: ''
                     //there is no support for subdirectories yet.
                     index: './src/index.ts',
-                    email: './src/index.ts',
+                    doc: './src/index.ts',
+                    example: './src/index.ts',
                 }
             },
             output: {

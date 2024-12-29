@@ -10,20 +10,20 @@ importers:
     dependencies:
       '@mateothegreat/svelte5-router':
         specifier: 0.1.38
-        version: 0.1.38(svelte@5.15.0)
+        version: 0.1.38(svelte@5.16.0)
       svelte:
-        specifier: 5.15.0
-        version: 5.15.0
+        specifier: 5.16.0
+        version: 5.16.0
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.1.11
-        version: 1.1.11
+        specifier: 1.1.13
+        version: 1.1.13
       '@rsbuild/plugin-css-minimizer':
         specifier: ^1.0.2
-        version: 1.0.2(@rsbuild/core@1.1.11)(webpack@5.96.1)
+        version: 1.0.2(@rsbuild/core@1.1.13)(webpack@5.96.1)
       '@rsbuild/plugin-svelte':
         specifier: 1.0.7
-        version: 1.0.7(@rsbuild/core@1.1.11)(postcss@8.4.49)(svelte@5.15.0)(typescript@5.7.2)
+        version: 1.0.7(@rsbuild/core@1.1.13)(postcss@8.4.49)(svelte@5.16.0)(typescript@5.7.2)
       '@tsconfig/svelte':
         specifier: ^5.0.4
         version: 5.0.4
@@ -41,7 +41,7 @@ importers:
         version: 25.0.1
       svelte-check:
         specifier: ^4.1.1
-        version: 4.1.1(svelte@5.15.0)(typescript@5.7.2)
+        version: 4.1.1(svelte@5.16.0)(typescript@5.7.2)
       tsconfig-to-swcconfig:
         specifier: ^2.8.1
         version: 2.8.1
@@ -104,8 +104,8 @@ packages:
   '@module-federation/webpack-bundler-runtime@0.5.1':
     resolution: {integrity: sha512-mMhRFH0k2VjwHt3Jol9JkUsmI/4XlrAoBG3E0o7HoyoPYv1UFOWyqAflfANcUPgbYpvqmyLzDcO+3IT36LXnrA==}
 
-  '@rsbuild/core@1.1.11':
-    resolution: {integrity: sha512-PZM7yRt6noWycYi2h22QsOQ2VU4bBBgthOblVdu7HKoEM8GwYvVImKd9oNOF5Y5WJLS0TVAkU90DelNttnnQiw==}
+  '@rsbuild/core@1.1.13':
+    resolution: {integrity: sha512-XBL2hrin8731W6iTGGL+x3cv07n4vm2D7u6XHRwtQkRfySzAqGx7ThlQLdNX/dJwfsoQrYQuWl/qzaljjXtGtg==}
     engines: {node: '>=16.7.0'}
     hasBin: true
 
@@ -384,6 +384,10 @@ packages:
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
     engines: {node: '>=8'}
+
+  clsx@2.1.1:
+    resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
+    engines: {node: '>=6'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -1234,8 +1238,8 @@ packages:
       typescript:
         optional: true
 
-  svelte@5.15.0:
-    resolution: {integrity: sha512-YWl8rAd4hSjERLtLvP6h2pflGtmrJwv+L12BgrOtHYJCpvLS9WKp/YNAdyolw3FymXtcYZqhSWvWlu5O1X7tgQ==}
+  svelte@5.16.0:
+    resolution: {integrity: sha512-Ygqsiac6UogVED2ruKclU+pOeMThxWtp9LG+li7BXeDKC2paVIsRTMkNmcON4Zejerd1s5sZHWx6ZtU85xklVg==}
     engines: {node: '>=18'}
 
   svgo@3.3.2:
@@ -1437,9 +1441,9 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@mateothegreat/svelte5-router@0.1.38(svelte@5.15.0)':
+  '@mateothegreat/svelte5-router@0.1.38(svelte@5.16.0)':
     dependencies:
-      svelte: 5.15.0
+      svelte: 5.16.0
 
   '@module-federation/runtime-tools@0.5.1':
     dependencies:
@@ -1457,19 +1461,19 @@ snapshots:
       '@module-federation/runtime': 0.5.1
       '@module-federation/sdk': 0.5.1
 
-  '@rsbuild/core@1.1.11':
+  '@rsbuild/core@1.1.13':
     dependencies:
       '@rspack/core': 1.1.8(@swc/helpers@0.5.15)
       '@rspack/lite-tapable': 1.0.1
       '@swc/helpers': 0.5.15
       core-js: 3.39.0
 
-  '@rsbuild/plugin-css-minimizer@1.0.2(@rsbuild/core@1.1.11)(webpack@5.96.1)':
+  '@rsbuild/plugin-css-minimizer@1.0.2(@rsbuild/core@1.1.13)(webpack@5.96.1)':
     dependencies:
       css-minimizer-webpack-plugin: 5.0.1(webpack@5.96.1)
       reduce-configs: 1.0.0
     optionalDependencies:
-      '@rsbuild/core': 1.1.11
+      '@rsbuild/core': 1.1.13
     transitivePeerDependencies:
       - '@parcel/css'
       - '@swc/css'
@@ -1479,11 +1483,11 @@ snapshots:
       - lightningcss
       - webpack
 
-  '@rsbuild/plugin-svelte@1.0.7(@rsbuild/core@1.1.11)(postcss@8.4.49)(svelte@5.15.0)(typescript@5.7.2)':
+  '@rsbuild/plugin-svelte@1.0.7(@rsbuild/core@1.1.13)(postcss@8.4.49)(svelte@5.16.0)(typescript@5.7.2)':
     dependencies:
-      '@rsbuild/core': 1.1.11
-      svelte-loader: 3.2.4(svelte@5.15.0)
-      svelte-preprocess: 6.0.3(postcss@8.4.49)(svelte@5.15.0)(typescript@5.7.2)
+      '@rsbuild/core': 1.1.13
+      svelte-loader: 3.2.4(svelte@5.16.0)
+      svelte-preprocess: 6.0.3(postcss@8.4.49)(svelte@5.16.0)(typescript@5.7.2)
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -1788,6 +1792,8 @@ snapshots:
   chrome-trace-event@1.0.4: {}
 
   ci-info@3.9.0: {}
+
+  clsx@2.1.1: {}
 
   color-convert@2.0.1:
     dependencies:
@@ -2579,39 +2585,39 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  svelte-check@4.1.1(svelte@5.15.0)(typescript@5.7.2):
+  svelte-check@4.1.1(svelte@5.16.0)(typescript@5.7.2):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       chokidar: 4.0.1
       fdir: 6.4.2
       picocolors: 1.1.1
       sade: 1.8.1
-      svelte: 5.15.0
+      svelte: 5.16.0
       typescript: 5.7.2
     transitivePeerDependencies:
       - picomatch
 
   svelte-dev-helper@1.1.9: {}
 
-  svelte-hmr@0.14.12(svelte@5.15.0):
+  svelte-hmr@0.14.12(svelte@5.16.0):
     dependencies:
-      svelte: 5.15.0
+      svelte: 5.16.0
 
-  svelte-loader@3.2.4(svelte@5.15.0):
+  svelte-loader@3.2.4(svelte@5.16.0):
     dependencies:
       loader-utils: 2.0.4
-      svelte: 5.15.0
+      svelte: 5.16.0
       svelte-dev-helper: 1.1.9
-      svelte-hmr: 0.14.12(svelte@5.15.0)
+      svelte-hmr: 0.14.12(svelte@5.16.0)
 
-  svelte-preprocess@6.0.3(postcss@8.4.49)(svelte@5.15.0)(typescript@5.7.2):
+  svelte-preprocess@6.0.3(postcss@8.4.49)(svelte@5.16.0)(typescript@5.7.2):
     dependencies:
-      svelte: 5.15.0
+      svelte: 5.16.0
     optionalDependencies:
       postcss: 8.4.49
       typescript: 5.7.2
 
-  svelte@5.15.0:
+  svelte@5.16.0:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@jridgewell/sourcemap-codec': 1.5.0
@@ -2620,6 +2626,7 @@ snapshots:
       acorn-typescript: 1.4.13(acorn@8.14.0)
       aria-query: 5.3.2
       axobject-query: 4.1.0
+      clsx: 2.1.1
       esm-env: 1.2.1
       esrap: 1.3.2
       is-reference: 3.0.3
