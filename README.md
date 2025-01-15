@@ -24,6 +24,14 @@ Static Site Generation (SSG) takes a different approach by generating plain HTML
 
 Since I did not find a proper term to describe a mix of both, I call it Server-Side Pre Rendering (SSPR). Like SSG, it pre-renders content at build time, but unlike SSG, it includes hydration code. The result is a set of static HTML, JavaScript, and CSS files that can be served by any standard web server (Caddy, Nginx, Apache). This approach provides fast initial page loads like SSG, while maintaining the ability to become fully interactive like SSR. So, you will see the data provided via REST a bit later, but compared to SPA, you can show the initial layout and structure already. A compromise of simplicity and user experience.
 
+## What about Isomorphic Rendering or Dynamic Rendering?
+
+Isomorphic rendering (IR) is a technique where the same JavaScript code runs on both the server and client sides. When a user requests a page, the server performs the initial render for fast page load, after which the client side takes over to handle interactivity. This approach uses frameworks like React.js with Node.js to maintain a single codebase that works across environments. Companies like Airbnb have implemented this using frameworks such as Rendr, achieving both optimal performance and maintainability.
+
+Dynamic rendering (DR) takes a different approach by serving different versions of content based on who's requesting it. When a search engine bot visits the site, it receives pre-rendered static HTML, while human users get the normal client-side rendered version. This method is particularly valuable for JavaScript-heavy websites that need to maintain good SEO. It's generally simpler to implement than isomorphic rendering and is actively recommended by major search engines like Google and Bing. [source](https://prerender.io/blog/isomorphic-rendering/)
+
+The fundamental difference between these approaches (IR, DR, SSPR) lies in when and how the rendering occurs. Isomorphic rendering maintains consistent code execution across server and client, dynamic rendering serves different versions based on the user agent, and SSPR pre-generates static content with hydration capabilities at build time. Each approach has its own sweet spot depending on the specific needs of the project, balancing factors like performance, SEO requirements, and development complexity.
+
 ## Why Rsbuild + Svelte SSR?
 
 - **Lightweight**: No complex framework overhead, just the essentials
