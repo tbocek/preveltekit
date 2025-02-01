@@ -64,7 +64,7 @@ The production build:
 - Generates pre-compressed static files for optimal serving:
     - Brotli (`.br` files)
     - Zstandard (`.zst` files)
-    - Gzip (`.gz` files)
+    - Zopfli (`.gz` files)
 - Optimizes assets for production
 
 ### Staging Environment
@@ -87,7 +87,7 @@ To run in development mode, run
 
 ```bash
 docker build -f Dockerfile.dev . -t preveltekit-dev
-docker run -p3000:3000 -v./src:/app/src -v./public:/app/public preveltekit-dev
+docker run -p3000:3000 -v./static:/app/static -v./src:/app/src -v./public:/app/public preveltekit-dev
 ```
 
 ## 📚 Technical Details

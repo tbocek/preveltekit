@@ -1,3 +1,10 @@
-node_modules
+# All dot files in root
+/.*
+
 dist
+docs
+node_modules
+
+Dockerfile*
+LICENSE
 README.md

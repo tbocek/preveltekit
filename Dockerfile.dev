@@ -1,11 +1,10 @@
 FROM node:22-alpine AS base
-RUN apk add --no-cache libc6-compat brotli gzip zstd parallel
+RUN apk add --no-cache libc6-compat brotli zopfli zstd pnpm
 WORKDIR /app
-RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml rsbuild.config.ts ssr.mjs tsconfig.json ./
 RUN pnpm install
 ENTRYPOINT ["pnpm", "run", "dev"]
 
 # run with:
-# docker build -f Dockerfile.dev . -t tag
-# docker run -p3000:3000 -v./src:/app/src -v./public:/app/public tag
+# docker build -f Dockerfile.dev . -t preveltekit-dev
+# docker run -p3000:3000 -v./static:/app/static -v./src:/app/src -v./public:/app/public preveltekit-dev

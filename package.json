@@ -5,25 +5,25 @@
   "scripts": {
     "dev": "node ssr.mjs -d",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
-    "build": "NODE_ENV=production node ssr.mjs -p && find dist -type f \\( -name \"*.js\" -o -name \"*.css\" -o -name \"*.html\" \\) -print0 | parallel -0 -j+0 'gzip -9kq {}; brotli -k {}; zstd -19k {} > /dev/null 2>&1'",
+    "build": "NODE_ENV=production node ssr.mjs -p && find dist -regex '.*\\.\\(js\\|css\\|html\\)$' -exec sh -c 'zopfli {} & brotli -f {} & zstd -19f {} > /dev/null 2>&1 & wait' \\;",
     "stage": "NODE_ENV=production node ssr.mjs -p && node ssr.mjs -s",
     "docs" : "NODE_ENV=production node ssr.mjs -p && rm -rf docs && mkdir -p docs && cp -r dist/* docs"
   },
   "dependencies": {
-    "svelte": "5.16.0",
+    "svelte": "5.19.6",
     "@mateothegreat/svelte5-router": "0.1.38"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.1.13",
+    "@rsbuild/core": "1.2.3",
     "@rsbuild/plugin-css-minimizer": "^1.0.2",
     "@rsbuild/plugin-svelte": "1.0.7",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^22.10.2",
-    "commander": "^12.1.0",
+    "@types/node": "^22.13.0",
+    "commander": "^13.1.0",
     "express": "^4.21.2",
-    "jsdom": "^25.0.1",
-    "svelte-check": "^4.1.1",
+    "jsdom": "^26.0.0",
+    "svelte-check": "^4.1.4",
     "tsconfig-to-swcconfig": "^2.8.1",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.3"
   }
 }
