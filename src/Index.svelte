@@ -7,19 +7,19 @@
 
     const routes: Routes = [
         {
-            path: "/doc",
+            path: "*/doc",
             component: Documentation
         },
         {
-            path: "/example",
+            path: "*/example",
             component: Example
         },
         {
-            path: "/",
+            path: "*/",
             component: Landing
         },
         {
-            path: "/index",
+            path: "*/index",
             component: Landing
         }
     ];
