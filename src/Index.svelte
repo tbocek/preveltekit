@@ -1,21 +1,25 @@
 <script lang="ts">
-    import type { Route } from "@mateothegreat/svelte5-router";
-    import { Router } from "@mateothegreat/svelte5-router";
     import Landing from "./Landing.svelte";
     import Documentation from "./Documentation.svelte";
     import Example from "./Example.svelte";
+    import Router from "./Router.svelte";
+    import type {Routes} from "./types";
 
-    const routes: Route[] = [
+    const routes: Routes = [
         {
-            path: "(.*?)/doc",
+            path: "/doc",
             component: Documentation
         },
         {
-            path: "(.*?)/example",
+            path: "/example",
             component: Example
         },
         {
-            path: "(.*?)/",
+            path: "/",
+            component: Landing
+        },
+        {
+            path: "/index",
             component: Landing
         }
     ];

@@ -1,6 +1,5 @@
 <script lang="ts">
-    import { route } from "@mateothegreat/svelte5-router";
-
+    import {route} from "./Router.svelte";
     let message = "Welcome to PrevelteKit";
     if (window?.JSDOM) {
         message = "Server-Side Pre-Rendered with PrevelteKit, you see this in the source code, you may see it flashing briefly, but you will not see this in the DOM after loading";

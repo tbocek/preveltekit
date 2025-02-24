@@ -10,15 +10,14 @@
     "docs" : "NODE_ENV=production node ssr.mjs -p && rm -rf docs && mkdir -p docs && cp -r dist/* docs"
   },
   "dependencies": {
-    "svelte": "5.19.6",
-    "@mateothegreat/svelte5-router": "0.1.38"
+    "svelte": "5.20.2"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.2.3",
+    "@rsbuild/core": "1.2.11",
     "@rsbuild/plugin-css-minimizer": "^1.0.2",
-    "@rsbuild/plugin-svelte": "1.0.7",
+    "@rsbuild/plugin-svelte": "1.0.8",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^22.13.0",
+    "@types/node": "^22.13.5",
     "commander": "^13.1.0",
     "express": "^4.21.2",
     "jsdom": "^26.0.0",
