@@ -103,9 +103,6 @@
         // Sort by specificity (highest first) and get the best match
         matchedRoutes.sort((a, b) => b.specificity - a.specificity);
 
-        console.log(path)
-        console.log(matchedRoutes)
-
         // Return the most specific match, or the notFound component
         return matchedRoutes.length > 0
             ? { component: matchedRoutes[0].component, params: matchedRoutes[0].params }
@@ -155,7 +152,6 @@
                     // Normalize the path to handle relative links
                     const path = href.startsWith('/') ? href : `/${href}`;
                     navigate(path);
-                    console.log("NAVVVVVV")
                 } else {
                     // For external links, just follow the href
                     window.location.href = href;
