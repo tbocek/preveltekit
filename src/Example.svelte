@@ -1,26 +1,59 @@
 <script lang="ts">
-    type CurrencyData = {
-        code: string;
-        symbol: string;
-        rate: string;
-        description: string;
-        rate_float: number;
-    };
-
     type BitcoinPrice = {
-        time: {
-            updated: string;
-            updatedISO: string;
-            updateduk: string;
+        RAW: {
+            MARKET: string;
+            FROMSYMBOL: string;
+            TOSYMBOL: string;
+            FLAGS: number;
+            PRICE: number;
+            LASTUPDATE: number;
+            LASTVOLUME: number;
+            LASTVOLUMETO: number;
+            LASTTRADEID: string;
+            VOLUME24HOUR: number;
+            VOLUME24HOURTO: number;
+            OPEN24HOUR: number;
+            HIGH24HOUR: number;
+            LOW24HOUR: number;
+            LASTMARKET: string;
+            TOPTIERVOLUME24HOUR: number;
+            TOPTIERVOLUME24HOURTO: number;
+            CHANGE24HOUR: number;
+            CHANGEPCT24HOUR: number;
+            CHANGEDAY: number;
+            CHANGEPCTDAY: number;
+            CHANGEHOUR: number;
+            CHANGEPCTHOUR: number;
         };
-        disclaimer: string;
-        bpi: Record<'USD' | 'GBP' | 'EUR', CurrencyData>;
-    };
+        DISPLAY: {
+            FROMSYMBOL: string;
+            TOSYMBOL: string;
+            MARKET: string;
+            PRICE: string;
+            LASTUPDATE: string;
+            LASTVOLUME: string;
+            LASTVOLUMETO: string;
+            LASTTRADEID: string;
+            VOLUME24HOUR: string;
+            VOLUME24HOURTO: string;
+            OPEN24HOUR: string;
+            HIGH24HOUR: string;
+            LOW24HOUR: string;
+            LASTMARKET: string;
+            TOPTIERVOLUME24HOUR: string;
+            TOPTIERVOLUME24HOURTO: string;
+            CHANGE24HOUR: string;
+            CHANGEPCT24HOUR: string;
+            CHANGEDAY: string;
+            CHANGEPCTDAY: string;
+            CHANGEHOUR: string;
+            CHANGEPCTHOUR: string;
+        };
+    }
 
     let priceData = $state<BitcoinPrice | null>(null);
     let loading = $state(true);
     let error = $state<string | null>(null);
-    let selectedCurrency = $state<'USD' | 'GBP' | 'EUR'>('USD');
 
     // Demo the SSPR capability
     let renderInfo = $state("Client Rendered");
@@ -32,7 +65,7 @@
         try {
             loading = true;
             error = null;
-            const response = await fetch('https://api.coindesk.com/v1/bpi/currentprice.json');
+            const response = await fetch('https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase');
             if (!response.ok) throw new Error('Failed to fetch data');
             priceData = await response.json();
         } catch (e) {
@@ -59,19 +92,6 @@
         <p class="render-info">({renderInfo})</p>
     </div>
 
-    <div class="currency-selector">
-        <label for="currency">Select Currency:</label>
-        <select
-                id="currency"
-                bind:value={selectedCurrency}
-                class="select-input"
-        >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-        </select>
-    </div>
-
     <div class="price-display">
         {#if loading && !priceData}
             <div class="loading">Loading Bitcoin prices...</div>
@@ -83,19 +103,16 @@
         {:else if priceData}
             <div class="price-card">
                 <div class="price-header">
-                    <span class="currency-code">{selectedCurrency}</span>
-                    <span class="update-time">Last Updated: {priceData.time.updated}</span>
+                    <span class="currency-code">{@html priceData.RAW.FROMSYMBOL}</span>
+                    <span class="update-time">Last Updated: {priceData.RAW.LASTUPDATE}</span>
                 </div>
                 <div class="current-price">
-                    {@html priceData.bpi[selectedCurrency].symbol}
-                    {priceData.bpi[selectedCurrency].rate}
-                </div>
-                <div class="price-description">
-                    {priceData.bpi[selectedCurrency].description}
+                    {@html priceData.RAW.TOSYMBOL}
+                    {priceData.RAW.PRICE}
                 </div>
             </div>
             <div class="disclaimer">
-                {priceData.disclaimer}
+                Cryptocurrency prices are highly volatile and subject to market risks. The displayed price information is for reference only and may not reflect real-time market conditions. Past performance is not indicative of future results. Please conduct your own research and consider your financial situation before making any investment decisions.
             </div>
         {/if}
     </div>
@@ -123,19 +140,6 @@
         color: #718096;
         font-size: 0.875rem;
         margin-top: 0.5rem;
-    }
-
-    .currency-selector {
-        margin-bottom: 2rem;
-        text-align: center;
-    }
-
-    .select-input {
-        padding: 0.5rem 1rem;
-        border: 2px solid #e2e8f0;
-        border-radius: 8px;
-        margin-left: 1rem;
-        font-size: 1rem;
     }
 
     .price-display {
@@ -173,12 +177,6 @@
         color: #2d3748;
         margin: 1rem 0;
         text-align: center;
-    }
-
-    .price-description {
-        text-align: center;
-        color: #4a5568;
-        margin-bottom: 1rem;
     }
 
     .disclaimer {
