@@ -172,27 +172,75 @@ async function fakeBrowser(ssrUrl, html, resourceFolder) {
 
 async function generateSSRHtml() {
     const config = await runRsbuildBuild();
-
     const startTime = process.hrtime.bigint();
     console.log('Starting SSR HTML generation...');
+
     try {
-        const promises = Object.keys(config.environments.web.source.entry).map(async entryName => {
-            const fullUrl = entryName === 'index'
-                ? 'http://localhost/'
-                : `http://localhost/${entryName}`;
-            const fileName = `${config.output.distPath.root}/${entryName}.html`;
-            const html = await fs.promises.readFile(path.join(process.cwd(), fileName), "utf-8");
-            const dom = await fakeBrowser(fullUrl, html, config.output.distPath.root);
+        // Map to store already processed paths and their DOM objects
+        const processedDoms = new Map();
+
+        // First, load the index page to get route information
+        console.log('Loading index page to extract routes...');
+        const indexFileName = `${config.output.distPath.root}/index.html`;
+        const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
+        const indexDom = await fakeBrowser('http://localhost/', indexHtml, config.output.distPath.root);
+        processedDoms.set('index.html', indexDom);
+
+        // Process the Svelte routes if they exist
+        const svelteRoutes = indexDom.window.__svelteRoutes;
+
+        if (svelteRoutes && Array.isArray(svelteRoutes)) {
+            console.log('Found Svelte routes:', svelteRoutes);
+
+            // Get all entries from the config
+            const entries = Object.keys(config.environments.web.source.entry);
+            console.log('Available entries in config:', entries);
+
+            // Process each route directly
+            const promises = svelteRoutes.map(async route => {
+                if (!route || !route.path) {
+                    return;
+                }
+
+                // Check if the route has a static field
+                if (!route.static) {
+                    console.log(`Route ${route.path} has no static field, skipping`);
+                    return;
+                }
+
+                // Simply replace all * with empty string for the URL path
+                const cleanPath = route.path.replace(/\*/g, '').replace(/^\//, '');
+                try {
+                    // Skip if we've already processed this path
+                    if (processedDoms.has(route.static)) {
+                        console.log(`Path ${route.static} already processed, skipping`);
+                        return;
+                    }
+                    console.log(`Processing route: ${route.static} using static entry 'http://localhost/${cleanPath}'`);
+                    // Create the filename using the static entry
+                    const dom = await fakeBrowser(`http://localhost/${cleanPath}`, indexHtml, config.output.distPath.root);
+                    processedDoms.set(route.static, dom);
+                } catch (error) {
+                    console.error(`Error processing route ${cleanPath}:`, error);
+                }
+            });
+
+            try {
+                await Promise.all(promises);
+                console.log('All routes processed successfully');
+            } catch (error) {
+                console.error('Error processing routes:', error);
+            }
+
+        } else {
+            console.log('No Svelte routes found in the DOM');
+        }
+        for (const [staticName, dom] of processedDoms.entries()) {
+            const fileName = `${config.output.distPath.root}/${staticName}`;
             const finalHtml = dom.serialize();
             await fs.promises.writeFile(fileName, finalHtml);
-        });
-
-        try {
-            await Promise.all(promises);
-        } catch (error) {
-            console.error('Error processing entries:', error);
+            console.log(`Successfully generated ${fileName}`);
         }
-
     } catch (error) {
         console.error('Error generating SSR HTML:', error);
         throw error;
@@ -202,51 +250,14 @@ async function generateSSRHtml() {
     }
 }
 
-const mapUrlToEntry = (url, entrySourceMap, basePath) => {
-    // Remove leading slash and get first path segment
-    const urlPart = url.split('/').filter(Boolean)[0] || 'index';
-
-    // First try direct match from map
-    if (entrySourceMap.has(urlPart)) {
-        return {
-            entry: urlPart,
-            value: entrySourceMap.get(urlPart),
-            currentPath: urlPart
-        };
-    }
-
-    // Fallback to index if no match
-    if (entrySourceMap.has('index')) {
-        return {
-            entry: 'index',
-            value: entrySourceMap.get('index'),
-            currentPath: ''
-        };
-    }
-
-    throw new Error(`No valid entry found for URL: ${url}`);
-};
-
 // Implement SSR rendering function
 const serverRender = (serverAPI) => async (req, res) => {
-    const entrySourceMap = new Map();
-    Object.entries(config.environments.web.source.entry).forEach(([entry, source]) => {
-        entrySourceMap.set(entry, source);
-    });
-    const entry = await mapUrlToEntry(req.url, entrySourceMap, './src');
+    const template = await serverAPI.environments.web.getTransformedHtml("index");
+    const fullUrl = `${req.protocol}://${req.get('host')}${req.url}`;
+    const dom = await fakeBrowser(fullUrl, template, null);
 
-    console.log("entrySourceMap", entrySourceMap);
-    console.log("req.url", req.url);
-    console.log("entry", entry);
-
-    const template = await serverAPI.environments.web.getTransformedHtml(entry.entry);
-
-    const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}/${entry.currentPath}`, template, null);
-    const finalHtml = dom.serialize();
-    res.writeHead(200, {
-        'Content-Type': 'text/html',
-    });
-    res.end(finalHtml);
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    res.end(dom.serialize());
 };
 
 async function runRsbuildBuild() {

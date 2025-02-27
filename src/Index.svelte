@@ -8,19 +8,18 @@
     const routes: Routes = [
         {
             path: "*/doc",
-            component: Documentation
+            component: Documentation,
+            static: "doc.html"
         },
         {
             path: "*/example",
-            component: Example
+            component: Example,
+            static: "example.html"
         },
         {
             path: "*/",
-            component: Landing
-        },
-        {
-            path: "*/index",
-            component: Landing
+            component: Landing,
+            static: "index.html"
         }
     ];
 </script>

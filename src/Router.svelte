@@ -29,6 +29,13 @@
         // Add event listener for back/forward navigation
         window.addEventListener('popstate', handlePopState);
         window.addEventListener('svelteNavigate', handleNavigateEvent);
+
+        // Expose routes directly to SSR if running in JSDOM
+        if (window?.JSDOM) {
+            // Get the current value of the routes
+            const currentRoutes = [...routes];
+            window.__svelteRoutes = currentRoutes;
+        }
     });
 
     onDestroy(() => {

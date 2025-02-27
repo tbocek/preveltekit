@@ -17,12 +17,7 @@ export default defineConfig({
             ],
             source: {
                 entry: {
-                    //add here your static URLs, e.g., https://example.com/email
-                    //should have the entry email: ''
-                    //there is no support for subdirectories yet.
-                    index: './src/index.ts',
-                    doc: './src/index.ts',
-                    example: './src/index.ts',
+                    index: './src/index.ts'
                 }
             },
             output: {
