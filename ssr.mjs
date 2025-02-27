@@ -355,17 +355,16 @@ async function devServer() {
 
 async function stageServer() {
     app.use(express.static('dist'))
-    app.get('/:page', (req, res, next) => {
+    app.get('*', (req, res, next) => {
         const htmlFile = path.join(process.cwd(), 'dist', `${req.params.page}.html`)
-        res.sendFile(htmlFile, err => {
+        const normalizedhtmlFile = path.normalize(htmlFile).replace(/^(\.\.[\/\\])+/, '');
+        
+        res.sendFile(normalizedhtmlFile, err => {
             if (err) {
                 // File doesn't exist, serve index.html instead
-                res.sendFile(path.join(process.cwd(), 'dist', 'index.html'))
+              res.sendFile(path.join(process.cwd(), 'dist', 'index.html'))
             }
         })
-    })
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(process.cwd(), 'dist', 'index.html'))
     })
     app.listen(3000)
 }
