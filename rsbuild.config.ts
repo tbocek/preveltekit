@@ -1,7 +1,6 @@
 import {defineConfig} from '@rsbuild/core';
 import {pluginSvelte} from '@rsbuild/plugin-svelte';
 import * as process from "node:process";
-import {pluginCssMinimizer} from "@rsbuild/plugin-css-minimizer";
 import { convert } from 'tsconfig-to-swcconfig';
 
 const swcConfig = convert("tsconfig.json"); // This will look for tsconfig.json in the current directory
@@ -12,8 +11,7 @@ export default defineConfig({
         // Configure the web environment for browsers
         web: {
             plugins: [
-                pluginSvelte(),
-                pluginCssMinimizer()
+                pluginSvelte()
             ],
             source: {
                 entry: {
