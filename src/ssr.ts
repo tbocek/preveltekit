@@ -163,7 +163,6 @@ export class PrevelteSSR {
   async build() {
     const { content } = await loadConfig();
     const finalConfig = mergeRsbuildConfig(defaultConfig, content);
-    console.log("AOEUAOEUAOE",finalConfig);
     const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
     await rsbuild.build();
     this.config = rsbuild.getRsbuildConfig();
@@ -230,7 +229,6 @@ export class PrevelteSSR {
     return async (port = 3000) => {
       const { content } = await loadConfig();
       const finalConfig = mergeRsbuildConfig(defaultConfig, content);
-      console.log("AOEUAOEUAOE2",finalConfig);
       const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
       const rsbuildServer = await rsbuild.createDevServer();
       
