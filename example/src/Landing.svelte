@@ -1,10 +1,46 @@
 <script lang="ts">
-    import { route } from '../node_modules/preveltekit/dist/client';
+    import { route } from "preveltekit";
     let message = "Welcome to PrevelteKit";
     if (window?.JSDOM) {
-        message = "Server-Side Pre-Rendered with PrevelteKit, you see this in the source code, you may see it flashing briefly, but you will not see this in the DOM after loading";
+        message =
+            "Server-Side Pre-Rendered with PrevelteKit, you see this in the source code, you may see it flashing briefly, but you will not see this in the DOM after loading";
     }
 </script>
+
+<div class="hero">
+    <h1>{message}</h1>
+    <p class="subtitle">
+        A Modern Framework for Building Fast, SEO-Friendly Web Applications
+    </p>
+
+    <div class="cta-buttons">
+        <a use:route href="doc" class="cta-button primary">View Documentation</a
+        >
+        <a use:route href="example" class="cta-button secondary"
+            >Try Bitcoin Demo</a
+        >
+        <div class="server-side-indicator">
+            (these links are client-side routed links)
+        </div>
+    </div>
+
+    <div class="features">
+        <div class="feature">
+            <h3>⚡️ Lightning Fast</h3>
+            <p>Pre-rendered pages with hydration for optimal performance</p>
+        </div>
+
+        <div class="feature">
+            <h3>📈 Real-time Data</h3>
+            <p>Seamless integration with external APIs and live updates</p>
+        </div>
+
+        <div class="feature">
+            <h3>🔄 SSPR Support</h3>
+            <p>Server-Side Pre-Rendering for better SEO</p>
+        </div>
+    </div>
+</div>
 
 <style>
     .hero {
@@ -71,7 +107,7 @@
         padding: 2rem;
         background: white;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s;
     }
 
@@ -113,32 +149,3 @@
         display: flex;
     }
 </style>
-
-<div class="hero">
-    <h1>{message}</h1>
-    <p class="subtitle">A Modern Framework for Building Fast, SEO-Friendly Web Applications</p>
-
-    <div class="cta-buttons">
-        <a use:route href="doc" class="cta-button primary">View Documentation</a>
-        <a use:route href="example" class="cta-button secondary">Try Bitcoin Demo</a>
-        <div class="server-side-indicator">(these links are client-side routed links)</div>
-    </div>
-
-    <div class="features">
-        <div class="feature">
-            <h3>⚡️ Lightning Fast</h3>
-            <p>Pre-rendered pages with hydration for optimal performance</p>
-        </div>
-
-        <div class="feature">
-            <h3>📈 Real-time Data</h3>
-            <p>Seamless integration with external APIs and live updates</p>
-        </div>
-
-        <div class="feature">
-            <h3>🔄 SSPR Support</h3>
-            <p>Server-Side Pre-Rendering for better SEO</p>
-        </div>
-    </div>
-</div>
-
