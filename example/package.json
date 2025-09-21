@@ -1,0 +1,14 @@
+{
+  "name": "preveltekit-example",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "preveltekit -d",
+    "build": "preveltekit -p",
+    "stage": "preveltekit -s"
+  },
+  "dependencies": {
+    "preveltekit": "file:..",
+    "svelte": "^5.39.3"
+  }
+}

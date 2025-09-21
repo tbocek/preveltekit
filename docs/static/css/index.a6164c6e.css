@@ -1,0 +1,372 @@
+.hero.svelte-1nllfry {
+  text-align: center;
+  background: linear-gradient(#f7fafc, #edf2f7);
+  padding: 4rem 2rem;
+}
+
+h1.svelte-1nllfry {
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 3rem;
+  font-weight: bold;
+}
+
+.subtitle.svelte-1nllfry {
+  color: #4a5568;
+  max-width: 800px;
+  margin-bottom: 3rem;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 1.5rem;
+}
+
+.cta-buttons.svelte-1nllfry {
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 4rem;
+  display: flex;
+}
+
+.cta-button.svelte-1nllfry {
+  border-radius: 8px;
+  padding: .75rem 1.5rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform .2s;
+}
+
+.cta-button.svelte-1nllfry:hover {
+  transform: translateY(-2px);
+}
+
+.primary.svelte-1nllfry {
+  color: #fff;
+  background: #4299e1;
+}
+
+.secondary.svelte-1nllfry {
+  color: #4299e1;
+  background: #fff;
+  border: 2px solid #4299e1;
+}
+
+.features.svelte-1nllfry {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+}
+
+.feature.svelte-1nllfry {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  transition: transform .2s;
+  box-shadow: 0 4px 6px #0000001a;
+}
+
+.feature.svelte-1nllfry:hover {
+  transform: translateY(-5px);
+}
+
+.feature.svelte-1nllfry h3:where(.svelte-1nllfry) {
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+.feature.svelte-1nllfry p:where(.svelte-1nllfry) {
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .cta-buttons.svelte-1nllfry {
+    flex-direction: column;
+    padding: 0 2rem;
+  }
+
+  h1.svelte-1nllfry {
+    font-size: 2.5rem;
+  }
+
+  .subtitle.svelte-1nllfry {
+    font-size: 1.25rem;
+  }
+}
+
+.server-side-indicator.svelte-1nllfry {
+  color: #93c5fd;
+  align-items: center;
+  margin-left: .5rem;
+  font-size: .875rem;
+  display: flex;
+}
+
+.docs.svelte-an6hzx {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+header.svelte-an6hzx {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+h1.svelte-an6hzx {
+  color: #2d3748;
+  margin-bottom: .5rem;
+  font-size: 2.5rem;
+}
+
+.render-info.svelte-an6hzx {
+  color: #718096;
+  font-size: .875rem;
+}
+
+section.svelte-an6hzx {
+  margin-bottom: 3rem;
+}
+
+h2.svelte-an6hzx {
+  color: #2d3748;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+  padding-bottom: .5rem;
+  font-size: 1.8rem;
+}
+
+h3.svelte-an6hzx {
+  color: #2d3748;
+  margin: 2rem 0 1rem;
+  font-size: 1.3rem;
+}
+
+p.svelte-an6hzx {
+  color: #4a5568;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+ul.svelte-an6hzx {
+  color: #4a5568;
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+li.svelte-an6hzx {
+  margin-bottom: .5rem;
+  line-height: 1.6;
+}
+
+strong.svelte-an6hzx {
+  color: #2d3748;
+  font-weight: 600;
+}
+
+code.svelte-an6hzx {
+  background: #edf2f7;
+  border-radius: 4px;
+  padding: .2rem .4rem;
+  font-family: Menlo, Monaco, Courier New, monospace;
+  font-size: .9rem;
+}
+
+.code-block.svelte-an6hzx {
+  background: #1a202c;
+  border-radius: 8px;
+  margin: 1rem 0;
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+
+.code-block.svelte-an6hzx pre:where(.svelte-an6hzx) {
+  margin: 0;
+}
+
+.code-block.svelte-an6hzx code:where(.svelte-an6hzx) {
+  color: #e2e8f0;
+  background: none;
+  padding: 0;
+  font-family: Menlo, Monaco, Courier New, monospace;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.bitcoin-dashboard.svelte-18byggp {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header.svelte-18byggp {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+h2.svelte-18byggp {
+  color: #2d3748;
+  margin: 0;
+  font-size: 2rem;
+}
+
+.render-info.svelte-18byggp {
+  color: #718096;
+  margin-top: .5rem;
+  font-size: .875rem;
+}
+
+.price-display.svelte-18byggp {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px #0000001a;
+}
+
+.price-card.svelte-18byggp {
+  padding: 2rem;
+}
+
+.price-header.svelte-18byggp {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  display: flex;
+}
+
+.currency-code.svelte-18byggp {
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.update-time.svelte-18byggp {
+  color: #718096;
+  font-size: .875rem;
+}
+
+.current-price.svelte-18byggp {
+  color: #2d3748;
+  text-align: center;
+  margin: 1rem 0;
+  font-size: 3rem;
+  font-weight: bold;
+}
+
+.disclaimer.svelte-18byggp {
+  color: #718096;
+  text-align: center;
+  background: #f7fafc;
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem;
+  font-size: .875rem;
+}
+
+.loading.svelte-18byggp {
+  text-align: center;
+  color: #4a5568;
+  padding: 2rem;
+}
+
+.error.svelte-18byggp {
+  text-align: center;
+  color: #e53e3e;
+  padding: 2rem;
+}
+
+.error.svelte-18byggp button:where(.svelte-18byggp) {
+  color: #fff;
+  cursor: pointer;
+  background: #e53e3e;
+  border: none;
+  border-radius: 4px;
+  margin-top: 1rem;
+  padding: .5rem 1rem;
+}
+
+.error.svelte-18byggp button:where(.svelte-18byggp):hover {
+  background: #c53030;
+}
+
+.app.svelte-15izthb {
+  background-color: #f7fafc;
+  min-height: 100vh;
+}
+
+nav.svelte-15izthb {
+  background-color: #fff;
+  box-shadow: 0 1px 3px #0000001a;
+}
+
+.nav-content.svelte-15izthb {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.nav-items.svelte-15izthb {
+  align-items: center;
+  gap: 3rem;
+  height: 4rem;
+  display: flex;
+}
+
+.logo.svelte-15izthb {
+  color: #4299e1;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.nav-links.svelte-15izthb {
+  gap: 3rem;
+  display: flex;
+}
+
+.nav-links.svelte-15izthb a:where(.svelte-15izthb) {
+  color: #4299e1;
+  padding: .5rem 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color .2s;
+}
+
+.nav-links.svelte-15izthb a:where(.svelte-15izthb):hover {
+  color: #2b6cb0;
+}
+
+.server-side-indicator.svelte-15izthb {
+  color: #93c5fd;
+  align-items: center;
+  margin-left: .5rem;
+  font-size: .875rem;
+  display: flex;
+}
+
+main.svelte-15izthb {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.content.svelte-15izthb {
+  padding: 1rem 0;
+}
+
+footer.svelte-15izthb {
+  background-color: #fff;
+  margin-top: 3rem;
+}
+
+.footer-content.svelte-15izthb {
+  text-align: center;
+  color: #718096;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  font-size: .875rem;
+}
+

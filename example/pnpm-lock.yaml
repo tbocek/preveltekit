@@ -8,37 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@rsbuild/core':
-        specifier: ^1.5.0
-        version: 1.5.10
-      '@rsbuild/plugin-svelte':
-        specifier: ^1.0.11
-        version: 1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3)(typescript@5.9.2)
-      commander:
-        specifier: ^14.0.0
-        version: 14.0.1
-      express:
-        specifier: ^5.1.0
-        version: 5.1.0
-      jsdom:
-        specifier: ^27.0.0
-        version: 27.0.0(postcss@8.5.6)
+      preveltekit:
+        specifier: file:..
+        version: file:..(@rsbuild/core@1.5.10)(@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3))(postcss@8.5.6)(svelte@5.39.3)
       svelte:
-        specifier: ^5.0.0
+        specifier: ^5.39.3
         version: 5.39.3
-    devDependencies:
-      '@types/express':
-        specifier: ^5.0.3
-        version: 5.0.3
-      '@types/jsdom':
-        specifier: ^21.1.7
-        version: 21.1.7
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.5.2
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.2
 
 packages:
 
@@ -217,47 +192,8 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
-  '@types/body-parser@1.19.6':
-    resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
-
-  '@types/connect@3.4.38':
-    resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
-
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
-
-  '@types/express-serve-static-core@5.0.7':
-    resolution: {integrity: sha512-R+33OsgWw7rOhD1emjU7dzCDHucJrgJXMA5PYCzJxVil0dsyx5iBEPHqpPfiKNJQb7lZ1vxwoLR4Z87bBUpeGQ==}
-
-  '@types/express@5.0.3':
-    resolution: {integrity: sha512-wGA0NX93b19/dZC1J18tKWVIYWyyF2ZjT9vin/NRu0qzzvfVzWjs04iq2rQ3H65vCTQYlRqs3YHfY7zjdV+9Kw==}
-
-  '@types/http-errors@2.0.5':
-    resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
-
-  '@types/jsdom@21.1.7':
-    resolution: {integrity: sha512-yOriVnggzrnQ3a9OKOCxaVuSug3w3/SbOj5i7VwXWZEyUNl3bLF9V3MfxGbZKuwqJOQyRfqXyROBB1CoZLFWzA==}
-
-  '@types/mime@1.3.5':
-    resolution: {integrity: sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w==}
-
-  '@types/node@24.5.2':
-    resolution: {integrity: sha512-FYxk1I7wPv3K2XBaoyH2cTnocQEu8AOZ60hPbsyukMPLv5/5qr7V1i8PLHdl6Zf87I+xZXFvPCXYjiTFq+YSDQ==}
-
-  '@types/qs@6.14.0':
-    resolution: {integrity: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==}
-
-  '@types/range-parser@1.2.7':
-    resolution: {integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==}
-
-  '@types/send@0.17.5':
-    resolution: {integrity: sha512-z6F2D3cOStZvuk2SaP6YrwkNO65iTZcwA2ZkSABegdkAh/lf+Aa/YQndZVfmEXT5vgAp6zv06VQ3ejSVjAny4w==}
-
-  '@types/serve-static@1.15.8':
-    resolution: {integrity: sha512-roei0UY3LhpOJvjbIP6ZZFngyLKl5dskOtDhxY5THRSpO+ZI+nzJ+m5yUMzGrp89YRa7lvknKkMYjqQFGwA7Sg==}
-
-  '@types/tough-cookie@4.0.5':
-    resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -575,6 +511,14 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
+  preveltekit@file:..:
+    resolution: {directory: .., type: directory}
+    hasBin: true
+    peerDependencies:
+      '@rsbuild/core': ^1.5.0
+      '@rsbuild/plugin-svelte': ^1.0.11
+      svelte: ^5.0.0
+
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
@@ -738,14 +682,6 @@ packages:
   type-is@2.0.1:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
     engines: {node: '>= 0.6'}
-
-  typescript@5.9.2:
-    resolution: {integrity: sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
-  undici-types@7.12.0:
-    resolution: {integrity: sha512-goOacqME2GYyOZZfb5Lgtu+1IDmAlAEu5xnD3+xTzS10hT0vzpf0SPjkXwAw9Jm+4n/mQGDP3LO8CPbYROeBfQ==}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -918,11 +854,11 @@ snapshots:
       core-js: 3.45.1
       jiti: 2.5.1
 
-  '@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3)(typescript@5.9.2)':
+  '@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3)':
     dependencies:
       '@rsbuild/core': 1.5.10
       svelte-loader: 3.2.4(svelte@5.39.3)
-      svelte-preprocess: 6.0.3(postcss@8.5.6)(svelte@5.39.3)(typescript@5.9.2)
+      svelte-preprocess: 6.0.3(postcss@8.5.6)(svelte@5.39.3)
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -1004,60 +940,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/body-parser@1.19.6':
-    dependencies:
-      '@types/connect': 3.4.38
-      '@types/node': 24.5.2
-
-  '@types/connect@3.4.38':
-    dependencies:
-      '@types/node': 24.5.2
-
   '@types/estree@1.0.8': {}
-
-  '@types/express-serve-static-core@5.0.7':
-    dependencies:
-      '@types/node': 24.5.2
-      '@types/qs': 6.14.0
-      '@types/range-parser': 1.2.7
-      '@types/send': 0.17.5
-
-  '@types/express@5.0.3':
-    dependencies:
-      '@types/body-parser': 1.19.6
-      '@types/express-serve-static-core': 5.0.7
-      '@types/serve-static': 1.15.8
-
-  '@types/http-errors@2.0.5': {}
-
-  '@types/jsdom@21.1.7':
-    dependencies:
-      '@types/node': 24.5.2
-      '@types/tough-cookie': 4.0.5
-      parse5: 7.3.0
-
-  '@types/mime@1.3.5': {}
-
-  '@types/node@24.5.2':
-    dependencies:
-      undici-types: 7.12.0
-
-  '@types/qs@6.14.0': {}
-
-  '@types/range-parser@1.2.7': {}
-
-  '@types/send@0.17.5':
-    dependencies:
-      '@types/mime': 1.3.5
-      '@types/node': 24.5.2
-
-  '@types/serve-static@1.15.8':
-    dependencies:
-      '@types/http-errors': 2.0.5
-      '@types/node': 24.5.2
-      '@types/send': 0.17.5
-
-  '@types/tough-cookie@4.0.5': {}
 
   accepts@2.0.0:
     dependencies:
@@ -1391,6 +1274,21 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  preveltekit@file:..(@rsbuild/core@1.5.10)(@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3))(postcss@8.5.6)(svelte@5.39.3):
+    dependencies:
+      '@rsbuild/core': 1.5.10
+      '@rsbuild/plugin-svelte': 1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3)
+      commander: 14.0.1
+      express: 5.1.0
+      jsdom: 27.0.0(postcss@8.5.6)
+      svelte: 5.39.3
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - postcss
+      - supports-color
+      - utf-8-validate
+
   proxy-addr@2.0.7:
     dependencies:
       forwarded: 0.2.0
@@ -1507,12 +1405,11 @@ snapshots:
       svelte-dev-helper: 1.1.9
       svelte-hmr: 0.14.12(svelte@5.39.3)
 
-  svelte-preprocess@6.0.3(postcss@8.5.6)(svelte@5.39.3)(typescript@5.9.2):
+  svelte-preprocess@6.0.3(postcss@8.5.6)(svelte@5.39.3):
     dependencies:
       svelte: 5.39.3
     optionalDependencies:
       postcss: 8.5.6
-      typescript: 5.9.2
 
   svelte@5.39.3:
     dependencies:
@@ -1556,10 +1453,6 @@ snapshots:
       content-type: 1.0.5
       media-typer: 1.1.0
       mime-types: 3.0.1
-
-  typescript@5.9.2: {}
-
-  undici-types@7.12.0: {}
 
   unpipe@1.0.0: {}
 

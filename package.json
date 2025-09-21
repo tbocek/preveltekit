@@ -1,27 +1,51 @@
 {
   "name": "preveltekit",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "description" :"PrevelteKit is a lightweight, high-performance web application framework built on Svelte 5, featuring Server-Side Pre Rendering (SSPR) using Rsbuild and jsdom",
+  "git repository": "https://github.com/tbocek/preveltekit/",
+  "author": "Thomas Bocek",
+  "license": "MIT",
   "type": "module",
+  "svelte": "dist/Router.svelte",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts", 
+      "import": "./dist/client.js",
+      "default": "./dist/client.js"
+    },
+    "./Router.svelte": "./dist/Router.svelte",
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.d.ts"
+    }
+  },
+  "bin": {
+    "preveltekit": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "dev": "node ssr.mjs -d",
-    "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
-    "build": "NODE_ENV=production node ssr.mjs -p && find dist -regex '.*\\.\\(js\\|css\\|html\\)$' -exec sh -c 'zopfli {} & brotli -f {} & zstd -19f {} > /dev/null 2>&1 & wait' \\;",
-    "stage": "NODE_ENV=production node ssr.mjs -p && node ssr.mjs -s",
-    "docs" : "NODE_ENV=production node ssr.mjs -p && rm -rf docs && mkdir -p docs && cp -r dist/* docs"
+    "build": "rm -rf dist/** && tsc && cp src/Router.svelte src/types.d.ts dist/",
+    "prepublishOnly": "pnpm run build",
+    "docs": "cd example && pnpm install && pnpm run build && rm -f ../docs/* && mv dist/* ../docs"
+  },
+  "peerDependencies": {
+    "@rsbuild/core": "^1.5.0",
+    "@rsbuild/plugin-svelte": "^1.0.11",
+    "svelte": "^5.0.0"
   },
   "dependencies": {
-    "svelte": "5.25.3"
+    "commander": "^14.0.0",
+    "express": "^5.1.0",
+    "jsdom": "^27.0.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.2.19",
-    "@rsbuild/plugin-svelte": "1.0.8",
-    "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^22.13.13",
-    "commander": "^13.1.0",
-    "express": "^4.21.2",
-    "jsdom": "^26.0.0",
-    "svelte-check": "^4.1.5",
-    "tsconfig-to-swcconfig": "^2.8.1",
-    "typescript": "^5.8.2"
+    "@types/express": "^5.0.3",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.0.0"
   }
 }
