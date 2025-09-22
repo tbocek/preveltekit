@@ -112,3 +112,9 @@ PrevelteKit is configured through rsbuild.config.ts and supports multiple deploy
  * Development: Hot reload enabled, unminified for debugging
  * Staging: Production build with local server
  * Production: Optimized build with Caddy server
+
+## Publish (internal only)
+
+```
+npm publish --access public
+```
