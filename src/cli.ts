@@ -18,12 +18,15 @@ program
   .action(async (options) => {
     try {
       if (options.prodBuild) {
+        process.env.NODE_ENV = 'production';
         await ssr.generateSSRHtml();
         process.exit(0);
       } else if (options.devServer) {
+        process.env.NODE_ENV = 'development';
         const createServer = ssr.createDevServer();
         await createServer(parseInt(options.port));
       } else if (options.stageServer) {
+        process.env.NODE_ENV = 'production';
         const createServer = ssr.createStageServer();
         createServer(parseInt(options.port));
       } else {
