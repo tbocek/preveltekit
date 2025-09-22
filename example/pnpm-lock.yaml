@@ -242,10 +242,6 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
-  commander@14.0.1:
-    resolution: {integrity: sha512-2JkV3gUZUVrbNA+1sjBOYLsMZ5cEEl8GTFP2a4AVz5hvasAMCQ1D2l2le/cX+pV4N6ZU17zjUahLpIXRrnWL8A==}
-    engines: {node: '>=20'}
-
   content-disposition@1.0.0:
     resolution: {integrity: sha512-Au9nRL8VNUut/XSzbQA38+M78dzP4D+eqg3gfJHMIHHYa3bg067xj1KxMUWj+VULbiZMowKngFFbKczUrNJ1mg==}
     engines: {node: '>= 0.6'}
@@ -989,8 +985,6 @@ snapshots:
 
   clsx@2.1.1: {}
 
-  commander@14.0.1: {}
-
   content-disposition@1.0.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -1278,7 +1272,6 @@ snapshots:
     dependencies:
       '@rsbuild/core': 1.5.10
       '@rsbuild/plugin-svelte': 1.0.11(@rsbuild/core@1.5.10)(postcss@8.5.6)(svelte@5.39.3)
-      commander: 14.0.1
       express: 5.1.0
       jsdom: 27.0.0(postcss@8.5.6)
       svelte: 5.39.3

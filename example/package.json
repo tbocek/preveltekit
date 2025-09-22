@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "preveltekit -d",
-    "build": "preveltekit -p",
-    "stage": "preveltekit -s"
+    "dev": "preveltekit dev",
+    "build": "preveltekit prod",
+    "stage": "preveltekit stage"
   },
   "dependencies": {
     "preveltekit": "file:..",

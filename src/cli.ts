@@ -1,41 +1,88 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+
+// Parse arguments manually
+const args = process.argv.slice(2);
+const command = args[0];
+
+// Set NODE_ENV before any imports
+if (command === 'prod' || command === 'stage') {
+  process.env.NODE_ENV = 'production';
+} else if (command === 'dev') {
+  process.env.NODE_ENV = 'development';
+}
+
 import { PrevelteSSR } from './index.js';
 
-const program = new Command();
 const ssr = new PrevelteSSR();
 
-program
-  .name('preveltekit')
-  .description('PrevelteKit SSR utilities')
-  .version('1.0.0');
+function getPort() {
+  const portIndex = args.indexOf('-p') !== -1 ? args.indexOf('-p') : args.indexOf('--port');
+  return portIndex !== -1 && args[portIndex + 1] ? parseInt(args[portIndex + 1]) : 3000;
+}
 
-program
-  .option('-p, --prod-build', 'Run production build and generate SSR HTML')
-  .option('-d, --dev-server', 'Run development server')
-  .option('-s, --stage-server', 'Run staging server')
-  .option('--port <port>', 'Port number', '3000')
-  .action(async (options) => {
-    try {
-      if (options.prodBuild) {
-        process.env.NODE_ENV = 'production';
+function showHelp() {
+  console.log(`
+PrevelteKit SSR utilities v1.0.0
+
+Usage:
+  preveltekit <command> [options]
+
+Commands:
+  prod                    Run production build and generate SSR HTML
+  dev                     Run development server
+  stage                   Run staging server
+
+Options:
+  -p, --port <port>       Port number (default: 3000)
+  -h, --help              Show help
+  -v, --version           Show version
+
+Examples:
+  preveltekit prod
+  preveltekit dev -p 3000
+  preveltekit stage --port 8080
+`);
+}
+
+async function main() {
+  try {
+    if (!command || args.includes('-h') || args.includes('--help')) {
+      showHelp();
+      process.exit(0);
+    }
+
+    if (args.includes('-v') || args.includes('--version')) {
+      console.log('1.0.0');
+      process.exit(0);
+    }
+
+    switch (command) {
+      case 'prod':
         await ssr.generateSSRHtml();
         process.exit(0);
-      } else if (options.devServer) {
-        process.env.NODE_ENV = 'development';
-        const createServer = ssr.createDevServer();
-        await createServer(parseInt(options.port));
-      } else if (options.stageServer) {
-        process.env.NODE_ENV = 'production';
-        const createServer = ssr.createStageServer();
-        createServer(parseInt(options.port));
-      } else {
-        program.help();
-      }
-    } catch (error) {
-      console.error(error);
-      process.exit(1);
-    }
-  });
+        break;
 
-program.parse();
+      case 'dev':
+        const devPort = getPort();
+        const createDevServer = ssr.createDevServer();
+        await createDevServer(devPort);
+        break;
+
+      case 'stage':
+        const stagePort = getPort();
+        const createStageServer = ssr.createStageServer();
+        createStageServer(stagePort);
+        break;
+
+      default:
+        console.error(`Unknown command: ${command}`);
+        showHelp();
+        process.exit(1);
+    }
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+}
+
+main();
