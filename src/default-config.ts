@@ -12,7 +12,7 @@ export const defaultConfig = defineConfig({
       },
       output: {
         target: "web",
-      }
+      },
     },
   },
   dev: { hmr: false },
