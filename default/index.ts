@@ -1,6 +1,5 @@
 import { hydrate } from 'svelte';
-import Index from './Index.svelte';
-import './main.css';
+import Index from './index.svelte';
 
 hydrate(Index, {
     target: document.getElementById('root')!,

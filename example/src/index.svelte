@@ -1,9 +1,10 @@
 <script lang="ts">
+    import './main.css';
     import Router from 'preveltekit/Router.svelte';
     import type { Routes } from 'preveltekit/types';
-    import Landing from "./Landing.svelte";
-    import Documentation from "./Documentation.svelte";
-    import Example from "./Example.svelte";
+    import Landing from "./landing.svelte";
+    import Documentation from "./documentation.svelte";
+    import Example from "./example.svelte";
 
     const routes: Routes = [
         {

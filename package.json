@@ -1,6 +1,6 @@
 {
   "name": "preveltekit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description" :"PrevelteKit is a lightweight, high-performance web application framework built on Svelte 5, featuring Server-Side Pre Rendering (SSPR) using Rsbuild and jsdom",
   "repository": "https://github.com/tbocek/preveltekit/",
   "author": "Thomas Bocek",
@@ -28,16 +28,18 @@
     "dist"
   ],
   "scripts": {
-    "build": "rm -rf dist/** && tsc && cp src/Router.svelte src/types.d.ts dist/",
+    "build": "rm -rf dist/** && mkdir -p dist/default && tsc && cp src/Router.svelte src/types.d.ts dist/ && cp -r default dist/",
     "prepublishOnly": "pnpm run build",
-    "docs": "cd example && pnpm install && pnpm run build && rm -rf ../docs/* && mv dist/* ../docs"
+    "docs": "cd example && pnpm install && pnpm run build && rm -rf ../docs/* && mv dist/* ../docs",
+    "release": "pnpm publish --access public"
   },
   "peerDependencies": {
-    "@rsbuild/core": "^1.5.0",
-    "@rsbuild/plugin-svelte": "^1.0.11",
     "svelte": "^5.0.0"
   },
   "dependencies": {
+    "@rsbuild/core": "^1.5.11",
+    "@rsbuild/plugin-svelte": "^1.0.11",
+    "@rspack/core": "^1.5.6",
     "express": "^5.1.0",
     "jsdom": "^27.0.0"
   },

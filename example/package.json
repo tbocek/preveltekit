@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "preveltekit dev",
-    "build": "preveltekit prod",
-    "stage": "preveltekit stage"
+    "dev": "NODE_ENV=development preveltekit dev",
+    "build": "NODE_ENV=production  preveltekit prod",
+    "stage": "NODE_ENV=production  preveltekit stage"
   },
   "dependencies": {
-    "preveltekit": "file:..",
     "svelte": "^5.39.3"
+  },
+  "devDependencies": {
+     "preveltekit": "file:.."
   }
 }

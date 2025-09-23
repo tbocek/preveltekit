@@ -2,11 +2,12 @@
 import { JSDOM, ResourceLoader, VirtualConsole } from 'jsdom';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
 import type { JSDOMInstance } from './types.js';
 import { mergeRsbuildConfig } from '@rsbuild/core';
-import { defaultConfig } from './default-config.js';
+import { defaultConfig } from './base-rsbuild.config.js';
 
 class LocalResourceLoader extends ResourceLoader {
   constructor(private resourceFolder?: string) {
@@ -163,6 +164,13 @@ export class PrevelteSSR {
   async build() {
     const { content } = await loadConfig();
     const finalConfig = mergeRsbuildConfig(defaultConfig, content);
+    
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    const libraryDir = path.join(currentDir, 'default');
+    if (!fs.existsSync('./src/index.html')) {
+      finalConfig.html!.template = path.join(libraryDir, 'index.html');
+    }
+    
     const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
     await rsbuild.build();
     this.config = rsbuild.getRsbuildConfig();
@@ -229,6 +237,13 @@ export class PrevelteSSR {
     return async (port = 3000) => {
       const { content } = await loadConfig();
       const finalConfig = mergeRsbuildConfig(defaultConfig, content);
+      
+      const currentDir = path.dirname(fileURLToPath(import.meta.url));
+      const libraryDir = path.join(currentDir, 'default');
+      if (!fs.existsSync('./src/index.html')) {
+        finalConfig.html!.template = path.join(libraryDir, 'index.html');
+      }
+      
       const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
       const rsbuildServer = await rsbuild.createDevServer();
       

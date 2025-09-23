@@ -1,19 +1,27 @@
 #!/usr/bin/env node
+import { PrevelteSSR } from './index.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-// Parse arguments manually
 const args = process.argv.slice(2);
 const command = args[0];
+const ssr = new PrevelteSSR();
 
-// Set NODE_ENV before any imports
-if (command === 'prod' || command === 'stage') {
-  process.env.NODE_ENV = 'production';
-} else if (command === 'dev') {
-  process.env.NODE_ENV = 'development';
+// Get version from package.json
+function getVersion() {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packageJsonPath = join(__dirname, '..', 'package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return packageJson.version;
+  } catch (error) {
+    return '1.0.0'; // fallback
+  }
 }
 
-import { PrevelteSSR } from './index.js';
-
-const ssr = new PrevelteSSR();
+const version = getVersion();
 
 function getPort() {
   const portIndex = args.indexOf('-p') !== -1 ? args.indexOf('-p') : args.indexOf('--port');
@@ -22,7 +30,7 @@ function getPort() {
 
 function showHelp() {
   console.log(`
-PrevelteKit SSR utilities v1.0.0
+PrevelteKit SSR utilities v${version}
 
 Usage:
   preveltekit <command> [options]
@@ -50,9 +58,9 @@ async function main() {
       showHelp();
       process.exit(0);
     }
-
+    
     if (args.includes('-v') || args.includes('--version')) {
-      console.log('1.0.0');
+      console.log(version);
       process.exit(0);
     }
 
@@ -61,19 +69,19 @@ async function main() {
         await ssr.generateSSRHtml();
         process.exit(0);
         break;
-
+        
       case 'dev':
         const devPort = getPort();
         const createDevServer = ssr.createDevServer();
         await createDevServer(devPort);
         break;
-
+        
       case 'stage':
         const stagePort = getPort();
         const createStageServer = ssr.createStageServer();
         createStageServer(stagePort);
         break;
-
+        
       default:
         console.error(`Unknown command: ${command}`);
         showHelp();
