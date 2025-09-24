@@ -27,7 +27,7 @@ export const defaultConfig = defineConfig({
     publicDir: {
       name: "static", // Specify the directory for static assets
       copyOnBuild: "auto", // Automatically copy files during production build
-      watch: true, // Enable file watching during development
+      watch: process.env.NODE_ENV === 'production', // Enable file watching during development
     },
   },
   environments: {

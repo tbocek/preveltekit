@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
-import type { JSDOMInstance } from './types.js';
+import type { JSDOMInstance, Route } from './types.js';
 import { mergeRsbuildConfig } from '@rsbuild/core';
 import { defaultConfig } from './rsbuild.config.js';
 
@@ -34,15 +34,16 @@ class LocalResourceLoader extends ResourceLoader {
   }
 }
 
-async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOMInstance> {  const virtualConsole = new VirtualConsole();
-  virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
-  virtualConsole.on("jsdomError", (e) => {
-    if (e.type === "not implemented" && e.message.match("navigation")) {
-      // handle navigation logic
-    } else {
-      console.error(e);
-    }
-  });
+async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOMInstance> {  
+  const virtualConsole = new VirtualConsole();
+  // ** for debugging **
+  //virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
+  //virtualConsole.on("jsdomError", (e) => {
+  //  if (e.type === "not-implemented" && e.message.includes("navigation")) {
+  //    } else {
+  //    console.error("jsdomError", e);
+  //  }
+  //});
 
   const dom = new JSDOM(html, {
     url: ssrUrl,
@@ -155,73 +156,26 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
 }
 
 export class PrevelteSSR {
-  private config: any;
-
-  async build() {
+  private async createCustomRsbuild() {
     const { content } = await loadConfig();
     const finalConfig = mergeRsbuildConfig(defaultConfig, content);
-    
     const currentDir = path.dirname(fileURLToPath(import.meta.url));
     const libraryDir = path.join(currentDir, 'default');
     if (!fs.existsSync('./src/index.html')) {
       finalConfig.html!.template = path.join(libraryDir, 'index.html');
     }
-    
     const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
-    await rsbuild.build();
-    this.config = rsbuild.getRsbuildConfig();
-    return this.config;
-  }
-
-  async generateSSRHtml() {
-    const config = this.config || await this.build();
-    const processedDoms = new Map();
-
-    const indexFileName = `${config.output.distPath.root}/index.html`;
-    const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
-    const indexDom = await fakeBrowser('http://localhost/', indexHtml, config.output.distPath.root);
-    processedDoms.set('index.html', indexDom);
-
-    const svelteRoutes = indexDom.window.__svelteRoutes;
-    if (svelteRoutes && Array.isArray(svelteRoutes)) {
-      const promises = svelteRoutes.map(async route => {
-        if (!route?.static || !route?.path) return;
-        if (processedDoms.has(route.static)) return;
-
-        const cleanPath = route.path.replace(/\*/g, '').replace(/^\//, '');
-        try {
-          const dom = await fakeBrowser(`http://localhost/${cleanPath}`, indexHtml, config.output.distPath.root);
-          processedDoms.set(route.static, dom);
-        } catch (error) {
-          console.error(`Error processing route ${cleanPath}:`, error);
-        }
-      });
-
-      await Promise.all(promises);
-    }
-
-    for (const [staticName, dom] of processedDoms.entries()) {
-      const fileName = `${config.output.distPath.root}/${staticName}`;
-      const finalHtml = dom.serialize();
-      await fs.promises.writeFile(fileName, finalHtml);
-      console.log(`Generated ${fileName}`);
-    }
-    
-    if (process.env.NODE_ENV === 'production') {
-      await this.compressFiles();
-    }
+    return rsbuild;
   }
   
-  private async compressFiles() {
+  private async compressFiles(distPath:string) {
     const { exec } = await import('child_process');
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
     
-    const distPath = this.config?.output?.distPath?.root || 'dist';
-    
     try {
       await execAsync(
-        `find ${distPath} -regex '.*\\.\\(js\\|css\\|html\\)$' -exec sh -c 'zopfli {} & brotli -f {} & zstd -19f {} > /dev/null 2>&1 & wait' \\;`
+        `find ${distPath} -regex '.*\\.\\(js\\|css\\|html\\|svg\\)$' -exec sh -c 'zopfli {} & brotli -f {} & zstd -19f {} > /dev/null 2>&1 & wait' \\;`
       );
       console.log('Files compressed with brotli, zopfli, and zstd');
     } catch (error) {
@@ -229,65 +183,116 @@ export class PrevelteSSR {
     }
   }
 
-  createDevServer() {
-    return async (port = 3000) => {
-      const { content } = await loadConfig();
-      const finalConfig = mergeRsbuildConfig(defaultConfig, content);
+  async generateSSRHtml() {
+    const rsbuild = await this.createCustomRsbuild();
+    await rsbuild.build();
+    const config = rsbuild.getRsbuildConfig();
+  
+    const indexFileName = `${config?.output?.distPath?.root}/index.html`;
+    const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
+    const indexDom = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
+    
+    const processedDoms = new Map();
+    processedDoms.set('index.html', indexDom);
+
+    const svelteRoutes = indexDom.window.__svelteRoutes as Route[];
+    if (Array.isArray(svelteRoutes)) {
+      const promises: Promise<void>[] = [];
       
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const libraryDir = path.join(currentDir, 'default');
-      if (!fs.existsSync('./src/index.html')) {
-        finalConfig.html!.template = path.join(libraryDir, 'index.html');
+      for (const route of svelteRoutes) {
+        if (!route?.static || !route?.path || processedDoms.has(route.static)) continue;
+      
+        const cleanPath = route.path.replace(/\*/g, '').replace(/^\//, '');
+        const promise = (async () => {
+          try {
+            const dom = await fakeBrowser(`http://localhost/${cleanPath}`, indexHtml, config?.output?.distPath?.root);
+            processedDoms.set(route.static, dom);
+          } catch (error) {
+            console.error(`Error processing route ${cleanPath}:`, error);
+          }
+        })();
+      
+        promises.push(promise);
       }
       
-      const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
-      const rsbuildServer = await rsbuild.createDevServer();
-      
+      await Promise.all(promises);
+    }
+
+    for (const [staticName, dom] of processedDoms.entries()) {
+      const fileName = `${config?.output?.distPath?.root}/${staticName}`;
+      const finalHtml = dom.serialize();
+      await fs.promises.writeFile(fileName, finalHtml);
+      console.log(`Generated ${fileName}`);
+    }
+    
+    if (process.env.NODE_ENV === 'production') {
+      const distPath = config?.output?.distPath?.root || 'dist';
+      await this.compressFiles(distPath as string);
+    }
+  }
+  
+  async createDevServer() {
+    const rsbuild = await this.createCustomRsbuild();
+    const rsbuildServer = await rsbuild.createDevServer();
+    const template = await rsbuildServer.environments.web.getTransformedHtml("index");
+    return async (port = 3000) => {
       const app = express();
-      
       app.use(async (req, res, next) => {
-        if (req.url.includes('static/') || req.url.includes('__rsbuild_hmr') || req.url.includes('.hot-update.')) {
+        if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) { 
           return next();
         }
-
         try {
-          const template = await rsbuildServer.environments.web.getTransformedHtml("index");
-          const fullUrl = `${req.protocol}://${req.get('host')}${req.url}`;
-          const dom = await fakeBrowser(fullUrl, template);
-          res.writeHead(200, {'Content-Type': 'text/html'});
-          res.end(dom.serialize());
+          const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
+          const svelteRoutes = dom.window.__svelteRoutes;
+          for (const route of svelteRoutes) {
+            if (req.url.includes(route.navigation) || req.url == '/') {
+              res.writeHead(200, { 'Content-Type': 'text/html' });
+              res.end(dom.serialize());
+              return; // stop here, do not continue to next middleware
+            }
+          }
         } catch (err) {
-          console.error('SSR render error, downgrade to CSR...\n', err);
-          next();
+          console.error(`SSR render error, downgrade to CSR for [${req.url}]`, err);
         }
-      });
-
+        return next();
+      })
       app.use(rsbuildServer.middlewares);
 
       const httpServer = app.listen(port, async () => {
         await rsbuildServer.afterListen();
+        rsbuildServer.connectWebSocket({ server: httpServer });
         console.log(`Dev server running on port ${port}`);
       });
 
       return { server: httpServer, rsbuildServer };
     };
   }
+  
+  private listHtmlFiles(folder: string): string[] {
+    return fs.readdirSync(folder)
+      .filter(file => file.endsWith('.html'))
+      .map(file => path.basename(file, '.html'));
+  }
 
   createStageServer() {
     return (port = 3000) => {
       const app = express();
-      app.use(express.static('dist'));
-      app.get('*', (req, res) => {
-        const htmlFile = path.join(process.cwd(), 'dist', `${req.url.slice(1) || 'index'}.html`);
-        const normalizedPath = path.normalize(htmlFile).replace(/^(\.\.[\/\\])+/, '');
-        
-        res.sendFile(normalizedPath, err => {
-          if (err) {
-            res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
-          }
+      
+      app.get('/', (req, _, next) => { 
+        req.url = '/index.html';
+         return next();
+      });
+      
+      const htmlFolder = path.join(process.cwd(), 'dist');
+      const htmlFiles = this.listHtmlFiles(htmlFolder);
+      htmlFiles.forEach((filename) => {
+        app.get(`/${filename}`, (req, _, next) => {
+          req.url = `/${filename}.html`;
+          return next();
         });
       });
       
+      app.use(express.static('dist'));
       return app.listen(port, () => {
         console.log(`Stage server running on port ${port}`);
       });

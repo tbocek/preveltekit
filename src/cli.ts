@@ -67,17 +67,17 @@ async function main() {
     switch (command) {
       case 'prod':
         await ssr.generateSSRHtml();
-        process.exit(0);
         break;
         
       case 'dev':
         const devPort = getPort();
-        const createDevServer = ssr.createDevServer();
+        const createDevServer = await ssr.createDevServer();
         await createDevServer(devPort);
         break;
         
       case 'stage':
         const stagePort = getPort();
+        await ssr.generateSSRHtml();
         const createStageServer = ssr.createStageServer();
         createStageServer(stagePort);
         break;

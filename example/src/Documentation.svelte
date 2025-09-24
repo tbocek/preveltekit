@@ -1,5 +1,8 @@
 <script lang="ts">
     // Demo SPAwBR capabilities
+    import SSR from './assets/SSR.svg';
+    import SPA from './assets/SPA.svg';
+    import SPAwBR from './assets/SPAwBR.svg';
     let renderType = "Client Rendered";
     if (window?.__isBuildTime) {
         renderType = "Server Pre-Rendered";
@@ -94,18 +97,14 @@ npm run dev
                 <tbody>
                     <tr>
                         <td><strong>SSR</strong></td>
+                        <td>
+                            <img src={SSR} alt="SSR Initial" class="comparison-img"/>
+                            <br />User sees content instantly
+                            <br /><small>(rendered on each request)</small>    
+                        </td>
                         <td
                             ><img
-                                src="static/SSR.svg"
-                                alt="SSR Initial"
-                                class="comparison-img"
-                            /><br />User sees content instantly<br /><small
-                                >(rendered on each request)</small
-                            ></td
-                        >
-                        <td
-                            ><img
-                                src="static/SSR.svg"
+                                src={SSR}
                                 alt="SSR After"
                                 class="comparison-img"
                             /><br />User sees content instantly<br /><small
@@ -117,7 +116,7 @@ npm run dev
                         <td><strong>SPA</strong></td>
                         <td
                             ><img
-                                src="static/SPA.svg"
+                                src={SPA}
                                 alt="SPA Initial"
                                 class="comparison-img"
                             /><br />User sees white page or spinner<br /><small
@@ -126,7 +125,7 @@ npm run dev
                         >
                         <td
                             ><img
-                                src="static/SSR.svg"
+                                src={SSR}
                                 alt="SPA Loaded"
                                 class="comparison-img"
                             /><br />User sees full content<br /><small
@@ -138,7 +137,7 @@ npm run dev
                         <td><strong>SPAwBR</strong></td>
                         <td
                             ><img
-                                src="static/SPAwBR.svg"
+                                src={SPAwBR}
                                 alt="SPAwBR Initial"
                                 class="comparison-img"
                             /><br />User sees layout and static content<br
@@ -146,7 +145,7 @@ npm run dev
                         >
                         <td
                             ><img
-                                src="static/SSR.svg"
+                                src={SSR}
                                 alt="SPAwBR Hydrated"
                                 class="comparison-img"
                             /><br />User sees interactive content<br /><small
@@ -245,17 +244,20 @@ if (window?.__isBuildTime) &lcub;
         &lcub;
             path: "*/doc",
             component: Documentation,
-            static: "doc.html"
+            static: "doc.html",
+            navigation: "doc"
         &rcub;,
         &lcub;
             path: "*/example",
             component: Example,
-            static: "example.html"
+            static: "example.html",
+            navigation: "example"
         &rcub;,
         &lcub;
             path: "*/",
             component: Landing,
-            static: "index.html"
+            static: "index.html",
+            navigation: "index"
         &rcub;
     ];
 

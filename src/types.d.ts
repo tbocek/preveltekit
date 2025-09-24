@@ -4,6 +4,7 @@ export interface Route {
     path: string;
     component: Component;
     static: string;
+    navigation: string;
 }
 
 export type Routes = Route[];

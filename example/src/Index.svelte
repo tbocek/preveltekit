@@ -10,17 +10,20 @@
         {
             path: "*/doc",
             component: Documentation,
-            static: "doc.html"
+            static: "doc.html",
+            navigation: "doc"
         },
         {
             path: "*/example",
             component: Example,
-            static: "example.html"
+            static: "example.html",
+            navigation: "example"
         },
         {
             path: "*/",
             component: Landing,
-            static: "index.html"
+            static: "index.html",
+            navigation: "index"
         }
     ];
 </script>
