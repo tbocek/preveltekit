@@ -244,11 +244,13 @@ export class PrevelteSSR {
         try {
           const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
           const svelteRoutes = dom.window.__svelteRoutes;
-          for (const route of svelteRoutes) {
-            if (req.url.includes(route.navigation) || req.url == '/') {
-              res.writeHead(200, { 'Content-Type': 'text/html' });
-              res.end(dom.serialize());
-              return; // stop here, do not continue to next middleware
+          if (Array.isArray(svelteRoutes)) {
+            for (const route of svelteRoutes) {
+              if (req.url.includes(route.navigation) || req.url == '/') {
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(dom.serialize());
+                return; // stop here, do not continue to next middleware
+              }
             }
           }
         } catch (err) {
