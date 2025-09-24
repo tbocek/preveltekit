@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "preveltekit dev",
     "build": "NODE_ENV=production preveltekit prod",
+    "build-no-zip": "NODE_ENV=production preveltekit prod --no-zip",
     "stage": "NODE_ENV=production preveltekit stage"
   },
   "dependencies": {
     "svelte": "^5.39.3"
   },
   "devDependencies": {
-    "preveltekit": "^1.0.11",
+    "preveltekit": "^1.0.12",
     "typescript": "^5.9.2"
   }
 }

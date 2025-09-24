@@ -183,7 +183,7 @@ export class PrevelteSSR {
     }
   }
 
-  async generateSSRHtml() {
+  async generateSSRHtml(noZip:boolean) {
     const rsbuild = await this.createCustomRsbuild();
     await rsbuild.build();
     const config = rsbuild.getRsbuildConfig();
@@ -225,7 +225,7 @@ export class PrevelteSSR {
       console.log(`Generated ${fileName}`);
     }
     
-    if (process.env.NODE_ENV === 'production') {
+    if (!noZip && process.env.NODE_ENV === 'production') {
       const distPath = config?.output?.distPath?.root || 'dist';
       await this.compressFiles(distPath as string);
     }

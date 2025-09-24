@@ -9,7 +9,7 @@ const command = args[0];
 const ssr = new PrevelteSSR();
 
 // Get version from package.json
-function getVersion() {
+function getVersion():string {
   try {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
@@ -23,9 +23,14 @@ function getVersion() {
 
 const version = getVersion();
 
-function getPort() {
+function getPort():number {
   const portIndex = args.indexOf('-p') !== -1 ? args.indexOf('-p') : args.indexOf('--port');
   return portIndex !== -1 && args[portIndex + 1] ? parseInt(args[portIndex + 1]) : 3000;
+}
+
+function getNoZip(): boolean {
+  const noZipIndex = args.indexOf('--no-zip');
+  return noZipIndex !== -1;
 }
 
 function showHelp() {
@@ -42,6 +47,7 @@ Commands:
 
 Options:
   -p, --port <port>       Port number (default: 3000)
+  --no-zip                Do not compress zip/br/zstd the output files
   -h, --help              Show help
   -v, --version           Show version
 
@@ -66,7 +72,7 @@ async function main() {
 
     switch (command) {
       case 'prod':
-        await ssr.generateSSRHtml();
+        await ssr.generateSSRHtml(getNoZip());
         break;
         
       case 'dev':
@@ -77,7 +83,7 @@ async function main() {
         
       case 'stage':
         const stagePort = getPort();
-        await ssr.generateSSRHtml();
+        await ssr.generateSSRHtml(getNoZip());
         const createStageServer = ssr.createStageServer();
         createStageServer(stagePort);
         break;
