@@ -1,21 +1,21 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginSvelte } from "@rsbuild/plugin-svelte";
-import fs from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { dirname, join } from "node:path";
 
-// Helper function to collect virtual modules
+// When used as a library, with virtual modules, other users that are using this library can pretend to have 
+// ./src/index.ts in the ./src directory without having it. If the file exists, the user provided file will
+// be used, otherwise this default will be used. Please note, this feature is marked experimental with rspack.
 function getVirtualModules() {
   const virtualModules: Record<string, string> = {};
 
-  // Re-calculate __dirname
   const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = path.dirname(currentFile);
+  const currentDir = dirname(currentFile);
 
-  // Check for index.ts
-  if (!fs.existsSync("./src/index.ts")) {
-    const libraryIndexPath = path.join(currentDir, "default", "index.ts");
-    const content = fs.readFileSync(libraryIndexPath, "utf8");
+  if (!existsSync("./src/index.ts")) {
+    const libraryIndexPath = join(currentDir, "default", "index.ts");
+    const content = readFileSync(libraryIndexPath, "utf8");
     virtualModules["./src/index.ts"] = content;
   }
 
@@ -28,19 +28,18 @@ export const defaultConfig = defineConfig({
       plugins: [pluginSvelte()],
       source: {
         entry: {
-          index: "./src/index.ts",
+          index: "./src/index.ts", //default provided see above (virtual modules)
         },
       },
       output: {
         target: "web",
-        minify: process.env.NODE_ENV === "production",
       },
     },
   },
-  dev: { hmr: false },
-  html: { template: "./src/index.html" },
-  output: { assetPrefix: "./" },
-  tools: {
+  dev: { hmr: false }, //I had issues with hmr in the past, easiest to disable it
+  html: { template: "./src/index.html" }, //default provided, see ssr.ts
+  output: { assetPrefix: "./" }, //create relative paths, to run in subdirectories
+  tools: { //tools only exist here due to virtual modules, needs restart when changed
     rspack: async (config) => {
       const virtualModules = getVirtualModules();
 
