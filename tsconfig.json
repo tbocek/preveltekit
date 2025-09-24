@@ -19,6 +19,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     
+    "declaration": true,
     "outDir": "dist"
   },
   "include": ["./src", "./example/src"],

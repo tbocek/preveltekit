@@ -16,11 +16,6 @@
       "svelte": "./dist/Router.svelte",
       "import": "./dist/Router.svelte",
       "default": "./dist/Router.svelte"
-    },
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/types.d.ts",
-      "default": "./dist/types.d.ts"
     }
   },
   "bin": {
