@@ -1,14 +1,15 @@
 FROM node:24-alpine AS base
 RUN apk add --no-cache libc6-compat brotli zopfli zstd pnpm
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install
-COPY . ./
+COPY pnpm-lock.yaml package.json ./
+RUN pnpm install --frozen-lockfile
+COPY src ./src
 RUN pnpm build
 
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=base /app/dist/ /var/www/html
+RUN ls -la /var/www/html
 
 # run with:
 # docker build . -t preveltekit

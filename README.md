@@ -40,14 +40,26 @@ Make sure you have the following installed:
 
 ### Install
 ```bash
-git clone https://github.com/tbocek/preveltekit.git
-cd preveltekit
-pnpm install
+# Create test directory and go into this directory
+mkdir -p preveltekit/src && cd preveltekit 
+# Declare dependency and the dev script
+echo '{"dependencies": {"preveltekit":"^1.0.4"}, "scripts": {"dev": "preveltekit dev"}}' > package.json 
+# Download dependencies
+npm install 
+# A very simple svelte file
+echo '<script>let count = $state(0);</script><h1>Count: {count}</h1><button onclick={() => count++}>Click me</button>' > src/Index.svelte 
+# And open a browser with localhost:3000
+npm run dev 
 ```
+
+## Slow Start
+
+Another example is the [notary example](https://github.com/tbocek/notary-example). Here you can see, which scripts are supported: dev/stage/prod. 
+Lets, look at those in the example folder:
 
 ### Start the development server
 ```bash
-pnpm dev
+npm run dev
 ```
 This starts an Express development server with:
 - Live reloading
@@ -56,7 +68,7 @@ This starts an Express development server with:
 
 ### Build for production
 ```bash
-pnpm build
+npm run build
 ```
 The production build:
 - Uses Caddy as the web server
@@ -68,7 +80,7 @@ The production build:
 
 ### Staging Environment
 ```bash
-pnpm stage
+npm stage
 ```
 
 **Note**: The development server prioritizes fast rebuilds and developer experience, while the production build focuses on optimization and performance. Always test your application with a production build before deploying.

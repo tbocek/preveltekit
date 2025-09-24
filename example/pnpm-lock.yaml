@@ -13,8 +13,11 @@ importers:
         version: 5.39.4
     devDependencies:
       preveltekit:
-        specifier: file:..
-        version: file:..(@swc/helpers@0.5.17)(postcss@8.5.6)(svelte@5.39.4)
+        specifier: 1.0.4
+        version: 1.0.4(@swc/helpers@0.5.17)(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
 
 packages:
 
@@ -508,8 +511,8 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  preveltekit@file:..:
-    resolution: {directory: .., type: directory}
+  preveltekit@1.0.4:
+    resolution: {integrity: sha512-TYa1zRx9dPSt4jwOTb1Y5kPPdVTAdXzWpGAKumpompucpe3kXOvNM4atfxw1SnMqfGCAb+PgrQJidM3xDfLLBw==}
     hasBin: true
     peerDependencies:
       svelte: ^5.0.0
@@ -677,6 +680,11 @@ packages:
   type-is@2.0.1:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
     engines: {node: '>= 0.6'}
+
+  typescript@5.9.2:
+    resolution: {integrity: sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==}
+    engines: {node: '>=14.17'}
+    hasBin: true
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -850,11 +858,11 @@ snapshots:
       core-js: 3.45.1
       jiti: 2.6.0
 
-  '@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.11)(postcss@8.5.6)(svelte@5.39.4)':
+  '@rsbuild/plugin-svelte@1.0.11(@rsbuild/core@1.5.11)(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2)':
     dependencies:
       '@rsbuild/core': 1.5.11
       svelte-loader: 3.2.4(svelte@5.39.4)
-      svelte-preprocess: 6.0.3(postcss@8.5.6)(svelte@5.39.4)
+      svelte-preprocess: 6.0.3(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2)
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -1268,10 +1276,10 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  preveltekit@file:..(@swc/helpers@0.5.17)(postcss@8.5.6)(svelte@5.39.4):
+  preveltekit@1.0.4(@swc/helpers@0.5.17)(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2):
     dependencies:
       '@rsbuild/core': 1.5.11
-      '@rsbuild/plugin-svelte': 1.0.11(@rsbuild/core@1.5.11)(postcss@8.5.6)(svelte@5.39.4)
+      '@rsbuild/plugin-svelte': 1.0.11(@rsbuild/core@1.5.11)(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2)
       '@rspack/core': 1.5.6(@swc/helpers@0.5.17)
       express: 5.1.0
       jsdom: 27.0.0(postcss@8.5.6)
@@ -1409,11 +1417,12 @@ snapshots:
       svelte-dev-helper: 1.1.9
       svelte-hmr: 0.14.12(svelte@5.39.4)
 
-  svelte-preprocess@6.0.3(postcss@8.5.6)(svelte@5.39.4):
+  svelte-preprocess@6.0.3(postcss@8.5.6)(svelte@5.39.4)(typescript@5.9.2):
     dependencies:
       svelte: 5.39.4
     optionalDependencies:
       postcss: 8.5.6
+      typescript: 5.9.2
 
   svelte@5.39.4:
     dependencies:
@@ -1457,6 +1466,8 @@ snapshots:
       content-type: 1.0.5
       media-typer: 1.1.0
       mime-types: 3.0.1
+
+  typescript@5.9.2: {}
 
   unpipe@1.0.0: {}
 
