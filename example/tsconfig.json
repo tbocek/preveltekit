@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // svelte-preprocess cannot figure out whether you have a value or a type, so tell TypeScript
+    // to enforce using `import type` instead of `import` for Types.
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["svelte"]
+  },
+  "include": ["./src/*"],
+  "exclude": ["node_modules"]
+}

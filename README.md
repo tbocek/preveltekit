@@ -43,7 +43,7 @@ Make sure you have the following installed:
 # Create test directory and go into this directory
 mkdir -p preveltekit/src && cd preveltekit 
 # Declare dependency and the dev script
-echo '{"dependencies": {"preveltekit":"^1.0.4"}, "scripts": {"dev": "preveltekit dev"}}' > package.json 
+echo '{"dependencies": {"preveltekit":"^1.0.9"}, "scripts": {"dev": "preveltekit dev"}}' > package.json 
 # Download dependencies
 npm install 
 # A very simple svelte file
@@ -98,20 +98,12 @@ To run in development mode, run
 
 ```bash
 docker build -f Dockerfile.dev . -t preveltekit-dev
-docker run -p3000:3000 -v./static:/app/static -v./src:/app/src -v./public:/app/public preveltekit-dev
+docker run -p3000:3000 -v./src:/app/src preveltekit-dev
 ```
 
-## 📚 Technical Details
-PrevelteKit uses SSPR (Server-Side Pre-Rendering) to generate static HTML at build time while maintaining full interactivity through hydration. This approach offers:
+## Configuration
+PrevelteKit uses rsbuild.config.ts for configuration with sensible defaults. To customize settings, create an rsbuild.config.ts file in your project - it will merge with the default configuration.
 
- * Better SEO: Search engines see fully rendered content
- * Faster Initial Load: Users see content immediately
- * Full Interactivity: Components hydrate seamlessly
- * Simple Deployment: Deploy to any static hosting
+The framework provides fallback files (index.html and index.ts) from the default folder when you don't supply your own. Once you add your own index.html or index.ts files, PrevelteKit uses those instead, ignoring the defaults.
 
-## 🔧 Configuration
-PrevelteKit is configured through rsbuild.config.ts and supports multiple deployment targets:
-
- * Development: Hot reload enabled, unminified for debugging
- * Staging: Production build with local server
- * Production: Optimized build with Caddy server
+This approach follows a "convention over configuration" pattern where you only need to specify what differs from the defaults.
