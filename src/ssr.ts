@@ -245,8 +245,8 @@ export class PrevelteSSR {
       
       const app = express();
       
-      app.get('/', async (req, res, next) => {
-        if (req.url.includes('/static/') || req.url.includes('/__rsbuild_hmr') || req.url.includes('.hot-update.')) {
+      app.use(async (req, res, next) => {
+        if (req.url.includes('static/') || req.url.includes('__rsbuild_hmr') || req.url.includes('.hot-update.')) {
           return next();
         }
 

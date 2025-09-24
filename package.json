@@ -1,8 +1,9 @@
 {
   "name": "preveltekit",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "PrevelteKit is a lightweight, high-performance web application framework built on Svelte 5, featuring Server-Side Pre Rendering (SSPR) using Rsbuild and jsdom",
-  "repository": "https://github.com/tbocek/preveltekit/",
+  "repository": "https://github.com/tbocek/preveltekit",
+  "homepage": "https://tbocek.github.io/preveltekit",
   "author": "Thomas Bocek",
   "license": "MIT",
   "type": "module",

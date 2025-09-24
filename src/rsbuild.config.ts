@@ -37,6 +37,7 @@ export const defaultConfig = defineConfig({
       output: {
         target: "web",
       },
+      publicDir: 'static',
     },
   },
   dev: { hmr: false }, //I had issues with hmr in the past, easiest to disable it

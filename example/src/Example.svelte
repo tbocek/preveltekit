@@ -57,7 +57,7 @@
 
     // Demo the SSPR capability
     let renderInfo = $state("Client Rendered");
-    if (window?.JSDOM) {
+    if (window?.__isBuildTime) {
         renderInfo = "Server Pre-Rendered";
     }
 
@@ -77,7 +77,7 @@
 
     // Fetch initial data
     $effect(() => {
-        if (!window?.JSDOM) {
+        if (!window?.__isBuildTime) {
             fetchBitcoinPrice();
             // Set up refresh interval
             const interval = setInterval(fetchBitcoinPrice, 60000); // Update every minute

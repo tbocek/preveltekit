@@ -1,7 +1,7 @@
 <script lang="ts">
-    // Demo SSPR capabilities
+    // Demo SPAwBR capabilities
     let renderType = "Client Rendered";
-    if (window?.JSDOM) {
+    if (window?.__isBuildTime) {
         renderType = "Server Pre-Rendered";
     }
 </script>
@@ -13,71 +13,190 @@
     </header>
 
     <section>
-        <h2>Getting Started</h2>
+        <h2>Quick Start</h2>
+        Make sure you have node/npm installed. Here is a minimalistic example:
         <div class="code-block">
-            <pre><code>git clone https://github.com/tbocek/preveltekit.git
-cd preveltekit
-pnpm install
-pnpm dev    # Development mode
-pnpm build  # Production build</code></pre>
+            {@html `<pre><code>mkdir -p preveltekit/src && cd preveltekit
+echo '&lcub;"dependencies": &lcub;"preveltekit":"^1.0.10"&rcub;, "scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
+npm install
+echo '&lt;script&gt;let count = $state(0);&lt;/script&gt;&lt;h1&gt;Count: &lcub;count&rcub;&lt;/h1&gt;&lt;button onclick={() =&gt; count++}&gt;Click me&lt;/button&gt;' &gt; src/Index.svelte
+npm run dev
+# And open a browser with localhost:3000</code></pre>`}
         </div>
     </section>
 
     <section>
         <h2>Core Features</h2>
 
-        <h3>📦 Server-Side Pre-Rendering (SSPR)</h3>
+        <h3>
+            ⚡ Single Page Application with Built-time Pre-rendering (SPAwBR)
+        </h3>
         <p>
-            Unlike traditional SSR or SSG, SSPR pre-renders your app at build time while maintaining full interactivity through hydration.
-            This gives you the best of both worlds: fast initial loads and dynamic functionality.
+            PrevelteKit combines the best of SPA and build-time rendering with
+            hydration approaches. Unlike traditional SSR that renders on each
+            request, or pure SPA that shows blank pages initially, SPAwBR
+            pre-renders your layout and static content at build time while
+            maintaining full interactivity through hydration. This provides fast
+            initial page loads with visible content, then progressive
+            enhancement as JavaScript loads.
         </p>
 
-        <h3>⚡ Build System</h3>
+        <h3>🎯 Simple Architecture</h3>
         <p>
-            Built on Rsbuild for lightning-fast builds. The system automatically handles:
+            Built on a clear separation between frontend and backend. Your
+            frontend is purely static assets (HTML/CSS/JS) that can be served
+            from any CDN or web server, while data comes from dedicated API
+            endpoints. No JavaScript runtime required for serving.
+        </p>
+
+        <h3>⚡ Lightning Fast Builds</h3>
+        <p>
+            Built on Rsbuild for builds in the range of hundreds of
+            milliseconds. The system automatically handles:
         </p>
         <ul>
             <li>TypeScript compilation and type checking</li>
             <li>Asset optimization and bundling</li>
             <li>CSS processing and minification</li>
-            <li>Production optimizations like code splitting</li>
+            <li>Pre-compression (Brotli, Zstandard, Gzip)</li>
         </ul>
 
-        <h3>🔄 Development Workflow</h3>
-        <p>
-            Three modes available to suit your needs:
-        </p>
+        <h3>🔧 Development Workflow</h3>
+        <p>Three modes available to suit your needs:</p>
         <ul>
-            <li><strong>Development (pnpm dev)</strong>: Express server with fast rebuilds and hot module replacement</li>
-            <li><strong>Staging (pnpm stage)</strong>: Production build with local preview server</li>
-            <li><strong>Production (pnpm build)</strong>: Optimized build with pre-compression (Brotli, Gzip, Zstandard)</li>
+            <li>
+                <strong>Development (npm run dev)</strong>: Express server with
+                fast rebuilds and live reloading
+            </li>
+            <li>
+                <strong>Staging (npm run stage)</strong>: Production build with
+                local preview server
+            </li>
+            <li>
+                <strong>Production (npm run build)</strong>: Optimized build
+                with pre-compression for deployment
+            </li>
         </ul>
     </section>
 
     <section>
-        <h2>SSPR Development</h2>
+        <h2>Rendering Comparison</h2>
 
-        <h3>🔍 Detecting Server Pre-Rendering</h3>
+        <div class="comparison-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rendering Type</th>
+                        <th>Initial Load</th>
+                        <th>After Script</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>SSR</strong></td>
+                        <td
+                            ><img
+                                src="static/SSR.svg"
+                                alt="SSR Initial"
+                                class="comparison-img"
+                            /><br />User sees content instantly<br /><small
+                                >(rendered on each request)</small
+                            ></td
+                        >
+                        <td
+                            ><img
+                                src="static/SSR.svg"
+                                alt="SSR After"
+                                class="comparison-img"
+                            /><br />User sees content instantly<br /><small
+                                >(no additional loading)</small
+                            ></td
+                        >
+                    </tr>
+                    <tr>
+                        <td><strong>SPA</strong></td>
+                        <td
+                            ><img
+                                src="static/SPA.svg"
+                                alt="SPA Initial"
+                                class="comparison-img"
+                            /><br />User sees white page or spinner<br /><small
+                                >(no content until JS loads)</small
+                            ></td
+                        >
+                        <td
+                            ><img
+                                src="static/SSR.svg"
+                                alt="SPA Loaded"
+                                class="comparison-img"
+                            /><br />User sees full content<br /><small
+                                >(after script execution)</small
+                            ></td
+                        >
+                    </tr>
+                    <tr>
+                        <td><strong>SPAwBR</strong></td>
+                        <td
+                            ><img
+                                src="static/SPAwBR.svg"
+                                alt="SPAwBR Initial"
+                                class="comparison-img"
+                            /><br />User sees layout and static content<br
+                            /><small>(pre-rendered at build time)</small></td
+                        >
+                        <td
+                            ><img
+                                src="static/SSR.svg"
+                                alt="SPAwBR Hydrated"
+                                class="comparison-img"
+                            /><br />User sees interactive content<br /><small
+                                >(hydrated with full functionality)</small
+                            ></td
+                        >
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section>
+        <h2>SPAwBR Development</h2>
+
+        <h3>🔍 Detecting Build-time Pre-rendering</h3>
         <p>
-            PrevelteKit uses <code>window.JSDOM</code> to indicate when code is running during server pre-rendering.
-            This is crucial for handling client-side-only code like API calls and intervals.
+            PrevelteKit uses <code>window.__isBuildTime</code> to indicate when code
+            is running during build-time pre-rendering. This is crucial for handling
+            client-side-only code like API calls and intervals.
         </p>
 
         <div class="code-block">
-            <pre><code>{"// Basic detection\nlet renderInfo = \"Client Rendered\";\nif (window?.JSDOM) {\n    renderInfo = \"Server Pre-Rendered\";\n}"}</code></pre>
+            {@html `<pre><code>// Basic detection
+let renderInfo = "Client Rendered";
+if (window?.__isBuildTime) &lcub;
+    renderInfo = "Server Pre-Rendered";
+&rcub;</code></pre>`}
         </div>
 
         <h3>🔄 Handling Client-Side Operations</h3>
         <p>
-            When working with APIs, timers, or browser-specific features, wrap them in a JSDOM check to prevent execution during pre-rendering:
+            When working with APIs, timers, or browser-specific features, wrap
+            them in a build-time check to prevent execution during
+            pre-rendering:
         </p>
 
         <div class="code-block">
-            <pre><code>{"$effect(() => {\n    if (!window?.JSDOM) {\n        fetchBitcoinPrice();\n        // Set up refresh interval\n        const interval = setInterval(fetchBitcoinPrice, 60000);\n        return () => clearInterval(interval);\n    }\n});"}</code></pre>
+            {@html `<pre><code>$effect(() =&gt; &lcub;
+    if (!window?.__isBuildTime) &lcub;
+        fetchBitcoinPrice();
+        // Set up refresh interval
+        const interval = setInterval(fetchBitcoinPrice, 60000);
+        return () =&gt; clearInterval(interval);
+    &rcub;
+&rcub;);</code></pre>`}
         </div>
 
         <p>
-            <strong>Common use cases for JSDOM checks:</strong>
+            <strong>Common use cases for build-time checks:</strong>
         </p>
         <ul>
             <li>API calls and data fetching</li>
@@ -89,56 +208,214 @@ pnpm build  # Production build</code></pre>
     </section>
 
     <section>
-        <h2>Static Site Configuration</h2>
+        <h2>Configuration</h2>
         <p>
-            To add static routes to your application, configure them in <code>rsbuild.config.ts</code>.
-            Each route needs an entry in the configuration. For example, to add routes for
-            <code>/doc</code> and <code>/example</code>:
+            PrevelteKit uses <code>rsbuild.config.ts</code> for configuration
+            with sensible defaults. To customize settings, create an
+            <code>rsbuild.config.ts</code> file in your project - it will merge with
+            the default configuration.
+        </p>
+
+        <p>
+            The framework provides fallback files (<code>index.html</code> and
+            <code>index.ts</code>) from the default folder when you don't supply
+            your own. Once you add your own files, PrevelteKit uses those
+            instead, ignoring the defaults.
+        </p>
+    </section>
+
+    <section>
+        <h2>Client-Side Routing</h2>
+        <p>
+            PrevelteKit includes a built-in routing system that handles
+            navigation between different pages in your application. The router
+            uses pattern matching to determine which component to render based
+            on the current URL path.
+        </p>
+
+        <h3>🧭 Route Configuration</h3>
+        <p>
+            Define your routes as an array of route objects, each specifying a
+            path pattern, the component to render, and the static HTML file
+            name:
         </p>
         <div class="code-block">
-            <pre><code>{"export default defineConfig({\n    environments: {\n        web: {\n            plugins: [\n                pluginSvelte(),\n                pluginCssMinimizer()\n            ],\n            source: {\n                entry: {\n                    // Each entry corresponds to a static route\n                    index: './src/index.ts',    // https://example.com/\n                    doc: './src/index.ts',      // https://example.com/doc\n                    example: './src/index.ts',  // https://example.com/example\n                }\n            },\n            output: {\n                target: 'web',\n                minify: process.env.NODE_ENV === 'production',\n            }\n        }\n    }\n});"}</code></pre>
+            <pre><code
+                    >const routes: Routes = [
+        &lcub;
+            path: "*/doc",
+            component: Documentation,
+            static: "doc.html"
+        &rcub;,
+        &lcub;
+            path: "*/example",
+            component: Example,
+            static: "example.html"
+        &rcub;,
+        &lcub;
+            path: "*/",
+            component: Landing,
+            static: "index.html"
+        &rcub;
+    ];
+
+    &lt;Router &lcub;routes&rcub; /&gt;</code
+                ></pre>
         </div>
+
+        <h3>🔍 Path Patterns</h3>
+        <p>PrevelteKit supports flexible path patterns for routing:</p>
+        <ul>
+            <li>
+                <strong>Wildcard prefix (<code>*/path</code>)</strong>: Matches
+                any single segment before the path (e.g., <code>*/doc</code>
+                matches <code>/doc</code> and <code>/any/doc</code>)
+            </li>
+            <li>
+                <strong>Root wildcard (<code>*/</code>)</strong>: Matches the
+                root path and single-segment paths
+            </li>
+            <li>
+                <strong>Exact paths (<code>/about</code>)</strong>: Matches the
+                exact path only
+            </li>
+            <li>
+                <strong>Parameters (<code>/user/:id</code>)</strong>: Captures
+                URL segments as parameters
+            </li>
+        </ul>
+
+        <h3>🔗 Navigation</h3>
         <p>
-            <strong>Important Notes:</strong>
+            Use the <code>route</code> action for client-side navigation that updates
+            the URL without page reloads:
+        </p>
+        <div class="code-block">
+            <pre><code
+                    >import &lcub; route &rcub; from 'preveltekit';
+
+    &lt;a use:route href="doc"&gt;Documentation&lt;/a&gt;
+    &lt;a use:route href="example"&gt;Example&lt;/a&gt;</code
+                ></pre>
+        </div>
+
+        <h3>📄 Static File Mapping & Hybrid Routing</h3>
+        <p>
+            The <code>static</code> field in each route configuration serves a dual
+            purpose in PrevelteKit's hybrid routing approach:
+        </p>
+        <div class="code-block">
+            <pre><code
+                    >static: "doc.html"  // Generates dist/doc.html at build time</code
+                ></pre>
+        </div>
+
+        <p>
+            <strong>Static Generation:</strong> During the build process,
+            PrevelteKit generates actual HTML files in your <code>dist/</code> folder
+            for each route:
         </p>
         <ul>
-            <li>Each entry key becomes a URL path in your application</li>
-            <li>Subdirectories are not currently supported</li>
-            <li>All entries point to the same <code>index.ts</code> file</li>
-            <li>The router in your application will handle the actual component rendering</li>
+            <li><code>dist/index.html</code> - Pre-rendered root route</li>
+            <li>
+                <code>dist/doc.html</code> - Pre-rendered documentation page
+            </li>
+            <li><code>dist/example.html</code> - Pre-rendered example page</li>
         </ul>
+
+        <p>
+            <strong>Dynamic Routing:</strong> Once the application loads, the same
+            route configuration enables client-side navigation between pages without
+            full page reloads. This provides:
+        </p>
+        <ul>
+            <li>Fast initial page loads from pre-rendered static HTML</li>
+            <li>Instant navigation between routes via client-side routing</li>
+            <li>
+                SEO benefits from static HTML while maintaining SPA
+                functionality
+            </li>
+        </ul>
+
+        <p>
+            This hybrid approach means users get static HTML files for direct
+            access (bookmarks, search engines) and dynamic routing for seamless
+            navigation within the application.
+        </p>
+
+        <h3>⚙️ Route Matching Priority</h3>
+        <p>
+            Routes are matched based on specificity, with more specific patterns
+            taking precedence:
+        </p>
+        <ol>
+            <li>Exact path matches (highest priority)</li>
+            <li>Parameter-based routes</li>
+            <li>Wildcard patterns (lowest priority)</li>
+        </ol>
+        <p>
+            Always place more specific routes before general wildcard routes in
+            your configuration to ensure proper matching behavior.
+        </p>
     </section>
 
     <section>
         <h2>Docker Support</h2>
         <p>Development environment:</p>
         <div class="code-block">
-            <pre><code>docker build -f Dockerfile.dev . -t preveltekit-dev
-docker run -p3000:3000 -v./src:/app/src -v./public:/app/public preveltekit-dev</code></pre>
+            <pre><code
+                    >docker build -f Dockerfile.dev . -t preveltekit-dev
+docker run -p3000:3000 -v./src:/app/src preveltekit-dev</code
+                ></pre>
         </div>
 
         <p>Production build:</p>
         <div class="code-block">
-            <pre><code>docker build . -t preveltekit
-docker run -p3000:3000 preveltekit</code></pre>
+            <pre><code
+                    >docker build . -t preveltekit
+docker run -p3000:3000 preveltekit</code
+                ></pre>
         </div>
     </section>
 
     <section>
-        <h2>Project Structure</h2>
+        <h2>Architecture Philosophy</h2>
+        <p>
+            PrevelteKit emphasizes <strong>static-first architecture</strong> with
+            clear separation between frontend and backend:
+        </p>
         <ul>
-            <li><strong>/src</strong>: Application source code</li>
-            <li><strong>/public</strong>: Static assets</li>
-            <li><strong>/dist</strong>: Production build output</li>
-            <li><strong>rsbuild.config.ts</strong>: Build configuration</li>
-            <li><strong>ssr.mjs</strong>: SSPR implementation</li>
+            <li>
+                <strong>Frontend</strong>: Pure static assets (HTML/CSS/JS)
+                served from any web server or CDN
+            </li>
+            <li>
+                <strong>Backend</strong>: Dedicated API endpoints for data, can
+                be built with any technology
+            </li>
+            <li>
+                <strong>Deployment</strong>: No JavaScript runtime required -
+                just static files
+            </li>
+        </ul>
+
+        <p>
+            This approach offers compelling simplicity compared to full-stack
+            meta-frameworks:
+        </p>
+        <ul>
+            <li>Deploy anywhere (GitHub Pages, S3, any web server)</li>
+            <li>Predictable performance with no server processes to monitor</li>
+            <li>Easier debugging with clear boundaries</li>
+            <li>Freedom to choose your backend technology</li>
         </ul>
     </section>
 
     <section>
         <h2>Deployment</h2>
         <p>
-            The production build generates static files with pre-compressed variants:
+            The production build generates static files with pre-compressed
+            variants:
         </p>
         <ul>
             <li>Standard files (.js, .css, .html)</li>
@@ -147,7 +424,27 @@ docker run -p3000:3000 preveltekit</code></pre>
             <li>Zstandard compressed (.zst)</li>
         </ul>
         <p>
-            Deploy to any static hosting or web server that supports serving compressed assets.
+            Deploy to any static hosting or web server. The pre-compressed files
+            enable optimal performance when served with appropriate web server
+            configuration.
+        </p>
+    </section>
+
+    <section>
+        <h2>Why PrevelteKit?</h2>
+        <p>
+            While SvelteKit provides comprehensive capabilities, PrevelteKit
+            focuses on a minimalistic solution for build-time pre-rendering.
+            With less than 500 lines of code, it's essentially glue code for
+            Svelte, Rsbuild, and jsdom - perfect for projects that need fast
+            initial loads without the complexity of full JavaScript
+            infrastructure for the frontend deployment.
+        </p>
+
+        <p>
+            PrevelteKit serves as a starting point for projects that need
+            pre-rendered content without the overhead of a full meta-framework,
+            following a "convention over configuration" approach.
         </p>
     </section>
 </div>
@@ -220,28 +517,79 @@ docker run -p3000:3000 preveltekit</code></pre>
         background: #edf2f7;
         padding: 0.2rem 0.4rem;
         border-radius: 4px;
-        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-        font-size: 0.9rem;
+        font-family: monospace;
+        font-size: 0.8rem;
     }
 
     .code-block {
         background: #1a202c;
         border-radius: 8px;
-        padding: 1.5rem;
+        padding: 1rem;
         margin: 1rem 0;
         overflow-x: auto;
+        color: #e2e8f0;
+        font-family: monospace;
+        font-size: 0.8rem;
     }
 
     .code-block pre {
         margin: 0;
+        color: #e2e8f0 !important;
+        font-family: monospace;
+        font-size: 0.8rem;
     }
 
     .code-block code {
-        color: #e2e8f0;
-        background: transparent;
+        color: #e2e8f0 !important;
+        background: transparent !important;
         padding: 0;
-        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-        font-size: 0.9rem;
+        font-family: monospace;
+        font-size: 0.8rem;
         line-height: 1.5;
+    }
+
+    .comparison-table {
+        margin: 1rem 0;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    th,
+    td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    th {
+        background: #f7fafc;
+        font-weight: 600;
+        color: #2d3748;
+    }
+
+    td {
+        color: #4a5568;
+        vertical-align: top;
+    }
+
+    small {
+        color: #718096;
+        display: block;
+        margin-top: 0.25rem;
+    }
+
+    .comparison-img {
+        width: 120px;
+        height: auto;
+        margin-bottom: 0.5rem;
+        border-radius: 4px;
     }
 </style>

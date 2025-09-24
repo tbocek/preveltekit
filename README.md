@@ -1,24 +1,28 @@
 # PrevelteKit
 
-PrevelteKit is a minimalistic (>500 LoC) web application framework built on [Svelte 5](https://svelte.dev/), featuring Server-Side Pre Rendering (SSPR) using [Rsbuild](https://rsbuild.dev/) as the build tool and [jsdom](https://github.com/jsdom/jsdom) as the DOM environment for rendering components on the server side.
+PrevelteKit is a minimalistic (>500 LoC) web application framework built on [Svelte 5](https://svelte.dev/), featuring  Single Page Application with Built-time Pre-rendering (SPAwBR) using [Rsbuild](https://rsbuild.dev/) as the build tool and [jsdom](https://github.com/jsdom/jsdom) as the DOM environment for rendering components on the server side.
 
 ## Why PrevelteKit?
-While there is a go-to solution for SSR for Svelte (SvelteKit), I was missing a minimalistic solution just for pre-rendering. There is the prerender option in SvelteKit, but it's part of SvelteKit that comes with many additional features that might not be necessary for every project. This project can be seen as the minimal setup for server-side pre-rendering and is essentially a glue of  [Svelte](https://svelte.dev/), [Rsbuild](https://rsbuild.dev/), and [jsdom](https://github.com/jsdom/jsdom), with 469 lines of code. It's a starting point for projects that need server-side rendering without the overhead of SvelteKit.
+While there is a go-to solution for SSR for Svelte (SvelteKit), I was missing a minimalistic solution just for pre-rendering. There is the prerender option in SvelteKit, but it's part of SvelteKit that comes with many additional features that might not be necessary for every project. This project can be seen as the minimal setup for server-side pre-rendering and is essentially glue code for [Svelte](https://svelte.dev/), [Rsbuild](https://rsbuild.dev/), and [jsdom](https://github.com/jsdom/jsdom), with less than 500 lines of code. It's a starting point for projects that need server-side rendering without the overhead of SvelteKit.
 
 The inspiration for this project comes from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). This project adapts those concepts for Svelte, providing a minimal setup.
 
 ## Key Features
- * ⚡️ Lightning Fast: Pre-rendered pages with hydration with Svelte/Rsbuild
+ * ⚡️ Lightning Fast:  Rsbuild bundles in the range of a couple hundred milliseconds
  * 🎯 Simple Routing: Built-in routing system
- * 🔄 SSPR Support: Server-Side Pre-Rendering for faster perceived loading
+ * 🔄 Layout and staic content pre-rendered: With Svelte and hydration
  * 📦 Zero Config: Works out of the box with sensible defaults
  * 🛠️ Developer Friendly: Hot reload in development, production-ready in minutes
  * 🛡️ Security: Docker-based development environments to protect against supply chain attacks
+ 
+ | Rendering Type | Initial Load | After Script |
+ |----------------|--------------|------------------|
+ | **SSR** | ![SSR](static/SSR.svg)<br>User sees content instantly | ![SSR](static/SSR.svg)<br>User sees content instantly |
+ | **SPA** | ![SPA Loading](static/SPA.svg)<br>User sees initial white page or spinner | ![SPA Loaded](static/SSR.svg)<br>Once script executes, user sees content |
+ | **SPA + Build-time Rendering + Hydration** | ![SSR Initial](static/SPAwBR.svg)<br>User sees initial layout with static content | ![SSR Hydrated](static/SSR.svg)<br>Once script executes, user sees interactive content |
 
-## Modern Web Rendering Approaches: SSR vs. SSG vs. SSPR
+## Modern Web Rendering Approaches: SSR vs. SPA vs. SPAwBR
 Web applications can be rendered in several ways, each with distinct characteristics and use cases. Server-Side Rendering (SSR) generates HTML dynamically on each request. The server executes the application code, produces HTML with initial state, and sends it to the client.
-
-Static Site Generation (SSG) takes a different approach by generating plain HTML files at build time. These static files are deployed directly to a web server, making them extremely fast to serve. However, SSG remain static without client-side interactivity.
 
 SPA on the other hand, loads a single HTML page initially and dynamically updates content using JavaScript. The client downloads the entire application bundle upfront, then handles routing and rendering in the browser. 
 
@@ -43,7 +47,7 @@ Make sure you have the following installed:
 # Create test directory and go into this directory
 mkdir -p preveltekit/src && cd preveltekit 
 # Declare dependency and the dev script
-echo '{"dependencies": {"preveltekit":"^1.0.9"}, "scripts": {"dev": "preveltekit dev"}}' > package.json 
+echo '{"dependencies": {"preveltekit":"^1.0.10"}, "scripts": {"dev": "preveltekit dev"}}' > package.json 
 # Download dependencies
 npm install 
 # A very simple svelte file
