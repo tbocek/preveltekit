@@ -1,4 +1,3 @@
-// src/types.d.ts - Complete types for jsdom v27 and express
 export type RouteParams = Record<string, string>;
 
 export interface Route {
@@ -9,6 +8,8 @@ export interface Route {
 
 export type Routes = Route[];
 export type Component = any;
+
+//export declare function route(node: HTMLElement, href: string): void;
 
 // JSDOM instance interface
 export interface JSDOMInstance {
