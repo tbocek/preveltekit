@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-// When used as a library, with virtual modules, other users that are using this library can pretend to have 
+// When used as a library, with virtual modules, other users that are using this library can pretend to have
 // ./src/index.ts in the ./src directory without having it. If the file exists, the user provided file will
 // be used, otherwise this default will be used. Please note, this feature is marked experimental with rspack.
 function getVirtualModules() {
@@ -23,6 +23,13 @@ function getVirtualModules() {
 }
 
 export const defaultConfig = defineConfig({
+  server: {
+    publicDir: {
+      name: "static", // Specify the directory for static assets
+      copyOnBuild: "auto", // Automatically copy files during production build
+      watch: true, // Enable file watching during development
+    },
+  },
   environments: {
     web: {
       plugins: [pluginSvelte()],
@@ -30,20 +37,17 @@ export const defaultConfig = defineConfig({
         entry: {
           index: "./src/index.ts", //default provided see above (virtual modules)
         },
-        define: {
-          '__SSR_BUILD__': JSON.stringify(true),  
-        },
       },
       output: {
         target: "web",
       },
-      publicDir: 'static',
     },
   },
   dev: { hmr: false }, //I had issues with hmr in the past, easiest to disable it
   html: { template: "./src/index.html" }, //default provided, see ssr.ts
   output: { assetPrefix: "./" }, //create relative paths, to run in subdirectories
-  tools: { //tools only exist here due to virtual modules, needs restart when changed
+  tools: {
+    //tools only exist here due to virtual modules, needs restart when changed
     rspack: async (config) => {
       const virtualModules = getVirtualModules();
 
