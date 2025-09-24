@@ -1,4 +1,4 @@
-// src/ssr.ts - SSR functionality (same as previous artifact)
+/// <reference path="./types.d.ts" />
 import { JSDOM, ResourceLoader, VirtualConsole } from 'jsdom';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
 import type { JSDOMInstance } from './types.js';
 import { mergeRsbuildConfig } from '@rsbuild/core';
-import { defaultConfig } from './base-rsbuild.config.js';
+import { defaultConfig } from './rsbuild.config.js';
 
 class LocalResourceLoader extends ResourceLoader {
   constructor(private resourceFolder?: string) {
@@ -51,8 +51,8 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
     resources: new LocalResourceLoader(resourceFolder),
     virtualConsole,
   });
-
-  dom.window.JSDOM = true;
+  
+  dom.window.__isBuildTime = true;
 
   return new Promise((resolve, reject) => {
     let isResolved = false;
@@ -130,12 +130,8 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
       }
 
       allScripts.forEach(script => {
-        if (script.readyState === 'complete' || script.readyState === 'loaded') {
-          handleLoad();
-        } else {
-          script.addEventListener('load', handleLoad);
-          script.addEventListener('error', handleError);
-        }
+        script.addEventListener('load', handleLoad);
+        script.addEventListener('error', handleError);
       });
 
       if (allScripts.length === 0) {

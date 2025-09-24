@@ -1,3 +1,6 @@
+/// <reference path="./types.d.ts" />
+export type { Routes, Route, RouteParams, Component } from './types.js';
+
 export function navigate(path: string): void {
     history.pushState(null, "", path);
     window.dispatchEvent(new CustomEvent('svelteNavigate', { detail: { path } }));

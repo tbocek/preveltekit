@@ -2,12 +2,6 @@
     import { onMount, onDestroy } from 'svelte';
     import type { Routes, RouteParams, Component } from './types';
 
-    // Export the navigate function for programmatic navigation
-    export function navigate(path: string): void {
-        history.pushState(null, "", path);
-        window.dispatchEvent(new CustomEvent('svelteNavigate', { detail: { path } }));
-    }
-
     // Props for the component
     const props = $props();
 
@@ -37,7 +31,7 @@
         window.addEventListener('svelteNavigate', handleNavigateEvent);
 
         // Expose routes directly to SSR if running in JSDOM
-        if (window?.JSDOM) {
+        if (window.__isBuildTime) {
             // Get the current value of the routes
             const currentRoutes = [...routes];
             window.__svelteRoutes = currentRoutes;

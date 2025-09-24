@@ -30,6 +30,9 @@ export const defaultConfig = defineConfig({
         entry: {
           index: "./src/index.ts", //default provided see above (virtual modules)
         },
+        define: {
+          '__SSR_BUILD__': JSON.stringify(true),  
+        },
       },
       output: {
         target: "web",

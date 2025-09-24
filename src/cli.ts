@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { PrevelteSSR } from './index.js';
+import { PrevelteSSR } from './ssr.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
