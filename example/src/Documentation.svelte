@@ -242,22 +242,26 @@ if (window?.__isBuildTime) &lcub;
             <pre><code
                     >const routes: Routes = [
         &lcub;
-            path: "*/doc",
-            component: Documentation,
-            static: "doc.html",
-            navigation: "doc"
+            path: "*/doc", // Dynamic path maching, e.g., 
+                           // https://tbocek.github.io/preveltekit/doc matches
+            component: Documentation, // Component to display
+            static: "doc.html", // For static pre-rendering, the filename to store this site
+            navigation: "/doc" // For static pre-rendering, we need to have a URL for jsdom. 
+                               // Here /doc will be used for http://localhost/doc, 
+                               // which will match path */doc. Depending on your 
+                               // component needs, you can use e.g., /preveltekit/doc here.
         &rcub;,
         &lcub;
             path: "*/example",
             component: Example,
             static: "example.html",
-            navigation: "example"
+            navigation: "/example"
         &rcub;,
         &lcub;
             path: "*/",
             component: Landing,
             static: "index.html",
-            navigation: "index"
+            navigation: "/"
         &rcub;
     ];
 
