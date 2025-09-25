@@ -1,87 +1,171 @@
 <script lang="ts">
     import { route } from "preveltekit";
-    let message = "Welcome to PrevelteKit";
+    let message = "PrevelteKit";
+    let subtitle = "Minimalistic Build-time Pre-rendering for Svelte";
+
     if (window.__isBuildTime) {
-        message =
-            "Server-Side Pre-Rendered with PrevelteKit, you see this in the source code, you may see it flashing briefly, but you will not see this in the DOM after loading";
+        message = "PrevelteKit (Pre-rendered)";
+        subtitle =
+            "This content was pre-rendered at build time and will hydrate on load";
     }
 </script>
 
 <div class="hero">
-    <h1>{message}</h1>
-    <p class="subtitle">
-        A Modern Framework for Building Fast, SEO-Friendly Web Applications
-    </p>
+    <div class="hero-content">
+        <h1>{message}</h1>
+        <p class="subtitle">{subtitle}</p>
 
-    <div class="cta-buttons">
-        <a use:route href="doc" class="cta-button primary">View Documentation</a
-        >
-        <a use:route href="example" class="cta-button secondary"
-            >Try Bitcoin Demo</a
-        >
-        <div class="server-side-indicator">
-            (these links are client-side routed links)
+        <ul class="key-benefits">
+            <li class="benefit">
+                <strong>Static-first architecture</strong> - Deploy frontend anywhere as pure HTML/CSS/JS
+            </li>
+            <li class="benefit">
+                <strong>Lightning fast builds</strong> - Hundreds of milliseconds with Rsbuild
+            </li>
+            <li class="benefit">
+                <strong>No JavaScript runtime in production for frontend</strong> - Just static files on a server
+            </li>
+        </ul>
+
+        <div class="cta-buttons">
+            <a use:route href="doc" class="cta-button primary">Documentation</a>
+            <a use:route href="example" class="cta-button secondary"
+                >Bitcoin Demo</a
+            >
+        </div>
+
+        <div class="routing-note">
+            (These buttons here are client-side routing • No page reloads)
         </div>
     </div>
 
-    <div class="features">
-        <div class="feature">
-            <h3>⚡️ Lightning Fast</h3>
-            <p>Pre-rendered pages with hydration for optimal performance</p>
-        </div>
+    <div class="features-section">
+        <div class="feature-grid">
+            <div class="feature">
+                <div class="feature-icon">⚡</div>
+                <h3>Lightning Fast Builds</h3>
+                <p>Rsbuild bundles in hundreds of milliseconds</p>
+            </div>
 
-        <div class="feature">
-            <h3>📈 Real-time Data</h3>
-            <p>Seamless integration with external APIs and live updates</p>
-        </div>
+            <div class="feature">
+                <div class="feature-icon">🎯</div>
+                <h3>Minimalistic</h3>
+                <p>
+                    Less than 500 lines of code - just glue for Svelte, Rsbuild,
+                    and jsdom
+                </p>
+            </div>
 
-        <div class="feature">
-            <h3>🔄 SSPR Support</h3>
-            <p>Server-Side Pre-Rendering for better SEO</p>
+            <div class="feature">
+                <div class="feature-icon">🔄</div>
+                <h3>HTML for Initial Page</h3>
+                <p>
+                    Single Page App with Built-time Pre-Rendering - best of both
+                    worlds
+                </p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">🚀</div>
+                <h3>Deploy Anywhere</h3>
+                <p>GitHub Pages, S3, any web server - just static files</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">🛡️</div>
+                <h3>Clear Separation</h3>
+                <p>Frontend as static assets, backend as dedicated APIs</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">📦</div>
+                <h3>Zero Config</h3>
+                <p>Works out of the box with sensible defaults</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="quick-start">
+        <h2>Quick Start</h2>
+        <div class="code-block">
+            {@html `<pre><code>mkdir -p preveltekit/src && cd preveltekit
+echo '&lcub;"dependencies": &lcub;"preveltekit":"^1.0.15"&rcub;, "scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
+npm install
+echo '&lt;script&gt;let count = $state(0);&lt;/script&gt;&lt;h1&gt;Count: &lcub;count&rcub;&lt;/h1&gt;&lt;button onclick={() =&gt; count++}&gt;Click me&lt;/button&gt;' &gt; src/Index.svelte
+npm run dev
+# And open a browser with localhost:3000</code></pre>`}
         </div>
     </div>
 </div>
 
 <style>
     .hero {
+        padding: 2rem 1rem;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .hero-content {
         text-align: center;
-        padding: 4rem 2rem;
-        background: linear-gradient(to bottom, #f7fafc, #edf2f7);
+        margin-bottom: 4rem;
     }
 
     h1 {
-        font-size: 3rem;
+        font-size: 3.5rem;
         margin-bottom: 1rem;
         color: #2d3748;
         font-weight: bold;
     }
 
     .subtitle {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         color: #4a5568;
-        margin-bottom: 3rem;
-        max-width: 800px;
+        margin-bottom: 2rem;
+        max-width: 600px;
         margin-left: auto;
         margin-right: auto;
     }
 
+    .key-benefits {
+        list-style: disc;
+        padding-left: 1.5rem;
+        margin: 2rem auto;
+        max-width: 600px;
+        text-align: left;
+        display: inline-block;
+    }
+
+    .benefit {
+        color: #4a5568;
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .benefit strong {
+        color: #2d3748;
+    }
+
     .cta-buttons {
-        margin-bottom: 4rem;
+        margin: 2rem 0;
         display: flex;
         gap: 1rem;
         justify-content: center;
+        flex-wrap: wrap;
     }
 
     .cta-button {
-        padding: 0.75rem 1.5rem;
+        padding: 0.875rem 2rem;
         border-radius: 8px;
         font-weight: 600;
-        transition: transform 0.2s;
+        font-size: 1.1rem;
+        transition: all 0.2s;
         text-decoration: none;
+        display: inline-block;
     }
 
     .cta-button:hover {
         transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .primary {
@@ -95,24 +179,38 @@
         border: 2px solid #4299e1;
     }
 
-    .features {
+    .routing-note {
+        color: #718096;
+        font-size: 0.875rem;
+        margin-top: 1rem;
+    }
+
+    .features-section {
+        margin: 4rem 0;
+    }
+
+    .feature-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 2rem;
-        max-width: 1200px;
-        margin: 0 auto;
     }
 
     .feature {
-        padding: 2rem;
         background: white;
+        padding: 2rem;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        text-align: center;
         transition: transform 0.2s;
     }
 
     .feature:hover {
-        transform: translateY(-5px);
+        transform: translateY(-4px);
+    }
+
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
     }
 
     .feature h3 {
@@ -126,26 +224,45 @@
         line-height: 1.6;
     }
 
-    @media (max-width: 640px) {
-        .cta-buttons {
-            flex-direction: column;
-            padding: 0 2rem;
-        }
+    .quick-start {
+        margin: 4rem 0;
+        text-align: center;
+    }
 
+    .quick-start h2 {
+        color: #2d3748;
+        font-size: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .code-block {
+        text-align: left;
+        background: #1a202c;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        overflow-x: auto;
+        color: #e2e8f0;
+        font-family: monospace;
+        font-size: 0.8rem;
+    }
+
+    @media (max-width: 768px) {
         h1 {
             font-size: 2.5rem;
         }
 
         .subtitle {
-            font-size: 1.25rem;
+            font-size: 1.1rem;
         }
-    }
 
-    .server-side-indicator {
-        color: #93c5fd;
-        font-size: 0.875rem;
-        margin-left: 0.5rem;
-        align-items: center;
-        display: flex;
+        .cta-buttons {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .cta-button {
+            width: 200px;
+        }
     }
 </style>

@@ -200,15 +200,14 @@ export class PrevelteSSR {
       const promises: Promise<void>[] = [];
       
       for (const route of svelteRoutes) {
-        if (!route?.static || !route?.path || processedDoms.has(route.static)) continue;
+        if (processedDoms.has(route.static)) continue;
       
-        const cleanPath = route.path.replace(/\*/g, '').replace(/^\//, '');
         const promise = (async () => {
           try {
-            const dom = await fakeBrowser(`http://localhost/${cleanPath}`, indexHtml, config?.output?.distPath?.root);
+            const dom = await fakeBrowser(`http://localhost${route.navigation}`, indexHtml, config?.output?.distPath?.root);
             processedDoms.set(route.static, dom);
           } catch (error) {
-            console.error(`Error processing route ${cleanPath}:`, error);
+            console.error(`Error processing route ${route.navigation}:`, error);
           }
         })();
       
@@ -246,7 +245,7 @@ export class PrevelteSSR {
           const svelteRoutes = dom.window.__svelteRoutes;
           if (Array.isArray(svelteRoutes)) {
             for (const route of svelteRoutes) {
-              if (req.url.includes(route.navigation) || req.url == '/') {
+              if (req.url.startsWith(route.navigation)) {
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end(dom.serialize());
                 return; // stop here, do not continue to next middleware

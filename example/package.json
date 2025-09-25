@@ -12,7 +12,7 @@
     "svelte": "^5.39.3"
   },
   "devDependencies": {
-    "preveltekit": "^1.0.12",
+    "preveltekit": "^1.0.15",
     "typescript": "^5.9.2"
   }
 }
