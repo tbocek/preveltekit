@@ -96,7 +96,7 @@ npm run dev
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>SSR</strong>(classic SSR / Next.js / Nuxt)</td>
+                        <td><strong>SSR</strong> (classic SSR / Next.js / Nuxt)</td>
                         <td>
                             <img src={SSR} alt="SSR Initial" class="comparison-img"/>
                             <br />User sees content instantly
@@ -113,7 +113,7 @@ npm run dev
                         >
                     </tr>
                     <tr>
-                        <td><strong>SPA</strong>(React App / pure Svelte)</td>
+                        <td><strong>SPA</strong> (React App / pure Svelte)</td>
                         <td
                             ><img
                                 src={SPA}
@@ -134,7 +134,7 @@ npm run dev
                         >
                     </tr>
                     <tr>
-                        <td><strong>SPA + Build-time Pre-Rendering</strong>(this approach)</td>
+                        <td><strong>SPA + Build-time Pre-Rendering</strong> (this approach)</td>
                         <td
                             ><img
                                 src={SPAwBR}
