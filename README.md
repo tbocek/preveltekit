@@ -10,6 +10,9 @@ From an architectural point of view, I prefer the clear separation between view 
 
 Meta-frameworks such as Next.js, Nuxt.js, SvelteKit blur this separation by requiring a JavaScript runtime (Node.js, Deno, or Bun) to handle server-side rendering, API routes, and build-time generation. While platforms like Vercel and Netlify can help with handling this complex setup (they are great services that I used in the past), serving just static content is much simpler: deploy anywhere (GitHub Pages, S3, any web serve) with predictable performance. You avoid the "full-stack JavaScript" complexity for your deployed frontend - it's just files on a server, nothing more.
 
+## Why Not SvelteKit + adapter-static?
+While SvelteKit with adapter-static can achieve similar static site generation, PrevelteKit offers a minimalistic alternative using Svelte + jsdom + Rsbuild. At less than 500 lines of code, it's essentially glue code between these libraries rather than a full framework. This provides a lightweight solution for those who want static pre-rendering without SvelteKit's additional complexity and features.
+
 ## Key Features
  * ⚡️ Lightning Fast: Rsbuild bundles in the range of a couple hundred milliseconds
  * 🎯 Simple Routing: Built-in routing system
