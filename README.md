@@ -13,6 +13,11 @@ Meta-frameworks such as Next.js, Nuxt.js, SvelteKit blur this separation by requ
 ## Why Not SvelteKit + adapter-static?
 While SvelteKit with adapter-static can achieve similar static site generation, PrevelteKit offers a minimalistic alternative using Svelte + jsdom + Rsbuild. At less than 500 lines of code, it's essentially glue code between these libraries rather than a full framework. This provides a lightweight solution for those who want static pre-rendering without SvelteKit's additional complexity and features.
 
+## Why Rsbuild and not Vite?
+While [benchmarks](https://github.com/rspack-contrib/build-tools-performance) show that Rsbuild and Vite (Rolldown + Oxc) have comparable overall performance in many cases (not for the 10k component case - which I do not have in my projects), Rsbuild has a small advantage in producing the smallest compressed bundle size, while Vite (Rolldown + Oxc) have a small advantage in build time performance.
+
+In my experience, Rsbuild "just works" after many updates out of the box with minimal configuration, which reduced friction and setup time. However, I am watching Vite (Rolldown + Oxc) closely, as they are progressing fast.
+
 ## Key Features
  * ⚡️ Lightning Fast: Rsbuild bundles in the range of a couple hundred milliseconds
  * 🎯 Simple Routing: Built-in routing system
