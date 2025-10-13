@@ -1,12 +1,12 @@
-import type { ComponentType } from 'svelte';
+import type { Component as SvelteComponent } from 'svelte';
+
 export type RouteParams = Record<string, string>;
+export type Component = SvelteComponent<any>;
 
 export interface Routes {
   dynamicRoutes?: { path: string; component: Component }[];
   staticRoutes?: { path: string; htmlFilename: string }[];
 }
-
-export type Component = ComponentType | null;
 
 // Extend HTMLScriptElement to include readyState for JSDOM compatibility
 declare global {

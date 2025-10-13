@@ -20,7 +20,7 @@
         Make sure you have node/npm installed. Here is a minimalistic example:
         <div class="code-block">
             {@html `<pre><code>mkdir -p preveltekit/src && cd preveltekit
-echo '&lcub;"dependencies": &lcub;"preveltekit":"^1.0.15"&rcub;, "scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
+echo '&lcub;"dependencies": &lcub;"preveltekit":"^1.0.17"&rcub;, "scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
 npm install
 echo '&lt;script&gt;let count = $state(0);&lt;/script&gt;&lt;h1&gt;Count: &lcub;count&rcub;&lt;/h1&gt;&lt;button onclick={() =&gt; count++}&gt;Click me&lt;/button&gt;' &gt; src/Index.svelte
 npm run dev
@@ -239,34 +239,38 @@ if (window?.__isBuildTime) &lcub;
             name:
         </p>
         <div class="code-block">
-            <pre><code
-                    >const routes: Routes = [
-        &lcub;
-            path: "*/doc", // Dynamic path maching, e.g., 
-                           // https://tbocek.github.io/preveltekit/doc matches
-            component: Documentation, // Component to display
-            static: "doc.html", // For static pre-rendering, the filename to store this site
-            navigation: "/doc" // For static pre-rendering, we need to have a URL for jsdom. 
-                               // Here /doc will be used for http://localhost/doc, 
-                               // which will match path */doc. Depending on your 
-                               // component needs, you can use e.g., /preveltekit/doc here.
-        &rcub;,
-        &lcub;
-            path: "*/example",
-            component: Example,
-            static: "example.html",
-            navigation: "/example"
-        &rcub;,
-        &lcub;
-            path: "*/",
-            component: Landing,
-            static: "index.html",
-            navigation: "/"
-        &rcub;
-    ];
-
-    &lt;Router &lcub;routes&rcub; /&gt;</code
-                ></pre>
+            <pre><code>const routes: Routes = &lcub;
+     dynamicRoutes: [
+         &lcub;
+             path: "*/doc",
+             component: Documentation
+         &rcub;,
+         &lcub;
+             path: "*/example",
+             component: Example
+         &rcub;,
+         &lcub;
+             path: "*/",
+             component: Landing
+         &rcub;
+     ],
+     staticRoutes: [
+         &lcub;
+             path: "/doc",
+             htmlFilename: "doc.html"
+         &rcub;,
+         &lcub;
+             path: "/example",
+             htmlFilename: "example.html"
+         &rcub;,
+         &lcub;
+             path: "/",
+             htmlFilename: "index.html"
+         &rcub;
+     ]
+ &rcub;;
+ 
+ &lt;Router routes&gt;</code></pre>
         </div>
 
         <h3>🔍 Path Patterns</h3>
@@ -307,12 +311,12 @@ if (window?.__isBuildTime) &lcub;
 
         <h3>📄 Static File Mapping & Hybrid Routing</h3>
         <p>
-            The <code>static</code> field in each route configuration serves a dual
+            The <code>staticRoutes</code> array configuration serves a dual
             purpose in PrevelteKit's hybrid routing approach:
         </p>
         <div class="code-block">
             <pre><code
-                    >static: "doc.html"  // Generates dist/doc.html at build time</code
+                    >htmlFilename: "doc.html"  // Generates dist/doc.html at build time</code
                 ></pre>
         </div>
 

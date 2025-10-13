@@ -12,7 +12,7 @@
     "svelte": "^5.39.11"
   },
   "devDependencies": {
-    "preveltekit": "file:/home/draft/git/preveltekit",
+    "preveltekit": "file:../",
     "typescript": "^5.9.3"
   }
 }

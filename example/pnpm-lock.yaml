@@ -13,7 +13,7 @@ importers:
         version: 5.39.11
     devDependencies:
       preveltekit:
-        specifier: file:/home/draft/git/preveltekit
+        specifier: file:../
         version: file:..(@swc/helpers@0.5.17)(postcss@8.5.6)(svelte@5.39.11)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
