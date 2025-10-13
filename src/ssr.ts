@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
-import type { JSDOMInstance, Route } from './types.js';
+import type { Routes } from './types.js';
 import { mergeRsbuildConfig } from '@rsbuild/core';
 import { defaultConfig } from './rsbuild.config.js';
 
@@ -18,23 +18,23 @@ class LocalResourceLoader extends ResourceLoader {
     if (!this.resourceFolder) {
       return super.fetch(url, options);
     }
-  
+
     const urlPath = new URL(url).pathname;
     const localPath = path.join(process.cwd(), this.resourceFolder, urlPath.replace(/^\//, ''));
-  
+
     const promise = fs.promises.access(localPath)
       .then(() => fs.promises.readFile(localPath))
       .then(content => Buffer.from(content))
       .catch(() => super.fetch(url, options));
-  
+
     // Add abort method to match AbortablePromise interface
     (promise as any).abort = () => {};
-      
+
     return promise as any;
   }
 }
 
-async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOMInstance> {  
+async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOM> {
   const virtualConsole = new VirtualConsole();
   // ** for debugging **
   //virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
@@ -52,7 +52,7 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
     resources: new LocalResourceLoader(resourceFolder),
     virtualConsole,
   });
-  
+
   dom.window.__isBuildTime = true;
 
   return new Promise((resolve, reject) => {
@@ -167,12 +167,12 @@ export class PrevelteSSR {
     const rsbuild = await createRsbuild({ rsbuildConfig: finalConfig });
     return rsbuild;
   }
-  
+
   private async compressFiles(distPath:string) {
     const { exec } = await import('child_process');
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
-    
+
     try {
       await execAsync(
         `find ${distPath} -regex '.*\\.\\(js\\|css\\|html\\|svg\\)$' -exec sh -c 'zopfli {} & brotli -f {} & zstd -19f {} > /dev/null 2>&1 & wait' \\;`
@@ -187,49 +187,49 @@ export class PrevelteSSR {
     const rsbuild = await this.createCustomRsbuild();
     await rsbuild.build();
     const config = rsbuild.getRsbuildConfig();
-  
+
     const indexFileName = `${config?.output?.distPath?.root}/index.html`;
     const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
     const indexDom = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
-    
+
     const processedDoms = new Map();
     processedDoms.set('index.html', indexDom);
 
-    const svelteRoutes = indexDom.window.__svelteRoutes as Route[];
-    if (Array.isArray(svelteRoutes)) {
+    const svelteRoutes = indexDom.window.__svelteRoutes as Routes;
+    if (svelteRoutes.staticRoutes) {
       const promises: Promise<void>[] = [];
-      
-      for (const route of svelteRoutes) {
-        if (processedDoms.has(route.static)) continue;
-      
+
+      for (const route of svelteRoutes.staticRoutes) {
+        if (processedDoms.has(route.htmlFilename)) continue;
+
         const promise = (async () => {
           try {
-            const dom = await fakeBrowser(`http://localhost${route.navigation}`, indexHtml, config?.output?.distPath?.root);
-            processedDoms.set(route.static, dom);
+            const dom = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
+            processedDoms.set(route.htmlFilename, dom);
           } catch (error) {
-            console.error(`Error processing route ${route.navigation}:`, error);
+            console.error(`Error processing route ${route.path}:`, error);
           }
         })();
-      
+
         promises.push(promise);
       }
-      
+
       await Promise.all(promises);
     }
 
-    for (const [staticName, dom] of processedDoms.entries()) {
-      const fileName = `${config?.output?.distPath?.root}/${staticName}`;
+    for (const [htmlFilename, dom] of processedDoms.entries()) {
+      const fileName = `${config?.output?.distPath?.root}/${htmlFilename}`;
       const finalHtml = dom.serialize();
       await fs.promises.writeFile(fileName, finalHtml);
       console.log(`Generated ${fileName}`);
     }
-    
+
     if (!noZip && process.env.NODE_ENV === 'production') {
       const distPath = config?.output?.distPath?.root || 'dist';
       await this.compressFiles(distPath as string);
     }
   }
-  
+
   async createDevServer() {
     const rsbuild = await this.createCustomRsbuild();
     const rsbuildServer = await rsbuild.createDevServer();
@@ -237,15 +237,15 @@ export class PrevelteSSR {
     return async (port = 3000) => {
       const app = express();
       app.use(async (req, res, next) => {
-        if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) { 
+        if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) {
           return next();
         }
         try {
           const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
-          const svelteRoutes = dom.window.__svelteRoutes;
-          if (Array.isArray(svelteRoutes)) {
-            for (const route of svelteRoutes) {
-              if (req.url.startsWith(route.navigation)) {
+          const svelteRoutes = dom.window.__svelteRoutes as Routes;
+          if (svelteRoutes.staticRoutes) {
+            for (const route of svelteRoutes.staticRoutes) {
+              if (req.url.startsWith(route.path)) {
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end(dom.serialize());
                 return; // stop here, do not continue to next middleware
@@ -268,7 +268,7 @@ export class PrevelteSSR {
       return { server: httpServer, rsbuildServer };
     };
   }
-  
+
   private listHtmlFiles(folder: string): string[] {
     return fs.readdirSync(folder)
       .filter(file => file.endsWith('.html'))
@@ -278,12 +278,12 @@ export class PrevelteSSR {
   createStageServer() {
     return (port = 3000) => {
       const app = express();
-      
-      app.get('/', (req, _, next) => { 
+
+      app.get('/', (req, _, next) => {
         req.url = '/index.html';
          return next();
       });
-      
+
       const htmlFolder = path.join(process.cwd(), 'dist');
       const htmlFiles = this.listHtmlFiles(htmlFolder);
       htmlFiles.forEach((filename) => {
@@ -292,7 +292,7 @@ export class PrevelteSSR {
           return next();
         });
       });
-      
+
       app.use(express.static('dist'));
       return app.listen(port, () => {
         console.log(`Stage server running on port ${port}`);

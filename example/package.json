@@ -9,10 +9,10 @@
     "stage": "NODE_ENV=production preveltekit stage"
   },
   "dependencies": {
-    "svelte": "^5.39.3"
+    "svelte": "^5.39.11"
   },
   "devDependencies": {
-    "preveltekit": "^1.0.15",
-    "typescript": "^5.9.2"
+    "preveltekit": "file:/home/draft/git/preveltekit",
+    "typescript": "^5.9.3"
   }
 }
