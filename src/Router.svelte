@@ -2,21 +2,18 @@
     import { onMount, onDestroy } from "svelte";
     import type { Routes, Component } from "./types";
 
-    // Props for the component
-    const props = $props();
+    interface Props {
+        routes: Routes;
+    }
+    
+    let { routes }: Props = $props();
 
-    // Create a store for the current route
     let currentRoute = $state<string>("/");
 
-    // Extract routes and notFound from props with defaults
-    let routes = $derived<Routes>((props.routes as Routes) || []);
-
-    // Handle browser back/forward navigation
     const handlePopState = () => {
         currentRoute = window.location.pathname;
     };
 
-    // Define event handler function for custom navigation events
     const handleNavigateEvent = (e: Event) => {
         const customEvent = e as CustomEvent<{ path: string }>;
         currentRoute = customEvent.detail.path;
@@ -204,14 +201,8 @@
     let routeParams = $derived(matchedRoute.params);
 </script>
 
-{#snippet renderer()}
-    {console.log('matchedRoute:', matchedRoute)}
-    {console.log('activeComponent:', ActiveComponent)}
-    {#if ActiveComponent}
-        <ActiveComponent params={routeParams}></ActiveComponent>
-    {:else}
-        <h1>404 - Page Not Found for [{currentRoute}]</h1>
-    {/if}
-{/snippet}
-
-{@render renderer()}
+{#if ActiveComponent}
+    <ActiveComponent params={routeParams}></ActiveComponent>
+{:else}
+    <h1>404 - Page Not Found for [{currentRoute}]</h1>
+{/if}
