@@ -1,53 +1,10 @@
 <script lang="ts">
     type BitcoinPrice = {
         RAW: {
-            MARKET: string;
             FROMSYMBOL: string;
             TOSYMBOL: string;
-            FLAGS: number;
             PRICE: number;
             LASTUPDATE: number;
-            LASTVOLUME: number;
-            LASTVOLUMETO: number;
-            LASTTRADEID: string;
-            VOLUME24HOUR: number;
-            VOLUME24HOURTO: number;
-            OPEN24HOUR: number;
-            HIGH24HOUR: number;
-            LOW24HOUR: number;
-            LASTMARKET: string;
-            TOPTIERVOLUME24HOUR: number;
-            TOPTIERVOLUME24HOURTO: number;
-            CHANGE24HOUR: number;
-            CHANGEPCT24HOUR: number;
-            CHANGEDAY: number;
-            CHANGEPCTDAY: number;
-            CHANGEHOUR: number;
-            CHANGEPCTHOUR: number;
-        };
-        DISPLAY: {
-            FROMSYMBOL: string;
-            TOSYMBOL: string;
-            MARKET: string;
-            PRICE: string;
-            LASTUPDATE: string;
-            LASTVOLUME: string;
-            LASTVOLUMETO: string;
-            LASTTRADEID: string;
-            VOLUME24HOUR: string;
-            VOLUME24HOURTO: string;
-            OPEN24HOUR: string;
-            HIGH24HOUR: string;
-            LOW24HOUR: string;
-            LASTMARKET: string;
-            TOPTIERVOLUME24HOUR: string;
-            TOPTIERVOLUME24HOURTO: string;
-            CHANGE24HOUR: string;
-            CHANGEPCT24HOUR: string;
-            CHANGEDAY: string;
-            CHANGEPCTDAY: string;
-            CHANGEHOUR: string;
-            CHANGEPCTHOUR: string;
         };
     }
 
