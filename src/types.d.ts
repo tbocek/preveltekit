@@ -1,6 +1,4 @@
 import type { Component as SvelteComponent } from 'svelte';
-
-export type RouteParams = Record<string, string>;
 export type Component = SvelteComponent<any> | null;
 
 export interface Routes {

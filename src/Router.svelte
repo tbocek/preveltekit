@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import type { Routes, RouteParams, Component } from "./types";
+    import type { Routes, Component } from "./types";
 
     // Props for the component
     const props = $props();
@@ -44,7 +44,7 @@
     // Helper function to find matching route and extract params
     function findMatchingRoute(path: string): {
         component: Component;
-        params: RouteParams;
+        params: Record<string, string>;
     } {
         // Normalize the input path (remove trailing slash except for root path)
         const normalizedPath =
@@ -53,7 +53,7 @@
         // For storing the best match
         let bestMatch: {
             component: Component;
-            params: RouteParams;
+            params: Record<string, string>;
             specificity: number;
         } | null = null;
 
@@ -62,7 +62,7 @@
             for (const route of routes.dynamicRoutes) {
                 const routePath = route.path;
                 let isMatch = false;
-                let params: RouteParams = {};
+                let params: Record<string, string> = {};
                 let specificity = 0;
 
                 // Normalize the route path (remove trailing slash except for root path)
