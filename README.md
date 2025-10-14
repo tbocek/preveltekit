@@ -38,22 +38,22 @@ In my experience, Rsbuild "just works" after many updates out of the box with mi
   <td colspan="2"><strong>SSR</strong> (classic SSR / Next.js / Nuxt)</td>
 </tr>
 <tr>
-  <td><img src="static/SSR.svg" width="50%"><br>User sees fully rendered content instantly</td>
-  <td><img src="static/SSR.svg" width="50%"><br>Content remains the same, scripts add interactivity</td>
+  <td><img src="static/SSR.svg" width="300"><br>User sees fully rendered content instantly</td>
+  <td><img src="static/SSR.svg" width="300"><br>Content remains the same, scripts add interactivity</td>
 </tr>
 <tr>
   <td colspan="2"><strong>SPA</strong> (React App / pure Svelte)</td>
 </tr>
 <tr>
-  <td><img src="static/SPA.svg" width="50%"><br>User sees blank page or loading spinner</td>
-  <td><img src="static/SSR.svg" width="50%"><br>User sees full interactive content</td>
+  <td><img src="static/SPA.svg" width="300"><br>User sees blank page or loading spinner</td>
+  <td><img src="static/SSR.svg" width="300"><br>User sees full interactive content</td>
 </tr>
 <tr>
   <td colspan="2"><strong>SPA + Build-time Pre-Rendering</strong> (this approach)</td>
 </tr>
 <tr>
-  <td><img src="static/SPAwBR.svg" width="50%"><br>User sees pre-rendered static content</td>
-  <td><img src="static/SSR.svg" width="50%"><br>Content becomes fully interactive</td>
+  <td><img src="static/SPAwBR.svg" width="300"><br>User sees pre-rendered static content</td>
+  <td><img src="static/SSR.svg" width="300"><br>Content becomes fully interactive</td>
 </tr>
 </table>
 
