@@ -26,11 +26,36 @@ In my experience, Rsbuild "just works" after many updates out of the box with mi
  * 🛠️ Developer Friendly: Hot reload in development, production-ready in minutes
  * 🛡️ Security: Docker-based development environments to protect against supply chain attacks
  
-| Rendering Type | Initial Load | After Script Execution |
-|----------------|--------------|------------------------|
-| **SSR** (classic SSR / Next.js / Nuxt) | ![SSR](static/SSR.svg)<br>User sees fully rendered content instantly | ![SSR](static/SSR.svg)<br>Content remains the same, scripts add interactivity |
-| **SPA** (React App / pure Svelte) | ![SPA Loading](static/SPA.svg)<br>User sees blank page or loading spinner | ![SPA Loaded](static/SSR.svg)<br>User sees full interactive content |
-| **SPA + Build-time Pre-Rendering** (this approach) | ![SSR Initial](static/SPAwBR.svg)<br>User sees pre-rendered static content | ![SSR Hydrated](static/SSR.svg)<br>Content becomes fully interactive |
+<table>
+<tr>
+  <th colspan="2" style="text-align: center;">Rendering Type</th>
+</tr>
+<tr>
+  <th>Initial Load</th>
+  <th>After Script Execution</th>
+</tr>
+<tr>
+  <td colspan="2"><strong>SSR</strong> (classic SSR / Next.js / Nuxt)</td>
+</tr>
+<tr>
+  <td><img src="static/SSR.svg"><br>User sees fully rendered content instantly</td>
+  <td><img src="static/SSR.svg"><br>Content remains the same, scripts add interactivity</td>
+</tr>
+<tr>
+  <td colspan="2"><strong>SPA</strong> (React App / pure Svelte)</td>
+</tr>
+<tr>
+  <td><img src="static/SPA.svg"><br>User sees blank page or loading spinner</td>
+  <td><img src="static/SSR.svg"><br>User sees full interactive content</td>
+</tr>
+<tr>
+  <td colspan="2"><strong>SPA + Build-time Pre-Rendering</strong> (this approach)</td>
+</tr>
+<tr>
+  <td><img src="static/SPAwBR.svg"><br>User sees pre-rendered static content</td>
+  <td><img src="static/SSR.svg"><br>Content becomes fully interactive</td>
+</tr>
+</table>
 
 ## Prerequisites
 Make sure you have the following installed:
