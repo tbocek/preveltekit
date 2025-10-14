@@ -18,6 +18,11 @@ While [benchmarks](https://github.com/rspack-contrib/build-tools-performance) sh
 
 In my experience, Rsbuild "just works" after many updates out of the box with minimal configuration, which reduced friction and setup time. However, I am watching Vite (Rolldown + Oxc) closely, as they are progressing fast.
 
+## Links
+ * [npm](https://www.npmjs.com/package/preveltekit)
+ * [github](https://github.com/tbocek/preveltekit)
+ * [github.io](https://tbocek.github.io/preveltekit)
+
 ## Key Features
  * ⚡️ Lightning Fast: Rsbuild bundles in the range of a couple hundred milliseconds
  * 🎯 Simple Routing: Built-in routing system
