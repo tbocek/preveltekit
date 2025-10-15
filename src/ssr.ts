@@ -183,7 +183,7 @@ export class PrevelteSSR {
     }
   }
 
-  async generateSSRHtml(noZip:boolean) {
+  async generateSSRHtml(noZip: boolean) {
     const rsbuild = await this.createCustomRsbuild();
     await rsbuild.build();
     const config = rsbuild.getRsbuildConfig();
@@ -196,7 +196,7 @@ export class PrevelteSSR {
     processedDoms.set('index.html', indexDom);
 
     const svelteRoutes = indexDom.window.__svelteRoutes as Routes;
-    if (svelteRoutes.staticRoutes) {
+    if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
       const promises: Promise<void>[] = [];
 
       for (const route of svelteRoutes.staticRoutes) {
@@ -243,7 +243,7 @@ export class PrevelteSSR {
         try {
           const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
           const svelteRoutes = dom.window.__svelteRoutes as Routes;
-          if (svelteRoutes.staticRoutes) {
+          if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
             for (const route of svelteRoutes.staticRoutes) {
               if (req.url.startsWith(route.path)) {
                 res.writeHead(200, { 'Content-Type': 'text/html' });
