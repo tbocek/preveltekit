@@ -74,7 +74,7 @@ Make sure you have the following installed:
 # Create test directory and go into this directory
 mkdir -p preveltekit/src && cd preveltekit 
 # Declare dependency and the dev script
-echo '{"devDependencies": {"preveltekit": "^1.1.2"},"dependencies": {"svelte": "^5.39.11"},"scripts": {"dev": "preveltekit dev"}}' > package.json 
+echo '{"devDependencies": {"preveltekit": "^1.1.3"},"dependencies": {"svelte": "^5.39.11"},"scripts": {"dev": "preveltekit dev"}}' > package.json 
 # Download dependencies
 npm install 
 # A very simple svelte file
