@@ -74,7 +74,7 @@ FILES=("README.md" "example/src/Landing.svelte" "example/src/Documentation.svelt
 
 # Update version in all files
 for file in "${FILES[@]}"; do
-    sed -i '' "s/\"preveltekit\": \"\\^[0-9]\+\.[0-9]\+\.[0-9]\+\"/\"preveltekit\": \"^$NEW_VERSION\"/g" "$file"
+    sed -i "s/\"preveltekit\": \"\\^[0-9]\+\.[0-9]\+\.[0-9]\+\"/\"preveltekit\": \"^$NEW_VERSION\"/g" "$file"
     git add "$file"
 done
 
