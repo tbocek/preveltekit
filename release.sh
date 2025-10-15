@@ -82,7 +82,7 @@ pnpm run docs
 git add docs/**
 git commit -m "release: v$NEW_VERSION"
 git tag "v$NEW_VERSION"
-git push --follow-tags
+git push && git push --tags
 
 # Run release
 pnpm run release
