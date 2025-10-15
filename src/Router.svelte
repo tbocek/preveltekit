@@ -20,8 +20,7 @@
     };
 
     onMount(() => {
-        // Set initial route
-        currentRoute = window.location.pathname;
+        currentRoute = new URL(window.location.href).pathname;
 
         // Add event listener for back/forward navigation
         window.addEventListener("popstate", handlePopState);
