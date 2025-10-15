@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { route } from "preveltekit";
+    import { link } from "preveltekit";
     let message = "PrevelteKit";
     let subtitle = "Minimalistic Build-time Pre-rendering for Svelte";
 
@@ -28,8 +28,8 @@
         </ul>
 
         <div class="cta-buttons">
-            <a use:route href="doc" class="cta-button primary">Documentation</a>
-            <a use:route href="example" class="cta-button secondary"
+            <a use:link href="doc" class="cta-button primary">Documentation</a>
+            <a use:link href="example" class="cta-button secondary"
                 >Bitcoin Demo</a
             >
         </div>

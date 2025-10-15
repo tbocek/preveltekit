@@ -2,7 +2,7 @@ export function navigate(path: string): void {
     history.pushState(null, "", path);
     window.dispatchEvent(new CustomEvent('svelteNavigate', { detail: { path } }));
 }
-export function route(node: HTMLAnchorElement): { destroy: () => void } {
+export function link(node: HTMLAnchorElement): { destroy: () => void } {
   const handleClick = (event: MouseEvent) => {
       // Only handle if it's a left-click without modifier keys
       if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {

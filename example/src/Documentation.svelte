@@ -304,8 +304,8 @@ if (window?.__isBuildTime) &lcub;
             <pre><code
                     >import &lcub; route &rcub; from 'preveltekit';
 
-    &lt;a use:route href="doc"&gt;Documentation&lt;/a&gt;
-    &lt;a use:route href="example"&gt;Example&lt;/a&gt;</code
+    &lt;a use:link href="doc"&gt;Documentation&lt;/a&gt;
+    &lt;a use:link href="example"&gt;Example&lt;/a&gt;</code
                 ></pre>
         </div>
 
