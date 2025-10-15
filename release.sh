@@ -68,7 +68,7 @@ fi
 
 # Update package.json
 pnpm version "$NEW_VERSION" --no-git-tag-version
-git package.json
+git add package.json
 
 FILES=("README.md" "example/src/Landing.svelte" "example/src/Documentation.svelte")
 
