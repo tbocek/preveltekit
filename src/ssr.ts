@@ -252,6 +252,7 @@ export class PrevelteSSR {
       fetchWrapper.rejectAll();
       await fs.promises.writeFile(fileName, finalHtml);
       console.log(`Generated ${fileName}`);
+      dom.window.close();
     }
 
     if (!noZip && process.env.NODE_ENV === 'production') {
