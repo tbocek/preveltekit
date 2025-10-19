@@ -178,31 +178,41 @@ if (window?.__isBuildTime) &lcub;
 
         <h3>🔄 Handling Client-Side Operations</h3>
         <p>
-            When working with APIs, timers, or browser-specific features, wrap
-            them in a build-time check to prevent execution during
-            pre-rendering:
+            PrevelteKit automatically handles fetch requests during build-time pre-rendering. 
+            Fetch calls made during pre-rendering will timeout after 5 seconds, allowing your 
+            components to render with loading states. You no longer need to wrap fetch calls 
+            in <code>window.__isBuildTime</code> checks.
         </p>
-
+        
         <div class="code-block">
-            {@html `<pre><code>$effect(() =&gt; &lcub;
-    if (!window?.__isBuildTime) &lcub;
-        fetchBitcoinPrice();
-        // Set up refresh interval
-        const interval = setInterval(fetchBitcoinPrice, 60000);
-        return () =&gt; clearInterval(interval);
-    &rcub;
-&rcub;);</code></pre>`}
+            {@html `<pre><code>// Fetch automatically handled during pre-rendering
+        let pricePromise = $state(fetchBitcoinPrice());
+        
+        $effect(() =&gt; &lcub;
+            // Automatic refresh - works both client and build-time
+            const interval = setInterval(() =&gt; &lcub;
+                pricePromise = fetchBitcoinPrice();
+            &rcub;, 60000);
+            return () =&gt; clearInterval(interval);
+        &rcub;);
+        
+        // Use Svelte's await block for clean handling
+        &lcub;#await pricePromise&rcub;
+            &lt;p&gt;Loading...&lt;/p&gt;
+        &lcub;:then data&rcub;
+            &lt;p&gt;&lcub;data&rcub;&lt;/p&gt;
+        &lcub;:catch error&rcub;
+            &lt;p&gt;Error: &lcub;error.message&rcub;&lt;/p&gt;
+        &lcub;/await&rcub;</code></pre>`}
         </div>
-
+        
         <p>
-            <strong>Common use cases for build-time checks:</strong>
+            <strong>When to still use build-time checks:</strong>
         </p>
         <ul>
-            <li>API calls and data fetching</li>
-            <li>Browser APIs (localStorage, sessionStorage)</li>
-            <li>Timers and intervals</li>
-            <li>DOM manipulation</li>
-            <li>Browser-specific features (geolocation, notifications)</li>
+            <li>Browser APIs (localStorage, sessionStorage, geolocation)</li>
+            <li>DOM manipulation that shouldn't happen during pre-rendering</li>
+            <li>Third-party scripts that expect a real browser environment</li>
         </ul>
     </section>
 

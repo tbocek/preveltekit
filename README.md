@@ -31,6 +31,14 @@ In my experience, Rsbuild "just works" after many updates out of the box with mi
  * 🛠️ Developer Friendly: Hot reload in development, production-ready in minutes
  * 🛡️ Security: Docker-based development environments to protect against supply chain attacks
  
+ ## Automatic Fetch Handling
+ 
+ PrevelteKit automatically manages fetch requests during build-time pre-rendering:
+ - Components render with loading states in the pre-rendered HTML
+ - No need to wrap fetch calls in `window.__isBuildTime` checks
+ - Use Svelte's `{#await}` blocks for clean loading/error/success states
+ - If anything went missing, in the worst case, fetch calls timeout after 5 seconds during pre-rendering
+ 
 <table>
 <tr>
   <th colspan="2" style="text-align: center;">Rendering Type</th>

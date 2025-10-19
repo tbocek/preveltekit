@@ -34,7 +34,30 @@ class LocalResourceLoader extends ResourceLoader {
   }
 }
 
-async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOM> {
+class FetchWrapper {
+  private pendingPromises = new Map<string, {reject: (reason?: any) => void, timeout: NodeJS.Timeout}>();
+    
+  async fetch(url: string, _?: RequestInit): Promise<Response> {
+    return new Promise((_, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingPromises.delete(url);
+        reject(new Error(`SSR: Fetch timeout after 5s for ${url}`));
+      }, 5000);
+      
+      this.pendingPromises.set(url, { reject, timeout });
+    });
+  }
+    
+  rejectAll() {
+    for (const [url, { reject, timeout }] of this.pendingPromises) {
+      clearTimeout(timeout);
+      reject(new Error(`SSR: Fetch aborted for ${url}`));
+    }
+    this.pendingPromises.clear();
+  }
+}
+
+async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<{dom: JSDOM, fetchWrapper: FetchWrapper}> {
   const virtualConsole = new VirtualConsole();
   // ** for debugging **
   //virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
@@ -52,6 +75,12 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
     resources: new LocalResourceLoader(resourceFolder),
     virtualConsole,
   });
+  
+  // Inject fetch and TextEncoder into the JSDOM window
+  const fetchWrapper = new FetchWrapper();
+  dom.window.fetch = fetchWrapper.fetch.bind(fetchWrapper);
+  dom.window.TextEncoder = TextEncoder;
+  dom.window.TextDecoder = TextDecoder;
 
   dom.window.__isBuildTime = true;
 
@@ -100,7 +129,7 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
                 if (markerScript) {
                   markerScript.remove();
                 }
-                resolve(dom);
+                resolve({ dom, fetchWrapper });
               }
             } else if (checkCount++ < maxChecks) {
               setTimeout(checkExecution, 10);
@@ -140,7 +169,7 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
           if (!isResolved) {
             isResolved = true;
             cleanup();
-            resolve(dom);
+            resolve({ dom, fetchWrapper });
           }
         });
       }
@@ -190,12 +219,12 @@ export class PrevelteSSR {
 
     const indexFileName = `${config?.output?.distPath?.root}/index.html`;
     const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
-    const indexDom = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
+    const { dom, fetchWrapper } = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
 
     const processedDoms = new Map();
-    processedDoms.set('index.html', indexDom);
+    processedDoms.set('index.html',  { dom, fetchWrapper });
 
-    const svelteRoutes = indexDom.window.__svelteRoutes as Routes;
+    const svelteRoutes = dom.window.__svelteRoutes as Routes;
     if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
       const promises: Promise<void>[] = [];
 
@@ -204,8 +233,8 @@ export class PrevelteSSR {
 
         const promise = (async () => {
           try {
-            const dom = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
-            processedDoms.set(route.htmlFilename, dom);
+            const { dom, fetchWrapper } = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
+            processedDoms.set(route.htmlFilename, { dom, fetchWrapper });
           } catch (error) {
             console.error(`Error processing route ${route.path}:`, error);
           }
@@ -217,9 +246,10 @@ export class PrevelteSSR {
       await Promise.all(promises);
     }
 
-    for (const [htmlFilename, dom] of processedDoms.entries()) {
+    for (const [htmlFilename, { dom, fetchWrapper }] of processedDoms.entries()) {
       const fileName = `${config?.output?.distPath?.root}/${htmlFilename}`;
       const finalHtml = dom.serialize();
+      fetchWrapper.rejectAll();
       await fs.promises.writeFile(fileName, finalHtml);
       console.log(`Generated ${fileName}`);
     }
@@ -241,16 +271,21 @@ export class PrevelteSSR {
           return next();
         }
         try {
-          const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
-          const svelteRoutes = dom.window.__svelteRoutes as Routes;
-          if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
-            for (const route of svelteRoutes.staticRoutes) {
-              if (req.url.startsWith(route.path)) {
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(dom.serialize());
-                return; // stop here, do not continue to next middleware
+          const { dom, fetchWrapper } = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
+          try {
+            const svelteRoutes = dom.window.__svelteRoutes as Routes;
+            if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
+              for (const route of svelteRoutes.staticRoutes) {
+                if (req.url.startsWith(route.path)) {
+                  const html = dom.serialize();
+                  res.writeHead(200, { 'Content-Type': 'text/html' });
+                  res.end(html);
+                  return; // stop here, do not continue to next middleware
+                }
               }
             }
+          } finally {
+            fetchWrapper.rejectAll();   
           }
         } catch (err) {
           console.error(`SSR render error, downgrade to CSR for [${req.url}]`, err);

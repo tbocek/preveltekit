@@ -19,40 +19,33 @@
     }
 
     async function fetchBitcoinPrice() {
-        try {
-            loading = true;
-            error = null;
-            const response = await fetch('https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase');
-            if (!response.ok) throw new Error('Failed to fetch data');
-            priceData = await response.json();
-        } catch (e) {
-            error = e instanceof Error ? e.message : 'An error occurred';
-        } finally {
-            loading = false;
-        }
+        const response = await fetch('https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase');
+        if (!response.ok) throw new Error('Failed to fetch data');
+        return response.json();
     }
-
-    // Fetch initial data
+    
+    let pricePromise = $state<Promise<BitcoinPrice>>(fetchBitcoinPrice());
+    
+    // Set up refresh interval
     $effect(() => {
-        if (!window?.__isBuildTime) {
-            fetchBitcoinPrice();
-            // Set up refresh interval
-            const interval = setInterval(fetchBitcoinPrice, 60000); // Update every minute
-            return () => clearInterval(interval);
-        }
+        const interval = setInterval(() => {
+            pricePromise = fetchBitcoinPrice();
+        }, 60000);
+        return () => clearInterval(interval);
     });
+    
+    function retry() {
+        pricePromise = fetchBitcoinPrice();
+    }
 </script>
 
 <div class="container">
     <h2>Bitcoin Price Tracker <small>({renderInfo})</small></h2>
     
     <div class="card">
-        {#if loading && !priceData}
+        {#await pricePromise}
             <p>Loading...</p>
-        {:else if error}
-            <p class="error">Error: {error}</p>
-            <button onclick={fetchBitcoinPrice}>Retry</button>
-        {:else if priceData}
+        {:then priceData}
             <div class="price-info">
                 <span>{priceData.RAW.FROMSYMBOL}</span>
                 <time>Updated: {new Date(priceData.RAW.LASTUPDATE * 1000).toLocaleTimeString()}</time>
@@ -61,8 +54,11 @@
             <small class="disclaimer">
                 Prices are volatile and for reference only. Not financial advice.
             </small>
-        {/if}
-    </div>
+        {:catch error}
+            <p class="error">Error: {error.message}</p>
+            <button onclick={retry}>Retry</button>
+        {/await}
+       </div>
 </div>
 
 <style>
