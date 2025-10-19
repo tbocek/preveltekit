@@ -44,16 +44,8 @@ class FetchWrapper {
 
 class RequestWrapper {
   constructor(input: RequestInfo | URL, init?: RequestInit) {
-    // Resolve relative URLs to absolute URLs using the document's base URL
-    if (typeof input === 'string' && !input.startsWith('http://') && !input.startsWith('https://')) {
-      const baseURL = globalThis.location?.href || 'http://localhost/';
-      input = new URL(input, baseURL).href;
-    }
-    
-    // If there's a signal from JSDOM, remove it before creating Node's Request
-    if (init?.signal) {
-      const { signal, ...restInit } = init;
-      return new Request(input, restInit);
+    if (typeof input === 'string' && input.startsWith('/')) {
+      input = new URL(input, 'http://localhost').href;
     }
     return new Request(input, init);
   }
