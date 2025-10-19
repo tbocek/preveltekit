@@ -35,25 +35,10 @@ class LocalResourceLoader extends ResourceLoader {
 }
 
 class FetchWrapper {
-  private pendingPromises = new Map<string, {reject: (reason?: any) => void, timeout: NodeJS.Timeout}>();
-    
-  async fetch(url: string, _?: RequestInit): Promise<Response> {
-    return new Promise((_, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingPromises.delete(url);
-        reject(new Error(`SSR: Fetch timeout after 5s for ${url}`));
-      }, 5000);
-      
-      this.pendingPromises.set(url, { reject, timeout });
+  async fetch(_url: string, _init?: RequestInit): Promise<Response> {
+    return new Promise(() => {
+      // Promise stays open forever
     });
-  }
-    
-  rejectAll() {
-    for (const [url, { reject, timeout }] of this.pendingPromises) {
-      clearTimeout(timeout);
-      reject(new Error(`SSR: Fetch aborted for ${url}`));
-    }
-    this.pendingPromises.clear();
   }
 }
 
@@ -74,16 +59,16 @@ class RequestWrapper {
   }
 }
 
-async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<{dom: JSDOM, fetchWrapper: FetchWrapper}> {
+async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<JSDOM> {
   const virtualConsole = new VirtualConsole();
   // ** for debugging **
-  //virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
-  //virtualConsole.on("jsdomError", (e) => {
-  //  if (e.type === "not-implemented" && e.message.includes("navigation")) {
-  //    } else {
-  //    console.error("jsdomError", e);
-  //  }
-  //});
+  virtualConsole.forwardTo(console);
+  virtualConsole.on("jsdomError", (e:any) => {
+    if (e.type === "not-implemented" && e.message.includes("navigation")) {
+      } else {
+      console.error("jsdomError", e);
+    }
+  });
 
   const dom = new JSDOM(html, {
     url: ssrUrl,
@@ -151,7 +136,7 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
                 if (markerScript) {
                   markerScript.remove();
                 }
-                resolve({ dom, fetchWrapper });
+                resolve(dom);
               }
             } else if (checkCount++ < maxChecks) {
               setTimeout(checkExecution, 10);
@@ -191,7 +176,7 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
           if (!isResolved) {
             isResolved = true;
             cleanup();
-            resolve({ dom, fetchWrapper });
+            resolve(dom);
           }
         });
       }
@@ -241,10 +226,10 @@ export class PrevelteSSR {
 
     const indexFileName = `${config?.output?.distPath?.root}/index.html`;
     const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
-    const { dom, fetchWrapper } = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
+    const dom = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
 
     const processedDoms = new Map();
-    processedDoms.set('index.html',  { dom, fetchWrapper });
+    processedDoms.set('index.html',  dom);
 
     const svelteRoutes = dom.window.__svelteRoutes as Routes;
     if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
@@ -255,8 +240,8 @@ export class PrevelteSSR {
 
         const promise = (async () => {
           try {
-            const { dom, fetchWrapper } = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
-            processedDoms.set(route.htmlFilename, { dom, fetchWrapper });
+            const dom = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
+            processedDoms.set(route.htmlFilename, dom);
           } catch (error) {
             console.error(`Error processing route ${route.path}:`, error);
           }
@@ -268,10 +253,9 @@ export class PrevelteSSR {
       await Promise.all(promises);
     }
 
-    for (const [htmlFilename, { dom, fetchWrapper }] of processedDoms.entries()) {
+    for (const [htmlFilename, dom] of processedDoms.entries()) {
       const fileName = `${config?.output?.distPath?.root}/${htmlFilename}`;
       const finalHtml = dom.serialize();
-      fetchWrapper.rejectAll();
       await fs.promises.writeFile(fileName, finalHtml);
       console.log(`Generated ${fileName}`);
       dom.window.close();
@@ -294,7 +278,7 @@ export class PrevelteSSR {
           return next();
         }
         try {
-          const { dom, fetchWrapper } = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
+          const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
           try {
             const svelteRoutes = dom.window.__svelteRoutes as Routes;
             if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
@@ -308,7 +292,6 @@ export class PrevelteSSR {
               }
             }
           } finally {
-            fetchWrapper.rejectAll();
             dom.window.close();
           }
         } catch (err) {
