@@ -286,7 +286,8 @@ export class PrevelteSSR {
               }
             }
           } finally {
-            fetchWrapper.rejectAll();   
+            fetchWrapper.rejectAll();
+            dom.window.close();
           }
         } catch (err) {
           console.error(`SSR render error, downgrade to CSR for [${req.url}]`, err);
