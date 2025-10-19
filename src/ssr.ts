@@ -88,7 +88,14 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
   dom.window.Blob = Blob;
   dom.window.TextEncoder = TextEncoder;
   dom.window.TextDecoder = TextDecoder;
-  dom.window.Element.prototype.animate = (() => ({ finished: Promise.resolve() })) as any;
+  dom.window.Element.prototype.animate = (() => {
+    return new Proxy({}, {
+      get: (_, prop) => {
+        if (prop === 'finished' || prop === 'ready') return Promise.resolve();
+        return () => {};
+      }
+    });
+  }) as any;
   dom.window.__isBuildTime = true;
 
   return new Promise((resolve, reject) => {
