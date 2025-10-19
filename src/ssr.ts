@@ -291,6 +291,8 @@ export class PrevelteSSR {
         if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) {
           return next();
         }
+        
+        console.debug('DEV request:', req.url);
         try {
           const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
           try {
