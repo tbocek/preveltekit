@@ -57,6 +57,18 @@ class FetchWrapper {
   }
 }
 
+class RequestWrapper {
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    // If there's a signal from JSDOM, remove it before creating Node's Request
+    // since your fetch never actually executes anyway
+    if (init?.signal) {
+      const { signal, ...restInit } = init;
+      return new Request(input, restInit);
+    }
+    return new Request(input, init);
+  }
+}
+
 async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string, timeout = 5000): Promise<{dom: JSDOM, fetchWrapper: FetchWrapper}> {
   const virtualConsole = new VirtualConsole();
   // ** for debugging **
@@ -79,9 +91,11 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
   // Inject fetch and TextEncoder into the JSDOM window
   const fetchWrapper = new FetchWrapper();
   dom.window.fetch = fetchWrapper.fetch.bind(fetchWrapper);
-  dom.window.Request = Request;
+  dom.window.Request = RequestWrapper;
   dom.window.Response = Response;
   dom.window.Headers = Headers;
+  dom.window.FormData = FormData;
+  dom.window.Blob = Blob;
   dom.window.TextEncoder = TextEncoder;
   dom.window.TextDecoder = TextDecoder;
 
