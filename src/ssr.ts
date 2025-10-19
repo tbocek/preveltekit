@@ -79,6 +79,9 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
   // Inject fetch and TextEncoder into the JSDOM window
   const fetchWrapper = new FetchWrapper();
   dom.window.fetch = fetchWrapper.fetch.bind(fetchWrapper);
+  dom.window.Request = Request;
+  dom.window.Response = Response;
+  dom.window.Headers = Headers;
   dom.window.TextEncoder = TextEncoder;
   dom.window.TextDecoder = TextDecoder;
 
