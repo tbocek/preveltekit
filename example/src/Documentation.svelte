@@ -1,8 +1,8 @@
 <script lang="ts">
     // Demo SPAwBR capabilities
-    import SSR from './assets/SSR.svg';
-    import SPA from './assets/SPA.svg';
-    import SPAwBR from './assets/SPAwBR.svg';
+    import SSR from "./assets/SSR.svg";
+    import SPA from "./assets/SPA.svg";
+    import SPAwBR from "./assets/SPAwBR.svg";
     let renderType = "Client Rendered";
     if (window?.__isBuildTime) {
         renderType = "Server Pre-Rendered";
@@ -96,11 +96,17 @@ npm run dev
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>SSR</strong> (classic SSR / Next.js / Nuxt)</td>
+                        <td
+                            ><strong>SSR</strong> (classic SSR / Next.js / Nuxt)</td
+                        >
                         <td>
-                            <img src={SSR} alt="SSR Initial" class="comparison-img"/>
+                            <img
+                                src={SSR}
+                                alt="SSR Initial"
+                                class="comparison-img"
+                            />
                             <br />User sees content instantly
-                            <br /><small>(rendered on each request)</small>    
+                            <br /><small>(rendered on each request)</small>
                         </td>
                         <td
                             ><img
@@ -134,7 +140,10 @@ npm run dev
                         >
                     </tr>
                     <tr>
-                        <td><strong>SPA + Build-time Pre-Rendering</strong> (this approach)</td>
+                        <td
+                            ><strong>SPA + Build-time Pre-Rendering</strong> (this
+                            approach)</td
+                        >
                         <td
                             ><img
                                 src={SPAwBR}
@@ -178,34 +187,28 @@ if (window?.__isBuildTime) &lcub;
 
         <h3>🔄 Handling Client-Side Operations</h3>
         <p>
-            PrevelteKit automatically handles fetch requests during build-time pre-rendering. 
-            Fetch calls made during pre-rendering will timeout after 5 seconds, allowing your 
-            components to render with loading states. You no longer need to wrap fetch calls 
-            in <code>window.__isBuildTime</code> checks.
+            PrevelteKit automatically handles fetch requests during build-time
+            pre-rendering. Fetch calls made during pre-rendering will timeout
+            after 5 seconds, allowing your components to render with loading
+            states. You no longer need to wrap fetch calls in <code
+                >window.__isBuildTime</code
+            > checks.
         </p>
-        
+
         <div class="code-block">
             {@html `<pre><code>// Fetch automatically handled during pre-rendering
-        let pricePromise = $state(fetchBitcoinPrice());
-        
-        $effect(() =&gt; &lcub;
-            // Automatic refresh - works both client and build-time
-            const interval = setInterval(() =&gt; &lcub;
-                pricePromise = fetchBitcoinPrice();
-            &rcub;, 60000);
-            return () =&gt; clearInterval(interval);
-        &rcub;);
-        
-        // Use Svelte's await block for clean handling
-        &lcub;#await pricePromise&rcub;
-            &lt;p&gt;Loading...&lt;/p&gt;
-        &lcub;:then data&rcub;
-            &lt;p&gt;&lcub;data&rcub;&lt;/p&gt;
-        &lcub;:catch error&rcub;
-            &lt;p&gt;Error: &lcub;error.message&rcub;&lt;/p&gt;
-        &lcub;/await&rcub;</code></pre>`}
+let pricePromise = $state(fetchBitcoinPrice());
+
+// Use Svelte's await block for clean handling
+&lcub;#await pricePromise&rcub;
+    &lt;p&gt;Loading...&lt;/p&gt;
+&lcub;:then data&rcub;
+    &lt;p&gt;&lcub;data&rcub;&lt;/p&gt;
+&lcub;:catch error&rcub;
+    &lt;p&gt;Error: &lcub;error.message&rcub;&lt;/p&gt;
+&lcub;/await&rcub;</code></pre>`}
         </div>
-        
+
         <p>
             <strong>When to still use build-time checks:</strong>
         </p>
@@ -249,7 +252,8 @@ if (window?.__isBuildTime) &lcub;
             name:
         </p>
         <div class="code-block">
-            <pre><code>const routes: Routes = &lcub;
+            <pre><code
+                    >const routes: Routes = &lcub;
      dynamicRoutes: [
          &lcub;
              path: "*/doc",
@@ -279,8 +283,9 @@ if (window?.__isBuildTime) &lcub;
          &rcub;
      ]
  &rcub;;
- 
- &lt;Router routes&gt;</code></pre>
+
+ &lt;Router routes&gt;</code
+                ></pre>
         </div>
 
         <h3>🔍 Path Patterns</h3>
@@ -321,8 +326,8 @@ if (window?.__isBuildTime) &lcub;
 
         <h3>📄 Static File Mapping & Hybrid Routing</h3>
         <p>
-            The <code>staticRoutes</code> array configuration serves a dual
-            purpose in PrevelteKit's hybrid routing approach:
+            The <code>staticRoutes</code> array configuration serves a dual purpose
+            in PrevelteKit's hybrid routing approach:
         </p>
         <div class="code-block">
             <pre><code
