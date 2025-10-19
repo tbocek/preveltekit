@@ -96,6 +96,13 @@ async function fakeBrowser(ssrUrl: string, html: string, resourceFolder?: string
       }
     });
   }) as any;
+  dom.window.WebSocket = class FakeWebSocket {
+    constructor() {}
+    send() {}
+    close() {}
+    addEventListener() {}
+    removeEventListener() {}
+  } as any;
   dom.window.__isBuildTime = true;
 
   return new Promise((resolve, reject) => {
