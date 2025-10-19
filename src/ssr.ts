@@ -287,12 +287,31 @@ export class PrevelteSSR {
     const template = await rsbuildServer.environments.web.getTransformedHtml("index");
     return async (port = 3000) => {
       const app = express();
+      const staticDir = path.resolve(process.cwd(), "static");
       app.use(async (req, res, next) => {
         if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) {
           return next();
         }
         
-        console.debug('DEV request:', req.url);
+        if (/\.(svg|png|jpg|jpeg)$/i.test(req.url)) {
+          const requestedPath = req.url.replace(/^\//, ""); // strip leading slash
+          const filePath = path.join(staticDir, requestedPath);
+        
+          // prevent path traversal
+          if (!filePath.startsWith(staticDir)) {
+            console.debug('DEV request (forbidden):', filePath);
+            return res.status(403).send("Forbidden");
+          }
+        
+          try {
+            await fs.promises.access(filePath, fs.constants.R_OK);
+            return res.sendFile(filePath);
+          } catch {
+            console.debug('DEV request (file not found):', filePath);
+            return res.status(404).send("Not Found");
+          }
+        }
+        
         try {
           const dom = await fakeBrowser(`${req.protocol}://${req.get('host')}${req.url}`, template);
           try {
@@ -300,6 +319,7 @@ export class PrevelteSSR {
             if (svelteRoutes?.staticRoutes) { //we may not have svelteRoutes or staticRoutes
               for (const route of svelteRoutes.staticRoutes) {
                 if (req.url.startsWith(route.path)) {
+                  console.debug('DEV request (hydration):', req.url);
                   const html = dom.serialize();
                   res.writeHead(200, { 'Content-Type': 'text/html' });
                   res.end(html);
@@ -313,6 +333,7 @@ export class PrevelteSSR {
         } catch (err) {
           console.error(`SSR render error, downgrade to CSR for [${req.url}]`, err);
         }
+        console.debug('DEV request (default rsbuild):', req.url);
         return next();
       })
       app.use(rsbuildServer.middlewares);
