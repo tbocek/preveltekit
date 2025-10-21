@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
+    import { setupStaticRoutes } from "./router";
     import type { Routes, Component } from "./types";
 
     interface Props {
@@ -27,9 +28,7 @@
         window.addEventListener("svelteNavigate", handleNavigateEvent);
 
         // Expose routes directly to SSR if running in JSDOM
-        if (window.__isBuildTime) {
-            window.__svelteRoutes = routes;
-        }
+        setupStaticRoutes(routes);
     });
 
     onDestroy(() => {
