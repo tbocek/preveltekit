@@ -45,7 +45,20 @@ export const defaultConfig = defineConfig({
   },
   dev: { hmr: false }, //I had issues with hmr in the past, easiest to disable it
   html: { template: "./src/index.html" }, //default provided, see ssr.ts
-  output: { assetPrefix: "./" }, //create relative paths, to run in subdirectories
+  output: { 
+    assetPrefix: "./",
+    distPath: {
+      root: 'dist',
+      js: 'js',
+      css: 'css',
+      svg: 'svg',
+      font: 'font',
+      image: 'image',
+      media: 'media',
+      assets: 'assets',
+      html: '.',
+    },
+  }, //create relative paths, to run in subdirectories
   tools: {
     //tools only exist here due to virtual modules, needs restart when changed
     rspack: async (config) => {
