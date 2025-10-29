@@ -304,9 +304,7 @@ export class PrevelteSSR {
           console.debug('DEV request (rsbuild asset):', req.url);
           return next();
         }
-        
-        console.debug('HMMMM request (dist path, pass to rsbuild):', req.url);
-        
+                
         if (/\.(svg|png|jpg|jpeg)$/i.test(req.url)) {
           const requestedPath = req.url.replace(/^\//, ""); // strip leading slash
           const filePath = path.join(staticDir, requestedPath);
