@@ -285,11 +285,38 @@ export class PrevelteSSR {
     const rsbuild = await this.createCustomRsbuild();
     const rsbuildServer = await rsbuild.createDevServer();
     const template = await rsbuildServer.environments.web.getTransformedHtml("index");
+    const config = rsbuild.getRsbuildConfig();
     return async (port = 3000) => {
       const app = express();
       const staticDir = path.resolve(process.cwd(), "static");
+      
+      // Get dist paths from config
+      const distPaths = [
+        config?.output?.distPath?.js,
+        config?.output?.distPath?.css,
+        config?.output?.distPath?.svg,
+        config?.output?.distPath?.font,
+        config?.output?.distPath?.image,
+        config?.output?.distPath?.media,
+        config?.output?.distPath?.assets,
+      ].filter(Boolean).map(p => `/${p}`);
+      
+      const filenameHash = config?.output?.filenameHash;
+      let hashLength = 8;
+      if (typeof filenameHash === 'string') {
+        const match = filenameHash.match(/:(\d+)/);
+        if (match) hashLength = parseInt(match[1]);
+      }
+      
+      const hashedAssetPattern = new RegExp(`\\.[a-f0-9]{${hashLength}}\\.(js|css|svg|png|jpg|jpeg|webp|woff|woff2|ttf|eot)$`, 'i');
+      
       app.use(async (req, res, next) => {
-        if (req.url.includes("static/") || req.url.includes("rsbuild-hmr?token=")) {
+        if (req.url.includes("rsbuild-hmr?token=")) {
+          return next();
+        }
+        
+        if (distPaths.some(path => req.url.startsWith(path)) && hashedAssetPattern.test(req.url)) {
+          console.debug('DEV request (dist path, pass to rsbuild):', req.url);
           return next();
         }
         
