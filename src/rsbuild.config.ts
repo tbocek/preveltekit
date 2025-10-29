@@ -62,5 +62,16 @@ export const defaultConfig = defineConfig({
 
       return config;
     },
+    cssLoader: {
+      url: {
+        filter: (url) => {
+          // Don't process absolute paths starting with /
+          if (url.startsWith('/')) {
+            return false;
+          }
+          return true;
+        },
+      },
+    },
   },
 });
