@@ -285,40 +285,27 @@ export class PrevelteSSR {
     const rsbuild = await this.createCustomRsbuild();
     const rsbuildServer = await rsbuild.createDevServer();
     const template = await rsbuildServer.environments.web.getTransformedHtml("index");
-    const config = rsbuild.getRsbuildConfig();
     return async (port = 3000) => {
       const app = express();
       const staticDir = path.resolve(process.cwd(), "static");
       
-      // Get dist paths from config
-      const distPaths = [
-        config?.output?.distPath?.js,
-        config?.output?.distPath?.css,
-        config?.output?.distPath?.svg,
-        config?.output?.distPath?.font,
-        config?.output?.distPath?.image,
-        config?.output?.distPath?.media,
-        config?.output?.distPath?.assets,
-      ].filter(Boolean).map(p => `/${p}`);
-      
-      const filenameHash = config?.output?.filenameHash;
-      let hashLength = 8;
-      if (typeof filenameHash === 'string') {
-        const match = filenameHash.match(/:(\d+)/);
-        if (match) hashLength = parseInt(match[1]);
-      }
-      
-      const hashedAssetPattern = new RegExp(`\\.[a-f0-9]{${hashLength}}\\.(js|css|svg|png|jpg|jpeg|webp|woff|woff2|ttf|eot)$`, 'i');
+      // Get generated assets from stats
+      const stats = await rsbuildServer.environments.web.getStats();
+      const { assets } = stats.toJson({ all: false, assets: true });
+      const rsbuildAssets = new Set(assets?.map(a => `/${a.name}`) || []);
       
       app.use(async (req, res, next) => {
         if (req.url.includes("rsbuild-hmr?token=")) {
           return next();
         }
         
-        if (distPaths.some(path => req.url.startsWith(path)) && hashedAssetPattern.test(req.url)) {
-          console.debug('DEV request (dist path, pass to rsbuild):', req.url);
+        const urlPath = req.url.split('?')[0]; // strip query params
+        if (rsbuildAssets.has(urlPath)) {
+          console.debug('DEV request (rsbuild asset):', req.url);
           return next();
         }
+        
+        console.debug('HMMMM request (dist path, pass to rsbuild):', req.url);
         
         if (/\.(svg|png|jpg|jpeg)$/i.test(req.url)) {
           const requestedPath = req.url.replace(/^\//, ""); // strip leading slash
