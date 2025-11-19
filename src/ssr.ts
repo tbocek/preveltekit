@@ -7,6 +7,7 @@ import express from 'express';
 import { createRsbuild, loadConfig } from '@rsbuild/core';
 import type { Routes } from './types.js';
 import { mergeRsbuildConfig } from '@rsbuild/core';
+import type { DistPathConfig } from '@rsbuild/core';
 import { defaultConfig } from './rsbuild.config.js';
 
 class LocalResourceLoader extends ResourceLoader {
@@ -232,15 +233,21 @@ export class PrevelteSSR {
       console.warn('Compression failed:', error);
     }
   }
+  
+  private getDistRoot = (distPath: string | DistPathConfig | undefined): string => {
+    if (!distPath) return 'dist';
+    if (typeof distPath === 'string') return distPath;
+    return distPath.root || 'dist';
+  };
 
   async generateSSRHtml(noZip: boolean) {
     const rsbuild = await this.createCustomRsbuild();
     await rsbuild.build();
     const config = rsbuild.getRsbuildConfig();
 
-    const indexFileName = `${config?.output?.distPath?.root}/index.html`;
+    const indexFileName = `${this.getDistRoot(config?.output?.distPath)}/index.html`;
     const indexHtml = await fs.promises.readFile(path.join(process.cwd(), indexFileName), "utf-8");
-    const dom = await fakeBrowser('http://localhost/', indexHtml, config?.output?.distPath?.root);
+    const dom = await fakeBrowser('http://localhost/', indexHtml, this.getDistRoot(config?.output?.distPath));
 
     const processedDoms = new Map();
     processedDoms.set('index.html',  dom);
@@ -254,7 +261,7 @@ export class PrevelteSSR {
 
         const promise = (async () => {
           try {
-            const dom = await fakeBrowser(`http://localhost${route.path}`, indexHtml, config?.output?.distPath?.root);
+            const dom = await fakeBrowser(`http://localhost${route.path}`, indexHtml, this.getDistRoot(config?.output?.distPath));
             processedDoms.set(route.htmlFilename, dom);
           } catch (error) {
             console.error(`Error processing route ${route.path}:`, error);
@@ -268,7 +275,7 @@ export class PrevelteSSR {
     }
 
     for (const [htmlFilename, dom] of processedDoms.entries()) {
-      const fileName = `${config?.output?.distPath?.root}/${htmlFilename}`;
+      const fileName = `${this.getDistRoot(config?.output?.distPath)}/${htmlFilename}`;
       const finalHtml = dom.serialize();
       await fs.promises.writeFile(fileName, finalHtml);
       console.log(`Generated ${fileName}`);
@@ -276,7 +283,7 @@ export class PrevelteSSR {
     }
 
     if (!noZip && process.env.NODE_ENV === 'production') {
-      const distPath = config?.output?.distPath?.root || 'dist';
+      const distPath = this.getDistRoot(config?.output?.distPath) || 'dist';
       await this.compressFiles(distPath as string);
     }
   }
