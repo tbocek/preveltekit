@@ -30,18 +30,18 @@
     "svelte": "^5.0.0"
   },
   "dependencies": {
-    "@rsbuild/core": "^1.6.7",
+    "@rsbuild/core": "^1.7.2",
     "@rsbuild/plugin-svelte": "^1.0.11",
-    "@rspack/core": "^1.6.4",
-    "express": "^5.1.0",
-    "jsdom": "^27.2.0"
+    "@rspack/core": "^1.7.1",
+    "express": "^5.2.1",
+    "jsdom": "^27.4.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.5",
+    "@types/express": "^5.0.6",
     "@types/jsdom": "^27.0.0",
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.0.5",
     "typescript": "^5.9.3",
     "svelte-preprocess": "^6.0.3",
-    "tsx": "^4.20.6"
+    "tsx": "^4.21.0"
   }
 }

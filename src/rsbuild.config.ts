@@ -27,7 +27,7 @@ export const defaultConfig = defineConfig({
     publicDir: {
       name: "static", // Specify the directory for static assets
       copyOnBuild: "auto", // Automatically copy files during production build
-      watch: process.env.NODE_ENV !== 'production', // Enable file watching during development
+      watch: process.env.NODE_ENV !== "production", // Enable file watching during development
     },
   },
   environments: {
@@ -45,18 +45,18 @@ export const defaultConfig = defineConfig({
   },
   dev: { hmr: false }, //I had issues with hmr in the past, easiest to disable it
   html: { template: "./src/index.html" }, //default provided, see ssr.ts
-  output: { 
+  output: {
     assetPrefix: "./",
     distPath: {
-      root: 'dist',
-      js: 'js',
-      css: 'css',
-      svg: 'svg',
-      font: 'font',
-      image: 'image',
-      media: 'media',
-      assets: 'assets',
-      html: '.',
+      root: "dist",
+      js: "js",
+      css: "css",
+      svg: "svg",
+      font: "font",
+      image: "image",
+      media: "media",
+      assets: "assets",
+      html: ".",
     },
   }, //create relative paths, to run in subdirectories
   tools: {
@@ -79,7 +79,7 @@ export const defaultConfig = defineConfig({
       url: {
         filter: (url) => {
           // Don't process absolute paths starting with /
-          if (url.startsWith('/')) {
+          if (url.startsWith("/")) {
             return false;
           }
           return true;

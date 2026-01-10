@@ -307,8 +307,8 @@ export class PrevelteSSR {
         }
         
         const urlPath = req.url.split('?')[0]; // strip query params
-        if (rsbuildAssets.has(urlPath)) {
-          console.debug('DEV request (rsbuild asset):', req.url);
+        if (rsbuildAssets.has(urlPath) || urlPath.endsWith('.map')) {
+          console.debug('DEV request (rsbuild asset / map):', req.url);
           return next();
         }
                 
