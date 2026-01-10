@@ -89,7 +89,7 @@
         <h2>Quick Start</h2>
         <div class="code-block">
             {@html `<pre><code>mkdir -p preveltekit/src && cd preveltekit
-echo '&lcub;"devDependencies": &lcub;"preveltekit": "^1.2.23"&rcub;,"dependencies": &lcub;"svelte": "^5.39.11"&rcub;,"scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
+echo '&lcub;"devDependencies": &lcub;"preveltekit": "^1.2.24"&rcub;,"dependencies": &lcub;"svelte": "^5.39.11"&rcub;,"scripts": &lcub;"dev": "preveltekit dev"&rcub;&rcub;' &gt; package.json
 npm install
 echo '&lt;script&gt;let count = $state(0);&lt;/script&gt;&lt;h1&gt;Count: &lcub;count&rcub;&lt;/h1&gt;&lt;button onclick={() =&gt; count++}&gt;Click me&lt;/button&gt;' &gt; src/Index.svelte
 npm run dev
