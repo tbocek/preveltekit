@@ -59,13 +59,6 @@ echo "Current version: $CURRENT_VERSION"
 NEW_VERSION=$(increment_version "$CURRENT_VERSION" "$VERSION_TYPE")
 echo "New version: $NEW_VERSION"
 
-read -p "Proceed with version $NEW_VERSION? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Cancelled."
-    exit 0
-fi
-
 # Update package.json
 pnpm version "$NEW_VERSION" --no-git-tag-version
 git add package.json
