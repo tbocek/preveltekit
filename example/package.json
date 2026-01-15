@@ -9,7 +9,7 @@
     "stage": "NODE_ENV=production preveltekit stage"
   },
   "dependencies": {
-    "svelte": "^5.46.1"
+    "svelte": "^5.46.4"
   },
   "devDependencies": {
     "preveltekit": "file:../",
