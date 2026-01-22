@@ -4,28 +4,28 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"strings"
 )
 
 type Variable struct {
 	Name      string
-	DependsOn []string
+	Type      string
+	DependsOn []string // vars this depends on (for derived values)
+	Affects   []string // vars that depend on this
 }
 
 type Function struct {
 	Name     string
-	Modifies []string
+	Modifies []string // vars modified by this function
 }
 
 type Analysis struct {
 	Vars  map[string]*Variable
 	Funcs map[string]*Function
-	Order []string
+	Order []string // topological order for derived values
 }
 
 func analyze(script string) (*Analysis, error) {
-	// Wrap as valid Go file
-	wrapped := "package main\n\n" + convertShortDecls(script)
+	wrapped := "package main\n\n" + script
 
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "", wrapped, parser.ParseComments)
@@ -44,9 +44,15 @@ func analyze(script string) (*Analysis, error) {
 			for _, spec := range gd.Specs {
 				if vs, ok := spec.(*ast.ValueSpec); ok {
 					for _, name := range vs.Names {
+						varType := ""
+						if vs.Type != nil {
+							varType = typeToString(vs.Type)
+						}
 						a.Vars[name.Name] = &Variable{
 							Name:      name.Name,
+							Type:      varType,
 							DependsOn: []string{},
+							Affects:   []string{},
 						}
 					}
 				}
@@ -54,7 +60,7 @@ func analyze(script string) (*Analysis, error) {
 		}
 	}
 
-	// Second pass: find dependencies and functions
+	// Second pass: find dependencies
 	for _, decl := range file.Decls {
 		switch d := decl.(type) {
 		case *ast.GenDecl:
@@ -63,13 +69,24 @@ func analyze(script string) (*Analysis, error) {
 					if vs, ok := spec.(*ast.ValueSpec); ok {
 						for i, name := range vs.Names {
 							if i < len(vs.Values) {
-								a.Vars[name.Name].DependsOn = findDeps(vs.Values[i], a.Vars)
+								deps := findDeps(vs.Values[i], a.Vars)
+								a.Vars[name.Name].DependsOn = deps
+								// Update reverse mapping
+								for _, dep := range deps {
+									if v, ok := a.Vars[dep]; ok {
+										v.Affects = append(v.Affects, name.Name)
+									}
+								}
 							}
 						}
 					}
 				}
 			}
 		case *ast.FuncDecl:
+			// Skip stub setters
+			if isStubSetter(d) {
+				continue
+			}
 			f := &Function{
 				Name:     d.Name.Name,
 				Modifies: findModifies(d.Body, a.Vars),
@@ -82,41 +99,38 @@ func analyze(script string) (*Analysis, error) {
 	return a, nil
 }
 
-// convertShortDecls converts "x := 0" to "var x = 0" at top level
-func convertShortDecls(script string) string {
-	var result []string
-	for _, line := range strings.Split(script, "\n") {
-		trimmed := strings.TrimSpace(line)
-		// Only convert if it looks like a top-level short decl (not in a func)
-		if idx := strings.Index(trimmed, " := "); idx > 0 {
-			name := trimmed[:idx]
-			if isIdent(name) {
-				expr := trimmed[idx+4:]
-				result = append(result, "var "+name+" = "+expr)
-				continue
-			}
-		}
-		result = append(result, line)
-	}
-	return strings.Join(result, "\n")
-}
-
-func isIdent(s string) bool {
-	if len(s) == 0 {
+func isStubSetter(fn *ast.FuncDecl) bool {
+	name := fn.Name.Name
+	if len(name) <= 3 || name[:3] != "set" {
 		return false
 	}
-	for i, c := range s {
-		if i == 0 {
-			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
-				return false
-			}
-		} else {
-			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
-				return false
+	// Check for empty body or just panic
+	if fn.Body == nil || len(fn.Body.List) == 0 {
+		return true
+	}
+	if len(fn.Body.List) == 1 {
+		if expr, ok := fn.Body.List[0].(*ast.ExprStmt); ok {
+			if call, ok := expr.X.(*ast.CallExpr); ok {
+				if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "panic" {
+					return true
+				}
 			}
 		}
 	}
-	return true
+	return false
+}
+
+func typeToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.ArrayType:
+		return "[]" + typeToString(t.Elt)
+	case *ast.MapType:
+		return "map[" + typeToString(t.Key) + "]" + typeToString(t.Value)
+	default:
+		return ""
+	}
 }
 
 func findDeps(expr ast.Expr, known map[string]*Variable) []string {
@@ -147,10 +161,19 @@ func findModifies(body *ast.BlockStmt, known map[string]*Variable) []string {
 		switch s := n.(type) {
 		case *ast.AssignStmt:
 			for _, lhs := range s.Lhs {
-				if id, ok := lhs.(*ast.Ident); ok {
-					if _, exists := known[id.Name]; exists && !seen[id.Name] {
-						mods = append(mods, id.Name)
-						seen[id.Name] = true
+				switch x := lhs.(type) {
+				case *ast.Ident:
+					if _, exists := known[x.Name]; exists && !seen[x.Name] {
+						mods = append(mods, x.Name)
+						seen[x.Name] = true
+					}
+				case *ast.IndexExpr:
+					// items[i] = v -> modifies items
+					if id, ok := x.X.(*ast.Ident); ok {
+						if _, exists := known[id.Name]; exists && !seen[id.Name] {
+							mods = append(mods, id.Name)
+							seen[id.Name] = true
+						}
 					}
 				}
 			}
@@ -159,6 +182,28 @@ func findModifies(body *ast.BlockStmt, known map[string]*Variable) []string {
 				if _, exists := known[id.Name]; exists && !seen[id.Name] {
 					mods = append(mods, id.Name)
 					seen[id.Name] = true
+				}
+			}
+		case *ast.ExprStmt:
+			// Check for delete(map, key) and clear(x) calls
+			if call, ok := s.X.(*ast.CallExpr); ok {
+				if fn, ok := call.Fun.(*ast.Ident); ok {
+					if fn.Name == "delete" && len(call.Args) >= 1 {
+						if id, ok := call.Args[0].(*ast.Ident); ok {
+							if _, exists := known[id.Name]; exists && !seen[id.Name] {
+								mods = append(mods, id.Name)
+								seen[id.Name] = true
+							}
+						}
+					}
+					if fn.Name == "clear" && len(call.Args) >= 1 {
+						if id, ok := call.Args[0].(*ast.Ident); ok {
+							if _, exists := known[id.Name]; exists && !seen[id.Name] {
+								mods = append(mods, id.Name)
+								seen[id.Name] = true
+							}
+						}
+					}
 				}
 			}
 		}
@@ -192,4 +237,31 @@ func topoSort(vars map[string]*Variable) []string {
 		visit(name)
 	}
 	return order
+}
+
+// GetTransitiveDeps returns all vars affected when varName changes
+func (a *Analysis) GetTransitiveDeps(varName string) []string {
+	affected := make(map[string]bool)
+	var collect func(name string)
+	collect = func(name string) {
+		if affected[name] {
+			return
+		}
+		affected[name] = true
+		if v, ok := a.Vars[name]; ok {
+			for _, dep := range v.Affects {
+				collect(dep)
+			}
+		}
+	}
+	collect(varName)
+	
+	// Return in topological order
+	var result []string
+	for _, name := range a.Order {
+		if affected[name] {
+			result = append(result, name)
+		}
+	}
+	return result
 }

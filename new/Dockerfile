@@ -63,6 +63,12 @@ RUN /app/pregokit nest.goweb
 RUN cd dist && go mod init nest && tinygo build -o app.wasm -target wasm -no-debug -panic trap -scheduler asyncify -gc leaking .
 RUN cp /usr/local/tinygo/targets/wasm_exec.js dist/
 
+# Build fetch example
+WORKDIR /app/examples/slot
+RUN /app/pregokit slot.goweb
+RUN cd dist && go mod init slot && tinygo build -o app.wasm -target wasm -no-debug -panic trap -scheduler asyncify -gc leaking .
+RUN cp /usr/local/tinygo/targets/wasm_exec.js dist/
+
 FROM caddy:alpine
 COPY --from=builder /app/examples/counter/dist/ /srv/counter/
 COPY --from=builder /app/examples/fetch/dist/ /srv/fetch/
@@ -73,6 +79,7 @@ COPY --from=builder /app/examples/at-html/dist/ /srv/at-html/
 COPY --from=builder /app/examples/mod/dist/ /srv/mod/
 COPY --from=builder /app/examples/class/dist/ /srv/class/
 COPY --from=builder /app/examples/nest/dist/ /srv/nest/
+COPY --from=builder /app/examples/slot/dist/ /srv/slot/
 
 RUN cat > /etc/caddy/Caddyfile <<EOF
 :80 {

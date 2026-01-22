@@ -1,0 +1,38 @@
+<script>
+import "./Card"
+
+count := 0
+message := "Click the button!"
+
+func increment() {
+    count++
+    message = "Clicked " + strconv.Itoa(count) + " times"
+}
+
+func reset() {
+    count = 0
+    message = "Reset!"
+}
+</script>
+
+<template>
+<div class="app">
+    <h1>Slot Demo</h1>
+    
+    <Card Title="Counter Card">
+        <p>{message}</p>
+        <button @click="increment()">Click me</button>
+        <button @click="reset()">Reset</button>
+    </Card>
+    
+    <Card Title="Static Card">
+        <p>This card has no interactive content.</p>
+        <p>Just some text.</p>
+    </Card>
+</div>
+</template>
+
+<style>
+.app { font-family: sans-serif; padding: 2em; max-width: 600px; margin: 0 auto; }
+button { margin: 0.5em; padding: 0.5em 1em; }
+</style>

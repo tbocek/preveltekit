@@ -8,16 +8,16 @@ import (
 type Event struct {
 	ID        string
 	Event     string
-	Handler   string   // Full call: "increment()" or "remove(item)"
-	Modifiers []string // preventDefault, stopPropagation
+	Handler   string
+	Modifiers []string
 	InBranch  bool
 	InEach    bool
-	EachID    string   // which each block this is in
+	EachID    string
 }
 
 type Binding struct {
 	ID       string
-	Attr     string // "value", "checked"
+	Attr     string
 	VarName  string
 	VarType  string
 	InBranch bool
@@ -28,62 +28,51 @@ type ClassBinding struct {
 	ClassName string
 	Cond      string
 	InBranch  bool
+	VarDeps   []string
 }
 
 func generate(p Parsed, a *Analysis) (goCode string, html string) {
 	var b strings.Builder
 
-	// Flatten all components recursively (including nested)
-	allComponents := make(map[string]*Parsed)
-	flattenComponents(p.Components, allComponents)
+	// Build reactive vars set for template parsing
+	reactiveVars := make(map[string]bool)
+	for varName := range p.ReactiveVars {
+		reactiveVars[varName] = true
+	}
+	// Also include analyzed vars
+	for varName := range a.Vars {
+		reactiveVars[varName] = true
+	}
 
 	// Build component names map
 	compNames := make(map[string]bool)
-	for name := range allComponents {
+	for name := range p.Components {
 		compNames[name] = true
 	}
 
-	// Parse template into AST with component awareness
-	tmplAST := parseTemplateWithComponents(p.Template, compNames)
+	// Parse template into AST with component and reactive var awareness
+	tmplAST := parseTemplateWithReactiveVars(p.Template, compNames, reactiveVars)
 	exprs := tmplAST.CollectExprs()
 	htmls := tmplAST.CollectHtmls()
 	ifs := tmplAST.CollectIfs()
 	eaches := tmplAST.CollectEaches()
-	components := tmplAST.CollectComponents()
 
-	// Collect ALL component usages including nested ones
-	allComponentUsages := collectAllComponentUsages(components, allComponents)
-
-	// Analyze each component
-	compAnalyses := make(map[string]*Analysis)
-	for name, comp := range allComponents {
-		compA, _ := analyze(comp.Script)
-		compAnalyses[name] = compA
-	}
-
-	// Replace p.Components with flattened version for HTML generation
-	p.Components = allComponents
-
-	// Collect events and bindings with branch info
+	// Collect events and bindings
 	events := collectEvents(p.Template, ifs, eaches)
-	inputBindings := collectBindings(p.Template, p.Script, ifs)
-	classBindings := collectClassBindings(p.Template, ifs)
+	inputBindings := collectBindings(p.Template, p.Script, ifs, p.ReactiveVars)
+	classBindings := collectClassBindings(p.Template, ifs, reactiveVars)
 
-	// Process branch templates - replace @click and bind: with IDs
+	// Process branch templates
 	branchTemplates := make(map[string]string)
 	btnID := countEventsOutsideIf(p.Template, ifs)
 	inputID := countBindingsOutsideIf(p.Template, ifs)
 	classID := countClassBindingsOutsideIf(p.Template, ifs)
-	
+
 	for _, ifn := range ifs {
-		thenHTML := generateBranchHTML(ifn.Then, tmplAST)
-		thenHTML, btnID, inputID, classID = processTemplateAttrs(thenHTML, btnID, inputID, classID)
-		branchTemplates[ifn.CondID+"_then"] = thenHTML
-		
-		if len(ifn.Else) > 0 {
-			elseHTML := generateBranchHTML(ifn.Else, tmplAST)
-			elseHTML, btnID, inputID, classID = processTemplateAttrs(elseHTML, btnID, inputID, classID)
-			branchTemplates[ifn.CondID+"_else"] = elseHTML
+		for i, branch := range ifn.Branches {
+			branchHTML := generateBranchHTML(branch.Body, tmplAST)
+			branchHTML, btnID, inputID, classID = processTemplateAttrs(branchHTML, btnID, inputID, classID)
+			branchTemplates[fmt.Sprintf("%s_branch%d", ifn.CondID, i)] = branchHTML
 		}
 	}
 
@@ -91,7 +80,6 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 	eachTemplates := make(map[string]string)
 	for _, each := range eaches {
 		bodyHTML := generateEachBodyHTML(each.Body, tmplAST, each.ID)
-		// Process @click etc with indexed IDs
 		bodyHTML = processEachTemplateAttrs(bodyHTML)
 		eachTemplates[each.ID] = bodyHTML
 	}
@@ -106,23 +94,18 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 	}
 	b.WriteString(")\n\n")
 
-	b.WriteString("var document = js.Global().Get(\"document\")\n")
-	b.WriteString("var propagating = false\n\n")
-
+	b.WriteString("var document = js.Global().Get(\"document\")\n\n")
 	b.WriteString("var _ = strconv.Atoi\n\n")
 
 	// State vars
-	b.WriteString("// State\n")
-	b.WriteString("var (\n")
-	for _, name := range a.Order {
-		v := a.Vars[name]
-		if len(v.DependsOn) == 0 {
-			fmt.Fprintf(&b, "\t%s = %s\n", name, getInitializer(p.Script, name))
-		} else {
-			fmt.Fprintf(&b, "\t%s %s\n", name, inferType(p.Script, name))
+	if len(p.ReactiveVars) > 0 {
+		b.WriteString("// State\n")
+		b.WriteString("var (\n")
+		for varName, varType := range p.ReactiveVars {
+			fmt.Fprintf(&b, "\t%s %s\n", varName, varType)
 		}
+		b.WriteString(")\n\n")
 	}
-	b.WriteString(")\n\n")
 
 	// DOM refs
 	if len(exprs) > 0 || len(htmls) > 0 || len(ifs) > 0 || len(eaches) > 0 {
@@ -153,7 +136,6 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 		b.WriteString("// Branch templates\n")
 		b.WriteString("var (\n")
 		for key, tmpl := range branchTemplates {
-			// Escape backticks in template
 			tmpl = strings.ReplaceAll(tmpl, "`", "` + \"`\" + `")
 			fmt.Fprintf(&b, "\t%s_tmpl = `%s`\n", key, tmpl)
 		}
@@ -170,256 +152,116 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 		b.WriteString("}\n\n")
 	}
 
-	// Setters
-	b.WriteString("// Setters\n")
-	for _, name := range a.Order {
-		if len(a.Vars[name].DependsOn) == 0 {
-			typ := inferType(p.Script, name)
-			fmt.Fprintf(&b, "func set%s(v %s) {\n", capitalize(name), typ)
-			fmt.Fprintf(&b, "\t%s = v\n", name)
-			b.WriteString("\tpropagate()\n")
-			b.WriteString("}\n\n")
-		}
-	}
+	// Generate setters with fine-grained updates
+	b.WriteString("// Setters with fine-grained updates\n")
+	for varName, varType := range p.ReactiveVars {
+		fmt.Fprintf(&b, "func set%s(v %s) {\n", capitalize(varName), varType)
+		fmt.Fprintf(&b, "\t%s = v\n", varName)
 
-	// Propagate
-	b.WriteString("func propagate() {\n")
-	b.WriteString("\tif propagating {\n")
-	b.WriteString("\t\treturn\n")
-	b.WriteString("\t}\n")
-	b.WriteString("\tpropagating = true\n\n")
+		// Get all vars affected by this change (including derived)
+		affected := a.GetTransitiveDeps(varName)
 
-	hasDerived := false
-	for _, name := range a.Order {
-		if len(a.Vars[name].DependsOn) > 0 {
-			if !hasDerived {
-				b.WriteString("\t// Recompute derived values\n")
-				hasDerived = true
+		// Recompute derived values that depend on this
+		for _, affectedVar := range affected {
+			if affectedVar == varName {
+				continue
 			}
-			fmt.Fprintf(&b, "\t%s = %s\n", name, getExpression(p.Script, name))
-		}
-	}
-
-	b.WriteString("\n\tupdateDOM()\n")
-	b.WriteString("\tpropagating = false\n")
-	b.WriteString("}\n\n")
-
-	// Update DOM
-	b.WriteString("func updateDOM() {\n")
-
-	// Update if blocks FIRST (so elements exist)
-	for _, ifn := range ifs {
-		hasElse := len(ifn.Else) > 0
-		fmt.Fprintf(&b, "\tif %s {\n", ifn.Cond)
-		fmt.Fprintf(&b, "\t\tif %s_showing != \"then\" {\n", ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\tif !%s_current.IsUndefined() && !%s_current.IsNull() {\n", ifn.CondID, ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\t\t%s_current.Call(\"remove\")\n", ifn.CondID)
-		b.WriteString("\t\t\t}\n")
-		fmt.Fprintf(&b, "\t\t\tfrag := createFragment(%s_then_tmpl)\n", ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\twrapper := document.Call(\"createElement\", \"span\")\n")
-		fmt.Fprintf(&b, "\t\t\twrapper.Call(\"appendChild\", frag)\n")
-		fmt.Fprintf(&b, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", wrapper, %s_anchor)\n", ifn.CondID, ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\t%s_current = wrapper\n", ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\t%s_showing = \"then\"\n", ifn.CondID)
-		b.WriteString("\t\t\tbindBranchElements()\n")
-		b.WriteString("\t\t}\n")
-		b.WriteString("\t} else {\n")
-		if hasElse {
-			fmt.Fprintf(&b, "\t\tif %s_showing != \"else\" {\n", ifn.CondID)
-		} else {
-			fmt.Fprintf(&b, "\t\tif %s_showing != \"none\" {\n", ifn.CondID)
-		}
-		fmt.Fprintf(&b, "\t\t\tif !%s_current.IsUndefined() && !%s_current.IsNull() {\n", ifn.CondID, ifn.CondID)
-		fmt.Fprintf(&b, "\t\t\t\t%s_current.Call(\"remove\")\n", ifn.CondID)
-		b.WriteString("\t\t\t}\n")
-		if hasElse {
-			fmt.Fprintf(&b, "\t\t\tfrag := createFragment(%s_else_tmpl)\n", ifn.CondID)
-			fmt.Fprintf(&b, "\t\t\twrapper := document.Call(\"createElement\", \"span\")\n")
-			fmt.Fprintf(&b, "\t\t\twrapper.Call(\"appendChild\", frag)\n")
-			fmt.Fprintf(&b, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", wrapper, %s_anchor)\n", ifn.CondID, ifn.CondID)
-			fmt.Fprintf(&b, "\t\t\t%s_current = wrapper\n", ifn.CondID)
-			fmt.Fprintf(&b, "\t\t\t%s_showing = \"else\"\n", ifn.CondID)
-			b.WriteString("\t\t\tbindBranchElements()\n")
-		} else {
-			fmt.Fprintf(&b, "\t\t\t%s_current = js.Null()\n", ifn.CondID)
-			fmt.Fprintf(&b, "\t\t\t%s_showing = \"none\"\n", ifn.CondID)
-		}
-		b.WriteString("\t\t}\n")
-		b.WriteString("\t}\n")
-	}
-
-	// Update each blocks
-	for _, each := range eaches {
-		indexVar := each.Index
-		if indexVar == "" {
-			indexVar = "_i"
-		}
-		
-		// Get events in this each block
-		eachEvts := filterEachEvents(events, each.ID)
-		
-		fmt.Fprintf(&b, "\t// Update %s\n", each.ID)
-		fmt.Fprintf(&b, "\tnewLen%s := len(%s)\n", each.ID, each.Array)
-		fmt.Fprintf(&b, "\toldLen%s := %s_count\n", each.ID, each.ID)
-		fmt.Fprintf(&b, "\t%s_count = newLen%s\n", each.ID, each.ID)
-		
-		// Remove excess items
-		fmt.Fprintf(&b, "\tfor i := newLen%s; i < oldLen%s; i++ {\n", each.ID, each.ID)
-		fmt.Fprintf(&b, "\t\tif el := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(i)); !el.IsNull() {\n", each.ID)
-		fmt.Fprintf(&b, "\t\t\tel.Call(\"remove\")\n")
-		b.WriteString("\t\t}\n")
-		b.WriteString("\t}\n")
-		
-		// Add/update items
-		fmt.Fprintf(&b, "\tfor %s := 0; %s < newLen%s; %s++ {\n", indexVar, indexVar, each.ID, indexVar)
-		fmt.Fprintf(&b, "\t\t%s := %s[%s]\n", each.Item, each.Array, indexVar)
-		fmt.Fprintf(&b, "\t\telID := \"%s_\" + strconv.Itoa(%s)\n", each.ID, indexVar)
-		fmt.Fprintf(&b, "\t\tif el := document.Call(\"getElementById\", elID); el.IsNull() {\n")
-		fmt.Fprintf(&b, "\t\t\thtml := %s_tmpl\n", each.ID)
-		
-		// Replace placeholders in template with actual index
-		fmt.Fprintf(&b, "\t\t\thtml = strings.ReplaceAll(html, \"${_idx}\", strconv.Itoa(%s))\n", indexVar)
-		
-		fmt.Fprintf(&b, "\t\t\tfrag := createFragment(html)\n")
-		fmt.Fprintf(&b, "\t\t\twrapper := document.Call(\"createElement\", \"span\")\n")
-		fmt.Fprintf(&b, "\t\t\twrapper.Set(\"id\", elID)\n")
-		fmt.Fprintf(&b, "\t\t\twrapper.Call(\"appendChild\", frag)\n")
-		fmt.Fprintf(&b, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", wrapper, %s_anchor)\n", each.ID, each.ID)
-		
-		// Bind events in newly created element
-		for i, ev := range eachEvts {
-			// Use unique ID per loop iteration
-			fmt.Fprintf(&b, "\t\t\tif btn := wrapper.Call(\"querySelector\", \"#btn%d_${_idx}\".replace(\"${_idx}\", strconv.Itoa(%s))); !btn.IsNull() || true {\n", i, indexVar)
-			// Find button by ID within wrapper
-			fmt.Fprintf(&b, "\t\t\t\tbtnEl := document.Call(\"getElementById\", \"btn%d_\" + strconv.Itoa(%s))\n", i, indexVar)
-			fmt.Fprintf(&b, "\t\t\t\tif !btnEl.IsNull() && btnEl.Get(\"_bound\").IsUndefined() {\n")
-			fmt.Fprintf(&b, "\t\t\t\t\tbtnEl.Set(\"_bound\", true)\n")
-			// Capture loop variables
-			fmt.Fprintf(&b, "\t\t\t\t\tidx := %s\n", indexVar)
-			fmt.Fprintf(&b, "\t\t\t\t\t_ = idx\n")
-			if each.Item != "" {
-				fmt.Fprintf(&b, "\t\t\t\t\titemVal := %s\n", each.Item)
-				fmt.Fprintf(&b, "\t\t\t\t\t_ = itemVal\n")
+			if v, ok := a.Vars[affectedVar]; ok && len(v.DependsOn) > 0 {
+				fmt.Fprintf(&b, "\t%s = %s\n", affectedVar, getExpression(p.Script, affectedVar))
 			}
-			fmt.Fprintf(&b, "\t\t\t\t\tbtnEl.Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", ev.Event)
-			generateEventModifiers(&b, ev.Modifiers, "\t\t\t\t\t\t")
-			// Replace loop vars in handler with captured vars
-			handler := ev.Handler
-			if each.Index != "" { handler = replaceVar(handler, each.Index, "idx") }
-			
-			if each.Item != "" { handler = replaceVar(handler, each.Item, "itemVal") }
-			
-			fmt.Fprintf(&b, "\t\t\t\t\t\t%s\n", handler)
-			b.WriteString("\t\t\t\t\t\treturn nil\n")
-			b.WriteString("\t\t\t\t\t}))\n")
-			b.WriteString("\t\t\t\t}\n")
-			b.WriteString("\t\t\t}\n")
 		}
-		
-		b.WriteString("\t\t}\n")
-		
-		// Update expressions inside this each
-		eachExprs := collectExprsInEach(each)
-		for _, expr := range eachExprs {
-			fmt.Fprintf(&b, "\t\tif exprEl := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(%s)); !exprEl.IsNull() {\n", expr.ID, indexVar)
-			fmt.Fprintf(&b, "\t\t\texprEl.Set(\"textContent\", %s)\n", expr.Expr)
-			b.WriteString("\t\t}\n")
-		}
-		
-		b.WriteString("\t}\n")
+
+		// Update only DOM elements that depend on affected vars
+		fmt.Fprintf(&b, "\tupdate%s()\n", capitalize(varName))
+		b.WriteString("}\n\n")
 	}
 
-	// Update expressions AFTER branches exist (skip expressions in each blocks)
-	for _, expr := range exprs {
-		if isExprInEach(expr.ID, eaches) {
-			continue
-		}
-		typ := inferType(p.Script, expr.Expr)
-		fmt.Fprintf(&b, "\tif !%sEl.IsUndefined() && !%sEl.IsNull() {\n", expr.ID, expr.ID)
-		if typ == "int" {
-			fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", strconv.Itoa(%s))\n", expr.ID, expr.Expr)
-		} else if typ == "bool" {
-			fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", strconv.FormatBool(%s))\n", expr.ID, expr.Expr)
-		} else {
-			fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", %s)\n", expr.ID, expr.Expr)
-		}
-		b.WriteString("\t}\n")
-	}
+	// Generate per-var update functions
+	b.WriteString("// Per-variable DOM update functions\n")
+	for varName := range p.ReactiveVars {
+		affected := a.GetTransitiveDeps(varName)
 
-	// Update html nodes (innerHTML)
-	for _, html := range htmls {
-		fmt.Fprintf(&b, "\tif !%sEl.IsUndefined() && !%sEl.IsNull() {\n", html.ID, html.ID)
-		fmt.Fprintf(&b, "\t\t%sEl.Set(\"innerHTML\", %s)\n", html.ID, html.Expr)
-		b.WriteString("\t}\n")
-	}
+		fmt.Fprintf(&b, "func update%s() {\n", capitalize(varName))
 
-	// Sync input values
-	for _, ib := range inputBindings {
-		if ib.Attr == "checked" {
-			fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"checked\").Bool() != %s {\n", ib.ID, ib.VarName)
-			fmt.Fprintf(&b, "\t\tel.Set(\"checked\", %s)\n", ib.VarName)
-			b.WriteString("\t}\n")
-		} else {
-			if ib.VarType == "int" {
-				fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"value\").String() != strconv.Itoa(%s) {\n", ib.ID, ib.VarName)
-				fmt.Fprintf(&b, "\t\tel.Set(\"value\", strconv.Itoa(%s))\n", ib.VarName)
-			} else {
-				fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"value\").String() != %s {\n", ib.ID, ib.VarName)
-				fmt.Fprintf(&b, "\t\tel.Set(\"value\", %s)\n", ib.VarName)
+		// Update expressions that depend on this var or any derived var
+		for _, expr := range exprs {
+			if isExprInEach(expr.ID, eaches) {
+				continue
 			}
-			b.WriteString("\t}\n")
-		}
-	}
-
-	// Update class bindings
-	for _, cb := range classBindings {
-		fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() {\n", cb.ID)
-		fmt.Fprintf(&b, "\t\tif %s {\n", cb.Cond)
-		fmt.Fprintf(&b, "\t\t\tel.Get(\"classList\").Call(\"add\", \"%s\")\n", cb.ClassName)
-		b.WriteString("\t\t} else {\n")
-		fmt.Fprintf(&b, "\t\t\tel.Get(\"classList\").Call(\"remove\", \"%s\")\n", cb.ClassName)
-		b.WriteString("\t\t}\n")
-		b.WriteString("\t}\n")
-	}
-
-	// Update component dynamic props
-	for _, comp := range allComponentUsages {
-		for propName, propVal := range comp.Props {
-			if strings.HasPrefix(propVal, "{") && strings.HasSuffix(propVal, "}") {
-				// Dynamic prop - extract expression
-				expr := propVal[1 : len(propVal)-1]
-				varName := strings.ReplaceAll(comp.ID, "-", "_")
-				fmt.Fprintf(&b, "\tif %s.%s != %s {\n", varName, propName, expr)
-				fmt.Fprintf(&b, "\t\t%s.%s = %s\n", varName, propName, expr)
-				fmt.Fprintf(&b, "\t\t%s.propagate()\n", varName)
+			if exprDependsOnAny(expr, affected) {
+				typ := inferTypeFromReactive(p.ReactiveVars, expr.Expr)
+				fmt.Fprintf(&b, "\tif !%sEl.IsUndefined() && !%sEl.IsNull() {\n", expr.ID, expr.ID)
+				if typ == "int" {
+					fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", strconv.Itoa(%s))\n", expr.ID, expr.Expr)
+				} else if typ == "bool" {
+					fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", strconv.FormatBool(%s))\n", expr.ID, expr.Expr)
+				} else {
+					fmt.Fprintf(&b, "\t\t%sEl.Set(\"textContent\", %s)\n", expr.ID, expr.Expr)
+				}
 				b.WriteString("\t}\n")
 			}
 		}
-		// Sync binding values (parent -> child)
-		for propName, parentVar := range comp.Bindings {
-			varName := strings.ReplaceAll(comp.ID, "-", "_")
-			fmt.Fprintf(&b, "\tif %s.%s != %s {\n", varName, capitalize(propName), parentVar)
-			fmt.Fprintf(&b, "\t\t%s.%s = %s\n", varName, capitalize(propName), parentVar)
-			fmt.Fprintf(&b, "\t\t%s.propagate()\n", varName)
-			b.WriteString("\t}\n")
+
+		// Update html nodes
+		for _, html := range htmls {
+			if exprDependsOnAnyStr(html.VarDeps, affected) {
+				fmt.Fprintf(&b, "\tif !%sEl.IsUndefined() && !%sEl.IsNull() {\n", html.ID, html.ID)
+				fmt.Fprintf(&b, "\t\t%sEl.Set(\"innerHTML\", %s)\n", html.ID, html.Expr)
+				b.WriteString("\t}\n")
+			}
 		}
-	}
-	b.WriteString("}\n\n")
 
-	// User functions
-	b.WriteString("// Functions\n")
-	for name, fn := range a.Funcs {
-		transformed := transformFunction(p.Script, name, fn.Modifies)
-		b.WriteString(transformed)
-		b.WriteString("\n\n")
+		// Update if blocks
+		for _, ifn := range ifs {
+			if ifDependsOnAny(ifn, affected) {
+				generateIfUpdate(&b, ifn)
+			}
+		}
+
+		// Update each blocks
+		for _, each := range eaches {
+			if exprDependsOnAnyStr(each.VarDeps, affected) {
+				generateEachUpdate(&b, each, events, exprs)
+			}
+		}
+
+		// Update input bindings
+		for _, ib := range inputBindings {
+			if contains(affected, ib.VarName) {
+				if ib.Attr == "checked" {
+					fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"checked\").Bool() != %s {\n", ib.ID, ib.VarName)
+					fmt.Fprintf(&b, "\t\tel.Set(\"checked\", %s)\n", ib.VarName)
+					b.WriteString("\t}\n")
+				} else {
+					if ib.VarType == "int" {
+						fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"value\").String() != strconv.Itoa(%s) {\n", ib.ID, ib.VarName)
+						fmt.Fprintf(&b, "\t\tel.Set(\"value\", strconv.Itoa(%s))\n", ib.VarName)
+					} else {
+						fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"value\").String() != %s {\n", ib.ID, ib.VarName)
+						fmt.Fprintf(&b, "\t\tel.Set(\"value\", %s)\n", ib.VarName)
+					}
+					b.WriteString("\t}\n")
+				}
+			}
+		}
+
+		// Update class bindings
+		for _, cb := range classBindings {
+			if exprDependsOnAnyStr(cb.VarDeps, affected) {
+				fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() {\n", cb.ID)
+				fmt.Fprintf(&b, "\t\tif %s {\n", cb.Cond)
+				fmt.Fprintf(&b, "\t\t\tel.Get(\"classList\").Call(\"add\", \"%s\")\n", cb.ClassName)
+				b.WriteString("\t\t} else {\n")
+				fmt.Fprintf(&b, "\t\t\tel.Get(\"classList\").Call(\"remove\", \"%s\")\n", cb.ClassName)
+				b.WriteString("\t\t}\n")
+				b.WriteString("\t}\n")
+			}
+		}
+
+		b.WriteString("}\n\n")
 	}
 
-	// Generate component types and instances
-	if len(allComponentUsages) > 0 {
-		generateComponentCode(&b, p, allComponentUsages, compAnalyses)
-	}
-
-	// Main - only bind static elements
+	// Main function
 	b.WriteString("func main() {\n")
 
 	// Get static DOM refs
@@ -456,20 +298,20 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 		}
 	}
 
-	// Bind static events only
+	// Bind static events
 	staticEvents := filterStaticEvents(events)
 	if len(staticEvents) > 0 {
 		b.WriteString("\n\t// Bind static events\n")
 		for _, ev := range staticEvents {
 			fmt.Fprintf(&b, "\tdocument.Call(\"getElementById\", \"%s\").Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", ev.ID, ev.Event)
 			generateEventModifiers(&b, ev.Modifiers, "\t\t")
-			fmt.Fprintf(&b, "\t\t%s\n", ev.Handler)
+			fmt.Fprintf(&b, "\t\t%s\n", transformEventHandler(ev.Handler))
 			b.WriteString("\t\treturn nil\n")
 			b.WriteString("\t}))\n")
 		}
 	}
 
-	// Bind static inputs only
+	// Bind static inputs
 	staticBindings := filterStaticBindings(inputBindings)
 	if len(staticBindings) > 0 {
 		b.WriteString("\n\t// Bind static inputs\n")
@@ -493,40 +335,27 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 		}
 	}
 
-	// Setup component binding callbacks
-	hasBindings := false
-	for _, comp := range allComponentUsages {
-		for propName, parentVar := range comp.Bindings {
-			if !hasBindings {
-				b.WriteString("\n\t// Setup component binding callbacks\n")
-				hasBindings = true
-			}
-			varName := strings.ReplaceAll(comp.ID, "-", "_")
-			fmt.Fprintf(&b, "\t%s._on%sChange = func(v %s) { set%s(v) }\n", 
-				varName, capitalize(propName), inferType(p.Script, parentVar), capitalize(parentVar))
-		}
+	// Initial update for all reactive vars
+	b.WriteString("\n\t// Initial DOM update\n")
+	for varName := range p.ReactiveVars {
+		fmt.Fprintf(&b, "\tupdate%s()\n", capitalize(varName))
 	}
 
-	// Mount components
-	if len(allComponentUsages) > 0 {
-		b.WriteString("\n\t// Mount components\n")
-		for _, comp := range allComponentUsages {
-			fmt.Fprintf(&b, "\t%s.mount()\n", strings.ReplaceAll(comp.ID, "-", "_"))
-		}
-	}
-
-	b.WriteString("\n\tpropagate()\n")
-	// Call onMount if defined in root app
-	if _, hasOnMount := a.Funcs["onMount"]; hasOnMount {
-		b.WriteString("\tonMount()\n")
-	}
-	b.WriteString("\tselect {}\n")
+	b.WriteString("\n\tselect {}\n")
 	b.WriteString("}\n\n")
 
-	// bindBranchElements - only bind branch elements
+	// Generate transformed user functions
+	b.WriteString("// User functions\n")
+	for funcName, fn := range a.Funcs {
+		transformed := transformFunction(p.Script, funcName, fn.Modifies, p.ReactiveVars)
+		if transformed != "" {
+			b.WriteString(transformed)
+			b.WriteString("\n\n")
+		}
+	}
+
+	// bindBranchElements
 	b.WriteString("func bindBranchElements() {\n")
-	
-	// Re-bind expression refs in branches
 	for _, expr := range exprs {
 		if isExprInIf(expr.ID, ifs) {
 			fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() {\n", expr.ID)
@@ -534,21 +363,19 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 			b.WriteString("\t}\n")
 		}
 	}
-	
-	// Bind events in branches
+
 	branchEvents := filterBranchEvents(events)
 	for _, ev := range branchEvents {
 		fmt.Fprintf(&b, "\tif el := document.Call(\"getElementById\", \"%s\"); !el.IsNull() && el.Get(\"_bound\").IsUndefined() {\n", ev.ID)
 		fmt.Fprintf(&b, "\t\tel.Set(\"_bound\", true)\n")
 		fmt.Fprintf(&b, "\t\tel.Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", ev.Event)
 		generateEventModifiers(&b, ev.Modifiers, "\t\t\t")
-		fmt.Fprintf(&b, "\t\t\t%s\n", ev.Handler)
+		fmt.Fprintf(&b, "\t\t\t%s\n", transformEventHandler(ev.Handler))
 		b.WriteString("\t\t\treturn nil\n")
 		b.WriteString("\t\t}))\n")
 		b.WriteString("\t}\n")
 	}
-	
-	// Bind inputs in branches
+
 	branchBindings := filterBranchBindings(inputBindings)
 	for _, ib := range branchBindings {
 		eventType := "input"
@@ -574,46 +401,219 @@ func generate(p Parsed, a *Analysis) (goCode string, html string) {
 	b.WriteString("}\n")
 
 	goCode = b.String()
-	html = generateHTML(p, tmplAST, events, inputBindings, ifs, components)
+	html = generateHTML(p, tmplAST, events, inputBindings, ifs)
 	return
 }
 
-// Collect events with branch info
+func generateIfUpdate(b *strings.Builder, ifn IfNode) {
+	for i, branch := range ifn.Branches {
+		branchName := fmt.Sprintf("branch%d", i)
+
+		if i == 0 {
+			fmt.Fprintf(b, "\tif %s {\n", branch.Cond)
+		} else if branch.Cond != "" {
+			fmt.Fprintf(b, " else if %s {\n", branch.Cond)
+		} else {
+			b.WriteString(" else {\n")
+		}
+
+		fmt.Fprintf(b, "\t\tif %s_showing != \"%s\" {\n", ifn.CondID, branchName)
+		fmt.Fprintf(b, "\t\t\tif !%s_current.IsUndefined() && !%s_current.IsNull() {\n", ifn.CondID, ifn.CondID)
+		fmt.Fprintf(b, "\t\t\t\t%s_current.Call(\"remove\")\n", ifn.CondID)
+		b.WriteString("\t\t\t}\n")
+		fmt.Fprintf(b, "\t\t\tfrag := createFragment(%s_%s_tmpl)\n", ifn.CondID, branchName)
+		fmt.Fprintf(b, "\t\t\twrapper := document.Call(\"createElement\", \"span\")\n")
+		fmt.Fprintf(b, "\t\t\twrapper.Call(\"appendChild\", frag)\n")
+		fmt.Fprintf(b, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", wrapper, %s_anchor)\n", ifn.CondID, ifn.CondID)
+		fmt.Fprintf(b, "\t\t\t%s_current = wrapper\n", ifn.CondID)
+		fmt.Fprintf(b, "\t\t\t%s_showing = \"%s\"\n", ifn.CondID, branchName)
+		b.WriteString("\t\t\tbindBranchElements()\n")
+		b.WriteString("\t\t}\n")
+		b.WriteString("\t}")
+	}
+
+	lastBranch := ifn.Branches[len(ifn.Branches)-1]
+	if lastBranch.Cond != "" {
+		b.WriteString(" else {\n")
+		fmt.Fprintf(b, "\t\tif %s_showing != \"none\" {\n", ifn.CondID)
+		fmt.Fprintf(b, "\t\t\tif !%s_current.IsUndefined() && !%s_current.IsNull() {\n", ifn.CondID, ifn.CondID)
+		fmt.Fprintf(b, "\t\t\t\t%s_current.Call(\"remove\")\n", ifn.CondID)
+		b.WriteString("\t\t\t}\n")
+		fmt.Fprintf(b, "\t\t\t%s_current = js.Null()\n", ifn.CondID)
+		fmt.Fprintf(b, "\t\t\t%s_showing = \"none\"\n", ifn.CondID)
+		b.WriteString("\t\t}\n")
+		b.WriteString("\t}")
+	}
+	b.WriteString("\n")
+}
+
+func generateEachUpdate(b *strings.Builder, each EachNode, events []Event, exprs []ExprNode) {
+	indexVar := each.Index
+	if indexVar == "" {
+		indexVar = "_i"
+	}
+
+	eachEvts := filterEachEvents(events, each.ID)
+
+	fmt.Fprintf(b, "\t// Update %s\n", each.ID)
+	fmt.Fprintf(b, "\tnewLen%s := len(%s)\n", each.ID, each.Array)
+	fmt.Fprintf(b, "\toldLen%s := %s_count\n", each.ID, each.ID)
+	fmt.Fprintf(b, "\t%s_count = newLen%s\n", each.ID, each.ID)
+
+	fmt.Fprintf(b, "\tfor i := newLen%s; i < oldLen%s; i++ {\n", each.ID, each.ID)
+	fmt.Fprintf(b, "\t\tif el := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(i)); !el.IsNull() {\n", each.ID)
+	fmt.Fprintf(b, "\t\t\tel.Call(\"remove\")\n")
+	b.WriteString("\t\t}\n")
+	b.WriteString("\t}\n")
+
+	fmt.Fprintf(b, "\tfor %s := 0; %s < newLen%s; %s++ {\n", indexVar, indexVar, each.ID, indexVar)
+	fmt.Fprintf(b, "\t\t%s := %s[%s]\n", each.Item, each.Array, indexVar)
+	fmt.Fprintf(b, "\t\telID := \"%s_\" + strconv.Itoa(%s)\n", each.ID, indexVar)
+	fmt.Fprintf(b, "\t\tif el := document.Call(\"getElementById\", elID); el.IsNull() {\n")
+	fmt.Fprintf(b, "\t\t\thtml := %s_tmpl\n", each.ID)
+	fmt.Fprintf(b, "\t\t\thtml = strings.ReplaceAll(html, \"${_idx}\", strconv.Itoa(%s))\n", indexVar)
+	fmt.Fprintf(b, "\t\t\tfrag := createFragment(html)\n")
+	fmt.Fprintf(b, "\t\t\twrapper := document.Call(\"createElement\", \"span\")\n")
+	fmt.Fprintf(b, "\t\t\twrapper.Set(\"id\", elID)\n")
+	fmt.Fprintf(b, "\t\t\twrapper.Call(\"appendChild\", frag)\n")
+	fmt.Fprintf(b, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", wrapper, %s_anchor)\n", each.ID, each.ID)
+
+	for i, ev := range eachEvts {
+		fmt.Fprintf(b, "\t\t\tif btn := wrapper.Call(\"querySelector\", \"#btn%d_${_idx}\".replace(\"${_idx}\", strconv.Itoa(%s))); !btn.IsNull() || true {\n", i, indexVar)
+		fmt.Fprintf(b, "\t\t\t\tbtnEl := document.Call(\"getElementById\", \"btn%d_\" + strconv.Itoa(%s))\n", i, indexVar)
+		fmt.Fprintf(b, "\t\t\t\tif !btnEl.IsNull() && btnEl.Get(\"_bound\").IsUndefined() {\n")
+		fmt.Fprintf(b, "\t\t\t\t\tbtnEl.Set(\"_bound\", true)\n")
+		fmt.Fprintf(b, "\t\t\t\t\tidx := %s\n", indexVar)
+		fmt.Fprintf(b, "\t\t\t\t\t_ = idx\n")
+		if each.Item != "" {
+			fmt.Fprintf(b, "\t\t\t\t\titemVal := %s\n", each.Item)
+			fmt.Fprintf(b, "\t\t\t\t\t_ = itemVal\n")
+		}
+		fmt.Fprintf(b, "\t\t\t\t\tbtnEl.Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", ev.Event)
+		generateEventModifiers(b, ev.Modifiers, "\t\t\t\t\t\t")
+		handler := ev.Handler
+		if each.Index != "" {
+			handler = replaceVar(handler, each.Index, "idx")
+		}
+		if each.Item != "" {
+			handler = replaceVar(handler, each.Item, "itemVal")
+		}
+		fmt.Fprintf(b, "\t\t\t\t\t\t%s\n", transformEventHandler(handler))
+		b.WriteString("\t\t\t\t\t\treturn nil\n")
+		b.WriteString("\t\t\t\t\t}))\n")
+		b.WriteString("\t\t\t\t}\n")
+		b.WriteString("\t\t\t}\n")
+	}
+
+	b.WriteString("\t\t}\n")
+
+	eachExprs := collectExprsInEach(each)
+	for _, expr := range eachExprs {
+		fmt.Fprintf(b, "\t\tif exprEl := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(%s)); !exprEl.IsNull() {\n", expr.ID, indexVar)
+		fmt.Fprintf(b, "\t\t\texprEl.Set(\"textContent\", %s)\n", expr.Expr)
+		b.WriteString("\t\t}\n")
+	}
+
+	b.WriteString("\t}\n")
+}
+
+// Helper functions
+
+func exprDependsOnAny(expr ExprNode, vars []string) bool {
+	for _, v := range vars {
+		for _, dep := range expr.VarDeps {
+			if dep == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func exprDependsOnAnyStr(deps []string, vars []string) bool {
+	for _, v := range vars {
+		for _, dep := range deps {
+			if dep == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func ifDependsOnAny(ifn IfNode, vars []string) bool {
+	for _, branch := range ifn.Branches {
+		if exprDependsOnAnyStr(branch.VarDeps, vars) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func inferTypeFromReactive(reactiveVars map[string]string, expr string) string {
+	// Simple case: expr is just a var name
+	if typ, ok := reactiveVars[expr]; ok {
+		return typ
+	}
+	// Default to string for complex expressions
+	return "string"
+}
+
+func capitalize(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func getExpression(script, name string) string {
+	for _, line := range strings.Split(script, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, name+" = ") {
+			return strings.TrimPrefix(trimmed, name+" = ")
+		}
+	}
+	return "0"
+}
+
+// Remaining helper functions from original codegen...
+
 func collectEvents(template string, ifs []IfNode, eaches []EachNode) []Event {
 	var events []Event
 	btnID := 0
 
-	// Find @event|modifier1|modifier2="handler"
 	for i := 0; i < len(template); i++ {
 		if template[i] != '@' {
 			continue
 		}
-		
-		// Skip {@html ...} directives
 		if i > 0 && template[i-1] == '{' {
 			continue
 		}
-		
-		// Find the ="
 		eqIdx := strings.Index(template[i:], "=\"")
 		if eqIdx == -1 {
 			continue
 		}
-		
-		// Parse event and modifiers: @click|preventDefault|stopPropagation
 		eventPart := template[i+1 : i+eqIdx]
 		parts := strings.Split(eventPart, "|")
 		eventName := parts[0]
 		modifiers := parts[1:]
-		
-		// Find handler
+
 		handlerStart := i + eqIdx + 2
 		handlerEnd := strings.Index(template[handlerStart:], "\"")
 		if handlerEnd == -1 {
 			continue
 		}
 		handler := template[handlerStart : handlerStart+handlerEnd]
-		
+
 		inBranch := isPositionInIf(template, i, ifs)
 		inEach, eachID := isPositionInEach(template, i, eaches)
 		events = append(events, Event{
@@ -631,8 +631,7 @@ func collectEvents(template string, ifs []IfNode, eaches []EachNode) []Event {
 	return events
 }
 
-// Collect bindings with branch info
-func collectBindings(template, script string, ifs []IfNode) []Binding {
+func collectBindings(template, script string, ifs []IfNode, reactiveVarTypes map[string]string) []Binding {
 	var bindings []Binding
 	inputID := 0
 
@@ -643,12 +642,16 @@ func collectBindings(template, script string, ifs []IfNode) []Binding {
 			end := strings.Index(template[start:], "\"")
 			if end != -1 {
 				varName := template[start : start+end]
+				varType := "string"
+				if t, ok := reactiveVarTypes[varName]; ok && t == "int" {
+					varType = "int"
+				}
 				inBranch := isPositionInIf(template, absPos, ifs)
 				bindings = append(bindings, Binding{
 					ID:       fmt.Sprintf("input%d", inputID),
 					Attr:     "value",
 					VarName:  varName,
-					VarType:  inferType(script, varName),
+					VarType:  varType,
 					InBranch: inBranch,
 				})
 				inputID++
@@ -681,13 +684,11 @@ func collectBindings(template, script string, ifs []IfNode) []Binding {
 	return bindings
 }
 
-// Collect class bindings with branch info
-func collectClassBindings(template string, ifs []IfNode) []ClassBinding {
+func collectClassBindings(template string, ifs []IfNode, reactiveVarNames map[string]bool) []ClassBinding {
 	var bindings []ClassBinding
 	classID := 0
-	needNewID := true
 	i := 0
-	
+
 	for i < len(template) {
 		idx := strings.Index(template[i:], "class:")
 		if idx == -1 {
@@ -700,7 +701,7 @@ func collectClassBindings(template string, ifs []IfNode) []ClassBinding {
 			continue
 		}
 		className := template[absPos+6 : absPos+eqIdx]
-		
+
 		condStart := absPos + eqIdx + 2
 		condEnd := strings.Index(template[condStart:], "}")
 		if condEnd == -1 {
@@ -709,27 +710,24 @@ func collectClassBindings(template string, ifs []IfNode) []ClassBinding {
 		}
 		cond := template[condStart : condStart+condEnd]
 		fullEnd := condStart + condEnd + 1
-		
-		// Assign new ID if this is first in a group
-		if needNewID {
-			classID++
-			needNewID = false
+
+		// Find var deps in condition
+		var varDeps []string
+		for varName := range reactiveVarNames {
+			if strings.Contains(cond, varName) {
+				varDeps = append(varDeps, varName)
+			}
 		}
-		
+
 		inBranch := isPositionInIf(template, absPos, ifs)
 		bindings = append(bindings, ClassBinding{
-			ID:        fmt.Sprintf("class%d", classID-1),
+			ID:        fmt.Sprintf("class%d", classID),
 			ClassName: className,
 			Cond:      cond,
 			InBranch:  inBranch,
+			VarDeps:   varDeps,
 		})
-		
-		// Check if there's another class: immediately after
-		rest := strings.TrimLeft(template[fullEnd:], " \t")
-		if !strings.HasPrefix(rest, "class:") {
-			// End of group - next binding needs new ID
-			needNewID = true
-		}
+		classID++
 		i = fullEnd
 	}
 
@@ -737,7 +735,6 @@ func collectClassBindings(template string, ifs []IfNode) []ClassBinding {
 }
 
 func isPositionInIf(template string, pos int, ifs []IfNode) bool {
-	// Find all {#if and {/if} positions
 	depth := 0
 	for i := 0; i < pos && i < len(template); i++ {
 		if strings.HasPrefix(template[i:], "{#if ") {
@@ -750,14 +747,13 @@ func isPositionInIf(template string, pos int, ifs []IfNode) bool {
 }
 
 func isPositionInEach(template string, pos int, eaches []EachNode) (bool, string) {
-	// Track each block depth and which each we're in
 	type eachInfo struct {
 		id    string
 		depth int
 	}
 	var stack []eachInfo
 	eachCount := 0
-	
+
 	for i := 0; i < pos && i < len(template); i++ {
 		if strings.HasPrefix(template[i:], "{#each ") {
 			stack = append(stack, eachInfo{id: fmt.Sprintf("each%d", eachCount), depth: 1})
@@ -768,7 +764,7 @@ func isPositionInEach(template string, pos int, eaches []EachNode) (bool, string
 			}
 		}
 	}
-	
+
 	if len(stack) > 0 {
 		return true, stack[len(stack)-1].id
 	}
@@ -781,7 +777,6 @@ func countEventsOutsideIf(template string, ifs []IfNode) int {
 		if template[i] != '@' {
 			continue
 		}
-		// Skip {@html ...} directives
 		if i > 0 && template[i-1] == '{' {
 			continue
 		}
@@ -792,7 +787,6 @@ func countEventsOutsideIf(template string, ifs []IfNode) int {
 		if !isPositionInIf(template, i, ifs) {
 			count++
 		}
-		// Skip past this event
 		handlerStart := i + eqIdx + 2
 		handlerEnd := strings.Index(template[handlerStart:], "\"")
 		if handlerEnd != -1 {
@@ -850,14 +844,8 @@ func countClassBindingsOutsideIf(template string, ifs []IfNode) int {
 			continue
 		}
 		fullEnd := condStart + condEnd + 1
-		
-		// Check if there's another class: immediately after
-		rest := strings.TrimLeft(template[fullEnd:], " \t")
-		if !strings.HasPrefix(rest, "class:") {
-			// This is the last in a group - count it if outside if
-			if !isPositionInIf(template, absPos, ifs) {
-				count++
-			}
+		if !isPositionInIf(template, absPos, ifs) {
+			count++
 		}
 		i = fullEnd
 	}
@@ -921,7 +909,6 @@ func generateBranchHTML(nodes []Node, ast *TemplateAST) string {
 }
 
 func processTemplateAttrs(html string, btnID, inputID, classID int) (string, int, int, int) {
-	// Replace @event|modifiers="handler" with id="btnN"
 	i := 0
 	for i < len(html) {
 		idx := strings.Index(html[i:], "@")
@@ -929,29 +916,24 @@ func processTemplateAttrs(html string, btnID, inputID, classID int) (string, int
 			break
 		}
 		absIdx := i + idx
-		// Skip {@html ...} directives
 		if absIdx > 0 && html[absIdx-1] == '{' {
 			i = absIdx + 1
 			continue
 		}
-		// Find ="
 		eqIdx := strings.Index(html[absIdx:], "=\"")
 		if eqIdx == -1 {
 			break
 		}
-		// Find closing quote
 		handlerStart := absIdx + eqIdx + 2
 		handlerEnd := strings.Index(html[handlerStart:], "\"")
 		if handlerEnd == -1 {
 			break
 		}
-		// Replace entire @event|mods="handler" with id="btnN"
 		html = html[:absIdx] + fmt.Sprintf("id=\"btn%d\"", btnID) + html[handlerStart+handlerEnd+1:]
 		btnID++
 		i = absIdx + 1
 	}
 
-	// Replace bind:value="var" with id="inputN"
 	for strings.Contains(html, "bind:value=\"") {
 		idx := strings.Index(html, "bind:value=\"")
 		end := strings.Index(html[idx+12:], "\"")
@@ -963,7 +945,6 @@ func processTemplateAttrs(html string, btnID, inputID, classID int) (string, int
 		}
 	}
 
-	// Replace bind:checked="var" with id="inputN"
 	for strings.Contains(html, "bind:checked=\"") {
 		idx := strings.Index(html, "bind:checked=\"")
 		end := strings.Index(html[idx+14:], "\"")
@@ -975,7 +956,6 @@ func processTemplateAttrs(html string, btnID, inputID, classID int) (string, int
 		}
 	}
 
-	// Replace class:name={cond} with id="classN" (only first in group)
 	for {
 		idx := strings.Index(html, "class:")
 		if idx == -1 {
@@ -991,274 +971,11 @@ func processTemplateAttrs(html string, btnID, inputID, classID int) (string, int
 			break
 		}
 		fullEnd := condStart + condEnd + 1
-		
-		// Check if there's another class: immediately after (same element)
-		rest := strings.TrimLeft(html[fullEnd:], " \t")
-		if strings.HasPrefix(rest, "class:") {
-			// More class bindings follow - just remove this one
-			html = html[:idx] + html[fullEnd:]
-		} else {
-			// Last (or only) class binding - replace with id
-			html = html[:idx] + fmt.Sprintf("id=\"class%d\"", classID) + html[fullEnd:]
-			classID++
-		}
+		html = html[:idx] + fmt.Sprintf("id=\"class%d\"", classID) + html[fullEnd:]
+		classID++
 	}
 
 	return html, btnID, inputID, classID
-}
-
-func generateHTML(p Parsed, tmplAST *TemplateAST, events []Event, inputBindings []Binding, ifs []IfNode, components []ComponentNode) string {
-	var b strings.Builder
-
-	b.WriteString("<!DOCTYPE html>\n<html>\n<head>\n")
-	b.WriteString("  <script src=\"wasm_exec.js\"></script>\n")
-	b.WriteString("  <script>\n")
-	b.WriteString("    const go = new Go();\n")
-	b.WriteString("    WebAssembly.instantiateStreaming(fetch(\"app.wasm\"), go.importObject)\n")
-	b.WriteString("      .then(r => go.run(r.instance));\n")
-	b.WriteString("  </script>\n")
-	
-	// Include component styles
-	for name, comp := range p.Components {
-		if comp.Style != "" {
-			fmt.Fprintf(&b, "  <!-- %s styles -->\n", name)
-			b.WriteString("  <style>\n")
-			b.WriteString(comp.Style)
-			b.WriteString("\n  </style>\n")
-		}
-	}
-	
-	if p.Style != "" {
-		b.WriteString("  <style>\n")
-		b.WriteString(p.Style)
-		b.WriteString("\n  </style>\n")
-	}
-	b.WriteString("</head>\n<body>\n")
-
-	html := tmplAST.GenerateHTML()
-
-	// Replace component placeholders with actual component HTML
-	for _, comp := range components {
-		compDef := p.Components[comp.Name]
-		if compDef == nil {
-			continue
-		}
-		
-		// Generate component's HTML with prefixed IDs
-		compHTML := generateComponentHTML(comp.ID, compDef, p.Components, comp.Props)
-		
-		// Replace placeholder
-		placeholder := fmt.Sprintf(`<span id="%s"></span>`, comp.ID)
-		html = strings.Replace(html, placeholder, compHTML, 1)
-	}
-
-	// Hydrate expression placeholders with initial values
-	exprs := tmplAST.CollectExprs()
-	for _, expr := range exprs {
-		initVal := getInitializer(p.Script, expr.Expr)
-		if initVal != "" && initVal != "0" && initVal != `""` {
-			// Clean up string quotes for display
-			displayVal := initVal
-			if strings.HasPrefix(displayVal, `"`) && strings.HasSuffix(displayVal, `"`) {
-				displayVal = displayVal[1 : len(displayVal)-1]
-			}
-			empty := fmt.Sprintf(`<span id="%s"></span>`, expr.ID)
-			filled := fmt.Sprintf(`<span id="%s">%s</span>`, expr.ID, displayVal)
-			html = strings.Replace(html, empty, filled, 1)
-		}
-	}
-
-	// Replace @event|modifiers="handler" with id="btnN"
-	btnID := 0
-	i := 0
-	for i < len(html) {
-		idx := strings.Index(html[i:], "@")
-		if idx == -1 {
-			break
-		}
-		absIdx := i + idx
-		// Skip {@html ...} directives
-		if absIdx > 0 && html[absIdx-1] == '{' {
-			i = absIdx + 1
-			continue
-		}
-		eqIdx := strings.Index(html[absIdx:], "=\"")
-		if eqIdx == -1 {
-			break
-		}
-		handlerStart := absIdx + eqIdx + 2
-		handlerEnd := strings.Index(html[handlerStart:], "\"")
-		if handlerEnd == -1 {
-			break
-		}
-		html = html[:absIdx] + fmt.Sprintf("id=\"btn%d\"", btnID) + html[handlerStart+handlerEnd+1:]
-		btnID++
-		i = absIdx + 1
-	}
-
-	inputID := 0
-	for strings.Contains(html, "bind:value=\"") {
-		idx := strings.Index(html, "bind:value=\"")
-		end := strings.Index(html[idx+12:], "\"")
-		if end != -1 {
-			html = strings.Replace(html, html[idx:idx+12+end+1], fmt.Sprintf("id=\"input%d\"", inputID), 1)
-			inputID++
-		} else {
-			break
-		}
-	}
-
-	for strings.Contains(html, "bind:checked=\"") {
-		idx := strings.Index(html, "bind:checked=\"")
-		end := strings.Index(html[idx+14:], "\"")
-		if end != -1 {
-			html = strings.Replace(html, html[idx:idx+14+end+1], fmt.Sprintf("id=\"input%d\"", inputID), 1)
-			inputID++
-		} else {
-			break
-		}
-	}
-
-	// Replace class:name={cond} with id="classN" (only first in group)
-	classID := 0
-	for {
-		idx := strings.Index(html, "class:")
-		if idx == -1 {
-			break
-		}
-		eqIdx := strings.Index(html[idx:], "={")
-		if eqIdx == -1 {
-			break
-		}
-		condStart := idx + eqIdx + 2
-		condEnd := strings.Index(html[condStart:], "}")
-		if condEnd == -1 {
-			break
-		}
-		fullEnd := condStart + condEnd + 1
-		
-		// Check if there's another class: immediately after (same element)
-		rest := strings.TrimLeft(html[fullEnd:], " \t")
-		if strings.HasPrefix(rest, "class:") {
-			// More class bindings follow - just remove this one, keep going
-			html = html[:idx] + html[fullEnd:]
-		} else {
-			// Last (or only) class binding - replace with id
-			html = html[:idx] + fmt.Sprintf("id=\"class%d\"", classID) + html[fullEnd:]
-			classID++
-		}
-	}
-
-	b.WriteString(html)
-	b.WriteString("\n</body>\n</html>\n")
-	return b.String()
-}
-
-func transformFunction(script, funcName string, modifies []string) string {
-	funcStart := strings.Index(script, "func "+funcName)
-	if funcStart == -1 {
-		return ""
-	}
-
-	braceStart := strings.Index(script[funcStart:], "{")
-	if braceStart == -1 {
-		return ""
-	}
-	braceStart += funcStart
-
-	depth := 1
-	braceEnd := braceStart + 1
-	for braceEnd < len(script) && depth > 0 {
-		switch script[braceEnd] {
-		case '{':
-			depth++
-		case '}':
-			depth--
-		}
-		braceEnd++
-	}
-
-	funcSrc := script[funcStart:braceEnd]
-
-	for _, varName := range modifies {
-		funcSrc = strings.ReplaceAll(funcSrc, varName+"++", fmt.Sprintf("set%s(%s + 1)", capitalize(varName), varName))
-		funcSrc = strings.ReplaceAll(funcSrc, varName+"--", fmt.Sprintf("set%s(%s - 1)", capitalize(varName), varName))
-
-		lines := strings.Split(funcSrc, "\n")
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, varName+" = ") {
-				expr := strings.TrimPrefix(trimmed, varName+" = ")
-				indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-				lines[i] = indent + fmt.Sprintf("set%s(%s)", capitalize(varName), expr)
-			}
-		}
-		funcSrc = strings.Join(lines, "\n")
-	}
-
-	return funcSrc
-}
-
-func getInitializer(script, name string) string {
-	for _, line := range strings.Split(script, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, name+" := ") {
-			return strings.TrimPrefix(trimmed, name+" := ")
-		}
-		if strings.HasPrefix(trimmed, name+" = ") {
-			return strings.TrimPrefix(trimmed, name+" = ")
-		}
-	}
-	return "0"
-}
-
-func getExpression(script, name string) string {
-	return getInitializer(script, name)
-}
-
-func inferType(script, name string) string {
-	init := getInitializer(script, name)
-	if init == "" || init == "0" {
-		return "int"
-	}
-	if strings.HasPrefix(init, "[]string{") {
-		return "[]string"
-	}
-	if strings.HasPrefix(init, "[]int{") {
-		return "[]int"
-	}
-	if strings.HasPrefix(init, "[]float64{") {
-		return "[]float64"
-	}
-	if strings.HasPrefix(init, "[]bool{") {
-		return "[]bool"
-	}
-	if strings.HasPrefix(init, "\"") {
-		return "string"
-	}
-	if init == "true" || init == "false" {
-		return "bool"
-	}
-	if strings.Contains(init, "&&") || strings.Contains(init, "||") ||
-		strings.Contains(init, "==") || strings.Contains(init, "!=") ||
-		strings.Contains(init, "<=") || strings.Contains(init, ">=") ||
-		strings.Contains(init, " < ") || strings.Contains(init, " > ") {
-		return "bool"
-	}
-	if strings.Contains(init, "\" + ") || strings.Contains(init, " + \"") {
-		return "string"
-	}
-	if strings.Contains(init, ".") {
-		return "float64"
-	}
-	return "int"
-}
-
-func capitalize(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func generateEventModifiers(b *strings.Builder, modifiers []string, indent string) {
@@ -1272,10 +989,20 @@ func generateEventModifiers(b *strings.Builder, modifiers []string, indent strin
 	}
 }
 
+func transformEventHandler(handler string) string {
+	handler = strings.ReplaceAll(handler, "(e)", "(args[0])")
+	handler = strings.ReplaceAll(handler, "(e,", "(args[0],")
+	handler = strings.ReplaceAll(handler, ", e)", ", args[0])")
+	handler = strings.ReplaceAll(handler, ",e)", ",args[0])")
+	return handler
+}
+
 func isExprInIf(exprID string, ifs []IfNode) bool {
 	for _, ifn := range ifs {
-		if exprInNodes(exprID, ifn.Then) || exprInNodes(exprID, ifn.Else) {
-			return true
+		for _, branch := range ifn.Branches {
+			if exprInNodes(exprID, branch.Body) {
+				return true
+			}
 		}
 	}
 	return false
@@ -1289,8 +1016,10 @@ func exprInNodes(exprID string, nodes []Node) bool {
 				return true
 			}
 		case IfNode:
-			if exprInNodes(exprID, node.Then) || exprInNodes(exprID, node.Else) {
-				return true
+			for _, branch := range node.Branches {
+				if exprInNodes(exprID, branch.Body) {
+					return true
+				}
 			}
 		case EachNode:
 			if exprInNodes(exprID, node.Body) {
@@ -1322,8 +1051,9 @@ func collectExprsFromNodes(nodes []Node, exprs *[]ExprNode) {
 		case ExprNode:
 			*exprs = append(*exprs, node)
 		case IfNode:
-			collectExprsFromNodes(node.Then, exprs)
-			collectExprsFromNodes(node.Else, exprs)
+			for _, branch := range node.Branches {
+				collectExprsFromNodes(branch.Body, exprs)
+			}
 		case EachNode:
 			collectExprsFromNodes(node.Body, exprs)
 		}
@@ -1336,22 +1066,23 @@ func generateEachBodyHTML(nodes []Node, ast *TemplateAST, eachID string) string 
 	return b.String()
 }
 
-// replaceVar replaces a variable name with a new name, respecting word boundaries
-func replaceVar(s, oldVar, newVar string) string {
-	// Simple approach: replace (var), var), (var, ,var) patterns
-	result := s
-	result = strings.ReplaceAll(result, "("+oldVar+")", "("+newVar+")")
-	result = strings.ReplaceAll(result, "("+oldVar+",", "("+newVar+",")
-	result = strings.ReplaceAll(result, ","+oldVar+")", ","+newVar+")")
-	result = strings.ReplaceAll(result, ", "+oldVar+")", ", "+newVar+")")
-	return result
+func generateEachHTMLNodes(b *strings.Builder, nodes []Node, eachID string) {
+	for _, n := range nodes {
+		switch node := n.(type) {
+		case TextNode:
+			b.WriteString(node.Text)
+		case ExprNode:
+			fmt.Fprintf(b, `<span id="%s_${_idx}"></span>`, node.ID)
+		case IfNode:
+			fmt.Fprintf(b, `<span id="%s_anchor" style="display:none"></span>`, node.CondID)
+		case EachNode:
+			fmt.Fprintf(b, `<span id="%s_anchor" style="display:none"></span>`, node.ID)
+		}
+	}
 }
 
-// processEachTemplateAttrs replaces @click etc with indexed IDs for each templates
 func processEachTemplateAttrs(html string) string {
 	btnID := 0
-	
-	// Replace @event|modifiers="handler" with id="btnN_${_idx}"
 	i := 0
 	for i < len(html) {
 		idx := strings.Index(html[i:], "@")
@@ -1359,7 +1090,6 @@ func processEachTemplateAttrs(html string) string {
 			break
 		}
 		absIdx := i + idx
-		// Skip {@html ...}
 		if absIdx > 0 && html[absIdx-1] == '{' {
 			i = absIdx + 1
 			continue
@@ -1373,222 +1103,24 @@ func processEachTemplateAttrs(html string) string {
 		if handlerEnd == -1 {
 			break
 		}
-		// Replace with indexed ID
 		html = html[:absIdx] + fmt.Sprintf("id=\"btn%d_${_idx}\"", btnID) + html[handlerStart+handlerEnd+1:]
 		btnID++
 		i = absIdx + 1
 	}
-	
 	return html
 }
 
-func generateEachHTMLNodes(b *strings.Builder, nodes []Node, eachID string) {
-	for _, n := range nodes {
-		switch node := n.(type) {
-		case TextNode:
-			b.WriteString(node.Text)
-		case ExprNode:
-			// Use index placeholder for ID so each item has unique IDs
-			fmt.Fprintf(b, `<span id="%s_${_idx}"></span>`, node.ID)
-		case IfNode:
-			fmt.Fprintf(b, `<span id="%s_anchor" style="display:none"></span>`, node.CondID)
-		case EachNode:
-			fmt.Fprintf(b, `<span id="%s_anchor" style="display:none"></span>`, node.ID)
-		}
-	}
+func replaceVar(s, oldVar, newVar string) string {
+	result := s
+	result = strings.ReplaceAll(result, "("+oldVar+")", "("+newVar+")")
+	result = strings.ReplaceAll(result, "("+oldVar+",", "("+newVar+",")
+	result = strings.ReplaceAll(result, ","+oldVar+")", ","+newVar+")")
+	result = strings.ReplaceAll(result, ", "+oldVar+")", ", "+newVar+")")
+	return result
 }
 
-// generateComponentCode generates struct types, instances, and methods for components
-func generateComponentCode(b *strings.Builder, p Parsed, components []ComponentNode, compAnalyses map[string]*Analysis) {
-	// Group components by type and collect which props have bindings
-	compTypes := make(map[string]bool)
-	compBindings := make(map[string]map[string]bool) // typeName -> propName -> true
-	for _, comp := range components {
-		compTypes[comp.Name] = true
-		if compBindings[comp.Name] == nil {
-			compBindings[comp.Name] = make(map[string]bool)
-		}
-		for propName := range comp.Bindings {
-			compBindings[comp.Name][capitalize(propName)] = true
-		}
-	}
-
-	// Generate struct type for each component type
-	for typeName := range compTypes {
-		compDef := p.Components[typeName]
-		analysis := compAnalyses[typeName]
-		if compDef == nil || analysis == nil {
-			continue
-		}
-
-		fmt.Fprintf(b, "// %s component\n", typeName)
-		fmt.Fprintf(b, "type %s struct {\n", typeName)
-		b.WriteString("\t_id string\n")
-		
-		// Fields from analysis
-		for _, name := range analysis.Order {
-			typ := inferType(compDef.Script, name)
-			fmt.Fprintf(b, "\t%s %s\n", name, typ)
-		}
-		
-		// Binding callback fields
-		for propName := range compBindings[typeName] {
-			typ := inferType(compDef.Script, propName)
-			fmt.Fprintf(b, "\t_on%sChange func(%s)\n", propName, typ)
-		}
-		b.WriteString("}\n\n")
-
-		// Parse component template
-		compAST := parseTemplate(compDef.Template)
-		compExprs := compAST.CollectExprs()
-		compEvents := collectEvents(compDef.Template, nil, nil)
-
-		// Setters - include bound props
-		for _, name := range analysis.Order {
-			v := analysis.Vars[name]
-			if len(v.DependsOn) == 0 {
-				typ := inferType(compDef.Script, name)
-				fmt.Fprintf(b, "func (c *%s) set%s(v %s) {\n", typeName, capitalize(name), typ)
-				fmt.Fprintf(b, "\tc.%s = v\n", name)
-				// If this prop has bindings, call the callback
-				if compBindings[typeName][capitalize(name)] {
-					fmt.Fprintf(b, "\tif c._on%sChange != nil {\n", capitalize(name))
-					fmt.Fprintf(b, "\t\tc._on%sChange(v)\n", capitalize(name))
-					b.WriteString("\t}\n")
-				}
-				b.WriteString("\tc.propagate()\n")
-				b.WriteString("}\n\n")
-			}
-		}
-
-		// Propagate
-		fmt.Fprintf(b, "func (c *%s) propagate() {\n", typeName)
-		
-		// Derived values
-		hasDerived := false
-		for _, name := range analysis.Order {
-			if len(analysis.Vars[name].DependsOn) > 0 {
-				if !hasDerived {
-					b.WriteString("\t// Recompute derived values\n")
-					hasDerived = true
-				}
-				fmt.Fprintf(b, "\tc.%s = %s\n", name, transformCompExpr(getExpression(compDef.Script, name)))
-			}
-		}
-		
-		b.WriteString("\tc.updateDOM()\n")
-		b.WriteString("}\n\n")
-
-		// updateDOM
-		fmt.Fprintf(b, "func (c *%s) updateDOM() {\n", typeName)
-		for _, expr := range compExprs {
-			typ := inferType(compDef.Script, expr.Expr)
-			fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_%s\"); !el.IsNull() {\n", expr.ID)
-			if typ == "int" {
-				fmt.Fprintf(b, "\t\tel.Set(\"textContent\", strconv.Itoa(c.%s))\n", expr.Expr)
-			} else if typ == "bool" {
-				fmt.Fprintf(b, "\t\tel.Set(\"textContent\", strconv.FormatBool(c.%s))\n", expr.Expr)
-			} else {
-				fmt.Fprintf(b, "\t\tel.Set(\"textContent\", c.%s)\n", expr.Expr)
-			}
-			b.WriteString("\t}\n")
-		}
-		
-		// Sync component input values
-		compInputBindings := collectBindings(compDef.Template, compDef.Script, nil)
-		for i, ib := range compInputBindings {
-			if ib.Attr == "checked" {
-				fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_input%d\"); !el.IsNull() && el.Get(\"checked\").Bool() != c.%s {\n", i, ib.VarName)
-				fmt.Fprintf(b, "\t\tel.Set(\"checked\", c.%s)\n", ib.VarName)
-				b.WriteString("\t}\n")
-			} else {
-				if ib.VarType == "int" {
-					fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_input%d\"); !el.IsNull() && el.Get(\"value\").String() != strconv.Itoa(c.%s) {\n", i, ib.VarName)
-					fmt.Fprintf(b, "\t\tel.Set(\"value\", strconv.Itoa(c.%s))\n", ib.VarName)
-				} else {
-					fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_input%d\"); !el.IsNull() && el.Get(\"value\").String() != c.%s {\n", i, ib.VarName)
-					fmt.Fprintf(b, "\t\tel.Set(\"value\", c.%s)\n", ib.VarName)
-				}
-				b.WriteString("\t}\n")
-			}
-		}
-		b.WriteString("}\n\n")
-
-		// User functions as methods
-		for name, fn := range analysis.Funcs {
-			transformed := transformComponentFunction(compDef.Script, typeName, name, fn.Modifies)
-			b.WriteString(transformed)
-			b.WriteString("\n\n")
-		}
-
-		// mount function
-		fmt.Fprintf(b, "func (c *%s) mount() {\n", typeName)
-		for i, ev := range compEvents {
-			fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_btn%d\"); !el.IsNull() {\n", i)
-			fmt.Fprintf(b, "\t\tel.Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", ev.Event)
-			// Convert handler() to c.handler()
-			fmt.Fprintf(b, "\t\t\tc.%s\n", ev.Handler)
-			b.WriteString("\t\t\treturn nil\n")
-			b.WriteString("\t\t}))\n")
-			b.WriteString("\t}\n")
-		}
-		
-		// Bind component inputs
-		for i, ib := range compInputBindings {
-			eventType := "input"
-			if ib.Attr == "checked" {
-				eventType = "change"
-			}
-			fmt.Fprintf(b, "\tif el := document.Call(\"getElementById\", c._id+\"_input%d\"); !el.IsNull() {\n", i)
-			fmt.Fprintf(b, "\t\tel.Call(\"addEventListener\", \"%s\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", eventType)
-			if ib.Attr == "checked" {
-				fmt.Fprintf(b, "\t\t\tc.set%s(this.Get(\"checked\").Bool())\n", capitalize(ib.VarName))
-			} else if ib.VarType == "int" {
-				fmt.Fprintf(b, "\t\t\tif v, err := strconv.Atoi(this.Get(\"value\").String()); err == nil {\n")
-				fmt.Fprintf(b, "\t\t\t\tc.set%s(v)\n", capitalize(ib.VarName))
-				b.WriteString("\t\t\t}\n")
-			} else {
-				fmt.Fprintf(b, "\t\t\tc.set%s(this.Get(\"value\").String())\n", capitalize(ib.VarName))
-			}
-			b.WriteString("\t\t\treturn nil\n")
-			b.WriteString("\t\t}))\n")
-			b.WriteString("\t}\n")
-		}
-		
-		b.WriteString("\tc.propagate()\n")
-		// Call onMount if it exists
-		if _, hasOnMount := analysis.Funcs["onMount"]; hasOnMount {
-			b.WriteString("\tc.onMount()\n")
-		}
-		b.WriteString("}\n\n")
-		
-		// destroy function (for cleanup)
-		if _, hasOnDestroy := analysis.Funcs["onDestroy"]; hasOnDestroy {
-			fmt.Fprintf(b, "func (c *%s) destroy() {\n", typeName)
-			b.WriteString("\tc.onDestroy()\n")
-			b.WriteString("}\n\n")
-		}
-	}
-
-	// Generate instances
-	b.WriteString("// Component instances\n")
-	b.WriteString("var (\n")
-	for _, comp := range components {
-		fmt.Fprintf(b, "\t%s = &%s{_id: \"%s\"", comp.ID, comp.Name, comp.ID)
-		for propName, propVal := range comp.Props {
-			// Check if value is expression {expr} or literal "string"
-			if strings.HasPrefix(propVal, "{") && strings.HasSuffix(propVal, "}") {
-				// Expression - will be set at runtime
-				continue
-			}
-			fmt.Fprintf(b, ", %s: \"%s\"", propName, propVal)
-		}
-		b.WriteString("}\n")
-	}
-	b.WriteString(")\n\n")
-}
-
-func transformComponentFunction(script, typeName, funcName string, modifies []string) string {
+// transformFunction transforms a user function to use setters for reactive vars
+func transformFunction(script, funcName string, modifies []string, reactiveVars map[string]string) string {
 	funcStart := strings.Index(script, "func "+funcName)
 	if funcStart == -1 {
 		return ""
@@ -1613,22 +1145,81 @@ func transformComponentFunction(script, typeName, funcName string, modifies []st
 	}
 
 	funcSrc := script[funcStart:braceEnd]
-	
-	// Convert func name() to func (c *Type) name()
-	funcSrc = strings.Replace(funcSrc, "func "+funcName, fmt.Sprintf("func (c *%s) %s", typeName, funcName), 1)
 
-	// Transform variable modifications to method calls
+	// If no modifications, return as-is
+	if len(modifies) == 0 {
+		return funcSrc
+	}
+
 	for _, varName := range modifies {
-		funcSrc = strings.ReplaceAll(funcSrc, varName+"++", fmt.Sprintf("c.set%s(c.%s + 1)", capitalize(varName), varName))
-		funcSrc = strings.ReplaceAll(funcSrc, varName+"--", fmt.Sprintf("c.set%s(c.%s - 1)", capitalize(varName), varName))
+		// Only transform if it's a reactive var
+		if _, isReactive := reactiveVars[varName]; !isReactive {
+			continue
+		}
 
+		// Replace varName++ with setVarName(varName + 1)
+		funcSrc = strings.ReplaceAll(funcSrc, varName+"++", fmt.Sprintf("set%s(%s + 1)", capitalize(varName), varName))
+		
+		// Replace varName-- with setVarName(varName - 1)
+		funcSrc = strings.ReplaceAll(funcSrc, varName+"--", fmt.Sprintf("set%s(%s - 1)", capitalize(varName), varName))
+
+		// Replace varName = expr with setVarName(expr)
 		lines := strings.Split(funcSrc, "\n")
 		for i, line := range lines {
 			trimmed := strings.TrimSpace(line)
+			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+			
+			// Handle: varName += expr
+			if strings.HasPrefix(trimmed, varName+" += ") {
+				expr := strings.TrimPrefix(trimmed, varName+" += ")
+				lines[i] = indent + fmt.Sprintf("set%s(%s + %s)", capitalize(varName), varName, expr)
+				continue
+			}
+			
+			// Handle: varName -= expr
+			if strings.HasPrefix(trimmed, varName+" -= ") {
+				expr := strings.TrimPrefix(trimmed, varName+" -= ")
+				lines[i] = indent + fmt.Sprintf("set%s(%s - %s)", capitalize(varName), varName, expr)
+				continue
+			}
+			
+			// Handle: varName *= expr
+			if strings.HasPrefix(trimmed, varName+" *= ") {
+				expr := strings.TrimPrefix(trimmed, varName+" *= ")
+				lines[i] = indent + fmt.Sprintf("set%s(%s * %s)", capitalize(varName), varName, expr)
+				continue
+			}
+			
+			// Handle: varName /= expr
+			if strings.HasPrefix(trimmed, varName+" /= ") {
+				expr := strings.TrimPrefix(trimmed, varName+" /= ")
+				lines[i] = indent + fmt.Sprintf("set%s(%s / %s)", capitalize(varName), varName, expr)
+				continue
+			}
+			
+			// Handle: varName = expr
 			if strings.HasPrefix(trimmed, varName+" = ") {
 				expr := strings.TrimPrefix(trimmed, varName+" = ")
-				indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-				lines[i] = indent + fmt.Sprintf("c.set%s(%s)", capitalize(varName), expr)
+				lines[i] = indent + fmt.Sprintf("set%s(%s)", capitalize(varName), expr)
+				continue
+			}
+			
+			// Handle: varName[i] = expr (slice/map index) -> keep it, add update call
+			if strings.HasPrefix(trimmed, varName+"[") && strings.Contains(trimmed, "] = ") {
+				lines[i] = line + "\n" + indent + fmt.Sprintf("update%s()", capitalize(varName))
+				continue
+			}
+			
+			// Handle: delete(varName, key)
+			if strings.HasPrefix(trimmed, "delete("+varName+",") {
+				lines[i] = line + "\n" + indent + fmt.Sprintf("update%s()", capitalize(varName))
+				continue
+			}
+			
+			// Handle: clear(varName)
+			if trimmed == "clear("+varName+")" || strings.HasPrefix(trimmed, "clear("+varName+")") {
+				lines[i] = line + "\n" + indent + fmt.Sprintf("update%s()", capitalize(varName))
+				continue
 			}
 		}
 		funcSrc = strings.Join(lines, "\n")
@@ -1637,184 +1228,97 @@ func transformComponentFunction(script, typeName, funcName string, modifies []st
 	return funcSrc
 }
 
-func transformCompExpr(expr string) string {
-	// Add c. prefix to identifiers - simplified version
-	return "c." + expr
-}
-
-func isUppercase(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	return s[0] >= 'A' && s[0] <= 'Z'
-}
-
-// flattenComponents collects all components recursively
-func flattenComponents(comps map[string]*Parsed, result map[string]*Parsed) {
-	for name, comp := range comps {
-		if _, exists := result[name]; !exists {
-			result[name] = comp
-			// Recurse into nested components
-			flattenComponents(comp.Components, result)
-		}
-	}
-}
-
-// collectAllComponentUsages collects component usages from main template and nested components
-func collectAllComponentUsages(topLevelComps []ComponentNode, allCompDefs map[string]*Parsed) []ComponentNode {
-	var result []ComponentNode
-	
-	// Add top-level components
-	result = append(result, topLevelComps...)
-	
-	// For each component, find nested component usages
-	for _, comp := range topLevelComps {
-		compDef := allCompDefs[comp.Name]
-		if compDef == nil {
-			continue
-		}
-		
-		// Build component names for parsing
-		compNames := make(map[string]bool)
-		for name := range allCompDefs {
-			compNames[name] = true
-		}
-		
-		// Parse this component's template
-		ast := parseTemplateWithComponents(compDef.Template, compNames)
-		nestedComps := ast.CollectComponents()
-		
-		// Add nested components with prefixed IDs
-		for _, nested := range nestedComps {
-			prefixedComp := ComponentNode{
-				Name:     nested.Name,
-				ID:       comp.ID + "_" + nested.ID,
-				Props:    nested.Props,
-				Children: nested.Children,
-			}
-			
-			// Recursively collect from this nested component
-			subNested := collectAllComponentUsages([]ComponentNode{prefixedComp}, allCompDefs)
-			result = append(result, subNested...)
-		}
-	}
-	
-	return result
-}
-
-// generateComponentHTML generates HTML for a component with prefixed IDs
-func generateComponentHTML(compID string, compDef *Parsed, allComponents map[string]*Parsed, props map[string]string) string {
-	// Build component names for this component's template
-	compNames := make(map[string]bool)
-	for name := range allComponents {
-		compNames[name] = true
-	}
-	
-	// Parse the component template with nested component awareness
-	ast := parseTemplateWithComponents(compDef.Template, compNames)
-	
+func generateHTML(p Parsed, tmplAST *TemplateAST, events []Event, inputBindings []Binding, ifs []IfNode) string {
 	var b strings.Builder
-	generateComponentHTMLNodes(&b, ast.Nodes, compID, allComponents)
-	
-	html := b.String()
-	
-	// Replace @click etc with prefixed btn IDs
+
+	b.WriteString("<!DOCTYPE html>\n<html>\n<head>\n")
+	b.WriteString("  <script src=\"wasm_exec.js\"></script>\n")
+	b.WriteString("  <script>\n")
+	b.WriteString("    const go = new Go();\n")
+	b.WriteString("    WebAssembly.instantiateStreaming(fetch(\"app.wasm\"), go.importObject)\n")
+	b.WriteString("      .then(r => go.run(r.instance));\n")
+	b.WriteString("  </script>\n")
+
+	if p.Style != "" {
+		b.WriteString("  <style>\n")
+		b.WriteString(p.Style)
+		b.WriteString("\n  </style>\n")
+	}
+	b.WriteString("</head>\n<body>\n")
+
+	html := tmplAST.GenerateHTML()
+
+	// Replace @event|modifiers="handler" with id="btnN"
 	btnID := 0
-	for strings.Contains(html, "@") {
-		idx := strings.Index(html, "@")
+	i := 0
+	for i < len(html) {
+		idx := strings.Index(html[i:], "@")
 		if idx == -1 {
 			break
 		}
-		// Skip if this is {@html}
-		if idx > 0 && html[idx-1] == '{' {
-			// Skip past this @
-			html = html[:idx] + "___AT___" + html[idx+1:]
+		absIdx := i + idx
+		if absIdx > 0 && html[absIdx-1] == '{' {
+			i = absIdx + 1
 			continue
 		}
-		eqIdx := strings.Index(html[idx:], "=\"")
+		eqIdx := strings.Index(html[absIdx:], "=\"")
 		if eqIdx == -1 {
 			break
 		}
-		handlerStart := idx + eqIdx + 2
+		handlerStart := absIdx + eqIdx + 2
 		handlerEnd := strings.Index(html[handlerStart:], "\"")
 		if handlerEnd == -1 {
 			break
 		}
-		html = html[:idx] + fmt.Sprintf("id=\"%s_btn%d\"", compID, btnID) + html[handlerStart+handlerEnd+1:]
+		html = html[:absIdx] + fmt.Sprintf("id=\"btn%d\"", btnID) + html[handlerStart+handlerEnd+1:]
 		btnID++
+		i = absIdx + 1
 	}
-	// Restore {@html}
-	html = strings.ReplaceAll(html, "___AT___", "@")
-	
-	// Replace bind:value with prefixed input IDs  
+
 	inputID := 0
 	for strings.Contains(html, "bind:value=\"") {
 		idx := strings.Index(html, "bind:value=\"")
 		end := strings.Index(html[idx+12:], "\"")
 		if end != -1 {
-			html = html[:idx] + fmt.Sprintf("id=\"%s_input%d\"", compID, inputID) + html[idx+12+end+1:]
+			html = strings.Replace(html, html[idx:idx+12+end+1], fmt.Sprintf("id=\"input%d\"", inputID), 1)
 			inputID++
 		} else {
 			break
 		}
 	}
-	
-	// Hydrate component expressions with initial values
-	exprs := ast.CollectExprs()
-	for _, expr := range exprs {
-		// Check if expression is a prop (passed in) or internal state
-		var displayVal string
-		if propVal, ok := props[expr.Expr]; ok {
-			// It's a prop - use the passed value
-			if strings.HasPrefix(propVal, "{") && strings.HasSuffix(propVal, "}") {
-				// Dynamic prop - can't hydrate at compile time
-				continue
-			}
-			displayVal = propVal
-		} else {
-			// Internal state - use initializer from component script
-			initVal := getInitializer(compDef.Script, expr.Expr)
-			if initVal == "" || initVal == "0" || initVal == `""` {
-				continue
-			}
-			displayVal = initVal
-			// Clean up string quotes
-			if strings.HasPrefix(displayVal, `"`) && strings.HasSuffix(displayVal, `"`) {
-				displayVal = displayVal[1 : len(displayVal)-1]
-			}
-		}
-		
-		if displayVal != "" {
-			empty := fmt.Sprintf(`<span id="%s_%s"></span>`, compID, expr.ID)
-			filled := fmt.Sprintf(`<span id="%s_%s">%s</span>`, compID, expr.ID, displayVal)
-			html = strings.Replace(html, empty, filled, 1)
-		}
-	}
-	
-	return html
-}
 
-func generateComponentHTMLNodes(b *strings.Builder, nodes []Node, compID string, allComponents map[string]*Parsed) {
-	for _, n := range nodes {
-		switch node := n.(type) {
-		case TextNode:
-			b.WriteString(node.Text)
-		case ExprNode:
-			fmt.Fprintf(b, `<span id="%s_%s"></span>`, compID, node.ID)
-		case HtmlNode:
-			fmt.Fprintf(b, `<span id="%s_%s"></span>`, compID, node.ID)
-		case IfNode:
-			fmt.Fprintf(b, `<span id="%s_%s_anchor" style="display:none"></span>`, compID, node.CondID)
-		case EachNode:
-			fmt.Fprintf(b, `<span id="%s_%s_anchor" style="display:none"></span>`, compID, node.ID)
-		case ComponentNode:
-			// Nested component - generate with combined ID
-			nestedCompDef := allComponents[node.Name]
-			if nestedCompDef != nil {
-				nestedID := compID + "_" + node.ID
-				nestedHTML := generateComponentHTML(nestedID, nestedCompDef, allComponents, node.Props)
-				b.WriteString(nestedHTML)
-			}
+	for strings.Contains(html, "bind:checked=\"") {
+		idx := strings.Index(html, "bind:checked=\"")
+		end := strings.Index(html[idx+14:], "\"")
+		if end != -1 {
+			html = strings.Replace(html, html[idx:idx+14+end+1], fmt.Sprintf("id=\"input%d\"", inputID), 1)
+			inputID++
+		} else {
+			break
 		}
 	}
+
+	classID := 0
+	for {
+		idx := strings.Index(html, "class:")
+		if idx == -1 {
+			break
+		}
+		eqIdx := strings.Index(html[idx:], "={")
+		if eqIdx == -1 {
+			break
+		}
+		condStart := idx + eqIdx + 2
+		condEnd := strings.Index(html[condStart:], "}")
+		if condEnd == -1 {
+			break
+		}
+		fullEnd := condStart + condEnd + 1
+		html = html[:idx] + fmt.Sprintf("id=\"class%d\"", classID) + html[fullEnd:]
+		classID++
+	}
+
+	b.WriteString(html)
+	b.WriteString("\n</body>\n</html>\n")
+	return b.String()
 }

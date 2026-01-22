@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"strings"
 )
 
@@ -17,34 +19,41 @@ type TextNode struct {
 func (t TextNode) nodeType() string { return "text" }
 
 type ExprNode struct {
-	Expr string
-	ID   string
+	Expr    string
+	ID      string
+	VarDeps []string // which reactive vars this expression depends on
 }
 
 func (e ExprNode) nodeType() string { return "expr" }
 
 type HtmlNode struct {
-	Expr string
-	ID   string
+	Expr    string
+	ID      string
+	VarDeps []string
 }
 
 func (h HtmlNode) nodeType() string { return "html" }
 
+type IfBranch struct {
+	Cond    string // condition (empty for final else)
+	Body    []Node
+	VarDeps []string // vars the condition depends on
+}
+
 type IfNode struct {
-	Cond   string
-	CondID string
-	Then   []Node
-	Else   []Node
+	CondID   string     // "if0"
+	Branches []IfBranch // first is "if", rest are "else if", last may be "else" (empty Cond)
 }
 
 func (i IfNode) nodeType() string { return "if" }
 
 type EachNode struct {
-	Array string // "items"
-	Item  string // "item"
-	Index string // "i" or ""
-	ID    string // "each0"
-	Body  []Node
+	Array   string // "items"
+	Item    string // "item"
+	Index   string // "i" or ""
+	ID      string // "each0"
+	Body    []Node
+	VarDeps []string // vars this each depends on (the array var)
 }
 
 func (e EachNode) nodeType() string { return "each" }
@@ -54,10 +63,14 @@ type ComponentNode struct {
 	ID       string            // "comp0"
 	Props    map[string]string // Label -> "hello" or Label -> "{varName}"
 	Bindings map[string]string // bind:value -> varName (two-way binding)
-	Children string            // inner HTML content
+	Children string            // raw children HTML (for slot)
 }
 
 func (c ComponentNode) nodeType() string { return "component" }
+
+type SlotNode struct{}
+
+func (s SlotNode) nodeType() string { return "slot" }
 
 type ElementNode struct {
 	Tag      string
@@ -71,60 +84,80 @@ type ElementNode struct {
 func (e ElementNode) nodeType() string { return "element" }
 
 type TemplateAST struct {
-	Nodes      []Node
-	exprCount  int
-	htmlCount  int
-	ifCount    int
-	eachCount  int
-	elemCount  int
-	compCount  int
-	Components map[string]bool // known component names
+	Nodes        []Node
+	exprCount    int
+	htmlCount    int
+	ifCount      int
+	eachCount    int
+	elemCount    int
+	compCount    int
+	Components   map[string]bool   // known component names
+	ReactiveVars map[string]bool   // known reactive var names for dependency tracking
 }
 
 func parseTemplate(template string) *TemplateAST {
-	ast := &TemplateAST{
-		Components: make(map[string]bool),
+	tmplAst := &TemplateAST{
+		Components:   make(map[string]bool),
+		ReactiveVars: make(map[string]bool),
 	}
-	ast.Nodes = ast.parseNodes(template)
-	return ast
+	tmplAst.Nodes = tmplAst.parseNodes(template)
+	return tmplAst
 }
 
 func parseTemplateWithComponents(template string, components map[string]bool) *TemplateAST {
-	ast := &TemplateAST{
-		Components: components,
+	tmplAst := &TemplateAST{
+		Components:   components,
+		ReactiveVars: make(map[string]bool),
 	}
-	ast.Nodes = ast.parseNodes(template)
-	return ast
+	tmplAst.Nodes = tmplAst.parseNodes(template)
+	return tmplAst
 }
 
-func (ast *TemplateAST) parseNodes(s string) []Node {
+func parseTemplateWithReactiveVars(template string, components map[string]bool, reactiveVars map[string]bool) *TemplateAST {
+	tmplAst := &TemplateAST{
+		Components:   components,
+		ReactiveVars: reactiveVars,
+	}
+	tmplAst.Nodes = tmplAst.parseNodes(template)
+	return tmplAst
+}
+
+func (tmplAst *TemplateAST) parseNodes(s string) []Node {
 	var nodes []Node
 	i := 0
 
 	for i < len(s) {
-		// Look for { or component tag
+		// Look for { or component tag or slot
 		nextBrace := strings.Index(s[i:], "{")
-		nextComp := ast.findNextComponent(s[i:])
-		
+		nextComp := tmplAst.findNextComponent(s[i:])
+		nextSlot := strings.Index(s[i:], "<slot")
+
 		// Determine which comes first
 		nextSpecial := -1
-		isComponent := false
-		if nextBrace == -1 && nextComp == -1 {
+		specialType := ""
+
+		candidates := []struct {
+			idx  int
+			kind string
+		}{
+			{nextBrace, "brace"},
+			{nextComp, "component"},
+			{nextSlot, "slot"},
+		}
+
+		for _, c := range candidates {
+			if c.idx != -1 && (nextSpecial == -1 || c.idx < nextSpecial) {
+				nextSpecial = c.idx
+				specialType = c.kind
+			}
+		}
+
+		if nextSpecial == -1 {
 			// Rest is text
 			if i < len(s) {
 				nodes = append(nodes, TextNode{Text: s[i:]})
 			}
 			break
-		} else if nextBrace == -1 {
-			nextSpecial = nextComp
-			isComponent = true
-		} else if nextComp == -1 {
-			nextSpecial = nextBrace
-		} else if nextComp < nextBrace {
-			nextSpecial = nextComp
-			isComponent = true
-		} else {
-			nextSpecial = nextBrace
 		}
 
 		// Text before special
@@ -133,9 +166,19 @@ func (ast *TemplateAST) parseNodes(s string) []Node {
 		}
 		i += nextSpecial
 
-		if isComponent {
+		if specialType == "slot" {
+			// Parse <slot /> or <slot>
+			end := strings.Index(s[i:], ">")
+			if end != -1 {
+				nodes = append(nodes, SlotNode{})
+				i += end + 1
+				continue
+			}
+		}
+
+		if specialType == "component" {
 			// Parse component tag
-			node, consumed := ast.parseComponent(s[i:])
+			node, consumed := tmplAst.parseComponent(s[i:])
 			if node != nil {
 				nodes = append(nodes, *node)
 				i += consumed
@@ -149,11 +192,11 @@ func (ast *TemplateAST) parseNodes(s string) []Node {
 
 		// What kind of brace?
 		if strings.HasPrefix(s[i:], "{#if ") {
-			node, consumed := ast.parseIf(s[i:])
+			node, consumed := tmplAst.parseIf(s[i:])
 			nodes = append(nodes, node)
 			i += consumed
 		} else if strings.HasPrefix(s[i:], "{#each ") {
-			node, consumed := ast.parseEach(s[i:])
+			node, consumed := tmplAst.parseEach(s[i:])
 			nodes = append(nodes, node)
 			i += consumed
 		} else if strings.HasPrefix(s[i:], "{:else}") || strings.HasPrefix(s[i:], "{/if}") || strings.HasPrefix(s[i:], "{/each}") {
@@ -170,9 +213,13 @@ func (ast *TemplateAST) parseNodes(s string) []Node {
 				break
 			}
 			expr := strings.TrimSpace(s[i+7 : i+end])
-			id := fmt.Sprintf("html%d", ast.htmlCount)
-			ast.htmlCount++
-			nodes = append(nodes, HtmlNode{Expr: expr, ID: id})
+			id := fmt.Sprintf("html%d", tmplAst.htmlCount)
+			tmplAst.htmlCount++
+			nodes = append(nodes, HtmlNode{
+				Expr:    expr,
+				ID:      id,
+				VarDeps: tmplAst.findExprDeps(expr),
+			})
 			i += end + 1
 		} else {
 			// Expression {var} - but skip if inside attribute value (={...})
@@ -194,9 +241,13 @@ func (ast *TemplateAST) parseNodes(s string) []Node {
 				break
 			}
 			expr := strings.TrimSpace(s[i+1 : i+end])
-			id := fmt.Sprintf("expr%d", ast.exprCount)
-			ast.exprCount++
-			nodes = append(nodes, ExprNode{Expr: expr, ID: id})
+			id := fmt.Sprintf("expr%d", tmplAst.exprCount)
+			tmplAst.exprCount++
+			nodes = append(nodes, ExprNode{
+				Expr:    expr,
+				ID:      id,
+				VarDeps: tmplAst.findExprDeps(expr),
+			})
 			i += end + 1
 		}
 	}
@@ -204,38 +255,91 @@ func (ast *TemplateAST) parseNodes(s string) []Node {
 	return nodes
 }
 
-func (ast *TemplateAST) parseIf(s string) (IfNode, int) {
+// findExprDeps extracts which reactive vars an expression depends on
+func (tmplAst *TemplateAST) findExprDeps(expr string) []string {
+	var deps []string
+	seen := make(map[string]bool)
+
+	// Try to parse as Go expression
+	node, err := parser.ParseExpr(expr)
+	if err != nil {
+		// Fallback: simple identifier check
+		for varName := range tmplAst.ReactiveVars {
+			if strings.Contains(expr, varName) && !seen[varName] {
+				deps = append(deps, varName)
+				seen[varName] = true
+			}
+		}
+		return deps
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok {
+			if tmplAst.ReactiveVars[id.Name] && !seen[id.Name] {
+				deps = append(deps, id.Name)
+				seen[id.Name] = true
+			}
+		}
+		return true
+	})
+
+	return deps
+}
+
+func (tmplAst *TemplateAST) parseIf(s string) (IfNode, int) {
 	// Find condition: {#if cond}
 	condEnd := strings.Index(s, "}")
 	cond := strings.TrimSpace(s[5:condEnd])
-	id := fmt.Sprintf("if%d", ast.ifCount)
-	ast.ifCount++
+	id := fmt.Sprintf("if%d", tmplAst.ifCount)
+	tmplAst.ifCount++
 
 	node := IfNode{
-		Cond:   cond,
 		CondID: id,
 	}
 
-	// Parse then branch
+	// Parse first branch (the if)
 	rest := s[condEnd+1:]
-	thenNodes := ast.parseNodes(rest)
-	node.Then = thenNodes
+	thenNodes := tmplAst.parseNodes(rest)
+	node.Branches = append(node.Branches, IfBranch{
+		Cond:    cond,
+		Body:    thenNodes,
+		VarDeps: tmplAst.findExprDeps(cond),
+	})
 
-	// Find where then ended
-	consumed := condEnd + 1 + ast.findConsumed(rest, thenNodes)
+	consumed := condEnd + 1 + tmplAst.findConsumed(rest, thenNodes)
 
-	// Check for else
-	remaining := s[consumed:]
-	if strings.HasPrefix(remaining, "{:else}") {
-		consumed += 7
-		rest = s[consumed:]
-		elseNodes := ast.parseNodes(rest)
-		node.Else = elseNodes
-		consumed += ast.findConsumed(rest, elseNodes)
+	// Check for else if / else chains
+	for {
+		remaining := s[consumed:]
+		if strings.HasPrefix(remaining, "{:else if ") {
+			// Parse {:else if cond}
+			elseIfEnd := strings.Index(remaining, "}")
+			elseIfCond := strings.TrimSpace(remaining[10:elseIfEnd])
+
+			consumed += elseIfEnd + 1
+			rest = s[consumed:]
+			elseIfNodes := tmplAst.parseNodes(rest)
+			node.Branches = append(node.Branches, IfBranch{
+				Cond:    elseIfCond,
+				Body:    elseIfNodes,
+				VarDeps: tmplAst.findExprDeps(elseIfCond),
+			})
+			consumed += tmplAst.findConsumed(rest, elseIfNodes)
+		} else if strings.HasPrefix(remaining, "{:else}") {
+			// Final else
+			consumed += 7
+			rest = s[consumed:]
+			elseNodes := tmplAst.parseNodes(rest)
+			node.Branches = append(node.Branches, IfBranch{Cond: "", Body: elseNodes})
+			consumed += tmplAst.findConsumed(rest, elseNodes)
+			break
+		} else {
+			break
+		}
 	}
 
 	// Consume {/if}
-	remaining = s[consumed:]
+	remaining := s[consumed:]
 	if strings.HasPrefix(remaining, "{/if}") {
 		consumed += 5
 	}
@@ -243,7 +347,7 @@ func (ast *TemplateAST) parseIf(s string) (IfNode, int) {
 	return node, consumed
 }
 
-func (ast *TemplateAST) parseEach(s string) (EachNode, int) {
+func (tmplAst *TemplateAST) parseEach(s string) (EachNode, int) {
 	// {#each items as item} or {#each items as item, i}
 	condEnd := strings.Index(s, "}")
 	inner := strings.TrimSpace(s[7:condEnd]) // after "{#each "
@@ -260,20 +364,21 @@ func (ast *TemplateAST) parseEach(s string) (EachNode, int) {
 		}
 	}
 
-	id := fmt.Sprintf("each%d", ast.eachCount)
-	ast.eachCount++
+	id := fmt.Sprintf("each%d", tmplAst.eachCount)
+	tmplAst.eachCount++
 
 	node := EachNode{
-		Array: array,
-		Item:  item,
-		Index: index,
-		ID:    id,
+		Array:   array,
+		Item:    item,
+		Index:   index,
+		ID:      id,
+		VarDeps: tmplAst.findExprDeps(array),
 	}
 
 	rest := s[condEnd+1:]
-	node.Body = ast.parseNodes(rest)
+	node.Body = tmplAst.parseNodes(rest)
 
-	consumed := condEnd + 1 + ast.findConsumed(rest, node.Body)
+	consumed := condEnd + 1 + tmplAst.findConsumed(rest, node.Body)
 
 	if strings.HasPrefix(s[consumed:], "{/each}") {
 		consumed += 7
@@ -282,15 +387,15 @@ func (ast *TemplateAST) parseEach(s string) (EachNode, int) {
 	return node, consumed
 }
 
-func (ast *TemplateAST) findConsumed(s string, nodes []Node) int {
+func (tmplAst *TemplateAST) findConsumed(s string, nodes []Node) int {
 	total := 0
 	for _, n := range nodes {
-		total += ast.nodeLen(s[total:], n)
+		total += tmplAst.nodeLen(s[total:], n)
 	}
 	return total
 }
 
-func (ast *TemplateAST) nodeLen(s string, n Node) int {
+func (tmplAst *TemplateAST) nodeLen(s string, n Node) int {
 	switch node := n.(type) {
 	case TextNode:
 		return len(node.Text)
@@ -348,95 +453,99 @@ func (ast *TemplateAST) nodeLen(s string, n Node) int {
 }
 
 // Collect all expression IDs for DOM refs
-func (ast *TemplateAST) CollectExprs() []ExprNode {
+func (tmplAst *TemplateAST) CollectExprs() []ExprNode {
 	var exprs []ExprNode
-	ast.collectExprsFromNodes(ast.Nodes, &exprs)
+	tmplAst.collectExprsFromNodes(tmplAst.Nodes, &exprs)
 	return exprs
 }
 
-func (ast *TemplateAST) collectExprsFromNodes(nodes []Node, exprs *[]ExprNode) {
+func (tmplAst *TemplateAST) collectExprsFromNodes(nodes []Node, exprs *[]ExprNode) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case ExprNode:
 			*exprs = append(*exprs, node)
 		case IfNode:
-			ast.collectExprsFromNodes(node.Then, exprs)
-			ast.collectExprsFromNodes(node.Else, exprs)
+			for _, branch := range node.Branches {
+				tmplAst.collectExprsFromNodes(branch.Body, exprs)
+			}
 		case EachNode:
-			ast.collectExprsFromNodes(node.Body, exprs)
+			tmplAst.collectExprsFromNodes(node.Body, exprs)
 		}
 	}
 }
 
 // Collect all html nodes for DOM refs
-func (ast *TemplateAST) CollectHtmls() []HtmlNode {
+func (tmplAst *TemplateAST) CollectHtmls() []HtmlNode {
 	var htmls []HtmlNode
-	ast.collectHtmlsFromNodes(ast.Nodes, &htmls)
+	tmplAst.collectHtmlsFromNodes(tmplAst.Nodes, &htmls)
 	return htmls
 }
 
-func (ast *TemplateAST) collectHtmlsFromNodes(nodes []Node, htmls *[]HtmlNode) {
+func (tmplAst *TemplateAST) collectHtmlsFromNodes(nodes []Node, htmls *[]HtmlNode) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case HtmlNode:
 			*htmls = append(*htmls, node)
 		case IfNode:
-			ast.collectHtmlsFromNodes(node.Then, htmls)
-			ast.collectHtmlsFromNodes(node.Else, htmls)
+			for _, branch := range node.Branches {
+				tmplAst.collectHtmlsFromNodes(branch.Body, htmls)
+			}
 		case EachNode:
-			ast.collectHtmlsFromNodes(node.Body, htmls)
+			tmplAst.collectHtmlsFromNodes(node.Body, htmls)
 		}
 	}
 }
 
 // Collect all if blocks
-func (ast *TemplateAST) CollectIfs() []IfNode {
+func (tmplAst *TemplateAST) CollectIfs() []IfNode {
 	var ifs []IfNode
-	ast.collectIfsFromNodes(ast.Nodes, &ifs)
+	tmplAst.collectIfsFromNodes(tmplAst.Nodes, &ifs)
 	return ifs
 }
 
-func (ast *TemplateAST) collectIfsFromNodes(nodes []Node, ifs *[]IfNode) {
+func (tmplAst *TemplateAST) collectIfsFromNodes(nodes []Node, ifs *[]IfNode) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case IfNode:
 			*ifs = append(*ifs, node)
-			ast.collectIfsFromNodes(node.Then, ifs)
-			ast.collectIfsFromNodes(node.Else, ifs)
+			for _, branch := range node.Branches {
+				tmplAst.collectIfsFromNodes(branch.Body, ifs)
+			}
 		case EachNode:
-			ast.collectIfsFromNodes(node.Body, ifs)
+			tmplAst.collectIfsFromNodes(node.Body, ifs)
 		}
 	}
 }
 
 // Collect all each blocks
-func (ast *TemplateAST) CollectEaches() []EachNode {
+func (tmplAst *TemplateAST) CollectEaches() []EachNode {
 	var eaches []EachNode
-	ast.collectEachesFromNodes(ast.Nodes, &eaches)
+	tmplAst.collectEachesFromNodes(tmplAst.Nodes, &eaches)
 	return eaches
 }
 
-func (ast *TemplateAST) collectEachesFromNodes(nodes []Node, eaches *[]EachNode) {
+func (tmplAst *TemplateAST) collectEachesFromNodes(nodes []Node, eaches *[]EachNode) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case EachNode:
 			*eaches = append(*eaches, node)
-			ast.collectEachesFromNodes(node.Body, eaches)
+			tmplAst.collectEachesFromNodes(node.Body, eaches)
 		case IfNode:
-			ast.collectEachesFromNodes(node.Then, eaches)
-			ast.collectEachesFromNodes(node.Else, eaches)
+			for _, branch := range node.Branches {
+				tmplAst.collectEachesFromNodes(branch.Body, eaches)
+			}
 		}
 	}
 }
 
 // Generate static HTML with placeholders
-func (ast *TemplateAST) GenerateHTML() string {
+func (tmplAst *TemplateAST) GenerateHTML() string {
 	var b strings.Builder
-	ast.generateHTMLNodes(&b, ast.Nodes)
+	tmplAst.generateHTMLNodes(&b, tmplAst.Nodes)
 	return b.String()
 }
 
-func (ast *TemplateAST) generateHTMLNodes(b *strings.Builder, nodes []Node) {
+func (tmplAst *TemplateAST) generateHTMLNodes(b *strings.Builder, nodes []Node) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case TextNode:
@@ -454,18 +563,21 @@ func (ast *TemplateAST) generateHTMLNodes(b *strings.Builder, nodes []Node) {
 		case ComponentNode:
 			// Placeholder for component
 			fmt.Fprintf(b, `<span id="%s"></span>`, node.ID)
+		case SlotNode:
+			// Placeholder for slot content
+			b.WriteString("<!--SLOT-->")
 		}
 	}
 }
 
 // Find next component tag in string, returns index or -1
-func (ast *TemplateAST) findNextComponent(s string) int {
-	if len(ast.Components) == 0 {
+func (tmplAst *TemplateAST) findNextComponent(s string) int {
+	if len(tmplAst.Components) == 0 {
 		return -1
 	}
-	
+
 	minIdx := -1
-	for name := range ast.Components {
+	for name := range tmplAst.Components {
 		// Look for <ComponentName with space or > or /
 		patterns := []string{"<" + name + " ", "<" + name + ">", "<" + name + "/"}
 		for _, pattern := range patterns {
@@ -479,46 +591,46 @@ func (ast *TemplateAST) findNextComponent(s string) int {
 }
 
 // Parse component tag like <Button Label="hello" /> or <Button>children</Button>
-func (ast *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
+func (tmplAst *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
 	if s[0] != '<' {
 		return nil, 0
 	}
-	
+
 	// Find component name
 	nameEnd := 1
 	for nameEnd < len(s) && s[nameEnd] != ' ' && s[nameEnd] != '>' && s[nameEnd] != '/' {
 		nameEnd++
 	}
 	name := s[1:nameEnd]
-	
+
 	// Verify it's a known component
-	if !ast.Components[name] {
+	if !tmplAst.Components[name] {
 		return nil, 0
 	}
-	
+
 	// Parse props
 	props := make(map[string]string)
 	bindings := make(map[string]string)
 	i := nameEnd
-	
+
 	// Skip whitespace and parse attributes
 	for i < len(s) {
 		// Skip whitespace
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n') {
 			i++
 		}
-		
+
 		// Check for end of tag
 		if i < len(s) && s[i] == '/' {
 			// Self-closing tag
 			if i+1 < len(s) && s[i+1] == '>' {
 				node := &ComponentNode{
 					Name:     name,
-					ID:       fmt.Sprintf("comp%d", ast.compCount),
+					ID:       fmt.Sprintf("comp%d", tmplAst.compCount),
 					Props:    props,
 					Bindings: bindings,
 				}
-				ast.compCount++
+				tmplAst.compCount++
 				return node, i + 2
 			}
 		}
@@ -529,18 +641,18 @@ func (ast *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
 			if closeIdx == -1 {
 				return nil, 0
 			}
-			children := s[i+1 : i+1+closeIdx]
+			childrenStr := s[i+1 : i+1+closeIdx]
 			node := &ComponentNode{
 				Name:     name,
-				ID:       fmt.Sprintf("comp%d", ast.compCount),
+				ID:       fmt.Sprintf("comp%d", tmplAst.compCount),
 				Props:    props,
 				Bindings: bindings,
-				Children: children,
+				Children: childrenStr,
 			}
-			ast.compCount++
+			tmplAst.compCount++
 			return node, i + 1 + closeIdx + len(closeTag)
 		}
-		
+
 		// Parse attribute name
 		attrStart := i
 		for i < len(s) && s[i] != '=' && s[i] != ' ' && s[i] != '>' && s[i] != '/' {
@@ -550,18 +662,18 @@ func (ast *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
 			break
 		}
 		attrName := s[attrStart:i]
-		
+
 		// Expect =
 		if i >= len(s) || s[i] != '=' {
 			continue
 		}
 		i++
-		
+
 		// Parse value - either "string" or {expr}
 		if i >= len(s) {
 			break
 		}
-		
+
 		var attrValue string
 		if s[i] == '"' {
 			// String value
@@ -587,11 +699,11 @@ func (ast *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
 				}
 				i++
 			}
-			attrValue = s[valueStart:i-1] // Don't include braces for bindings
+			attrValue = s[valueStart : i-1] // Don't include braces for bindings
 		} else {
 			continue
 		}
-		
+
 		// Check if it's a binding
 		if strings.HasPrefix(attrName, "bind:") {
 			bindProp := strings.TrimPrefix(attrName, "bind:")
@@ -604,27 +716,72 @@ func (ast *TemplateAST) parseComponent(s string) (*ComponentNode, int) {
 			props[attrName] = attrValue
 		}
 	}
-	
+
 	return nil, 0
 }
 
 // Collect all components
-func (ast *TemplateAST) CollectComponents() []ComponentNode {
+func (tmplAst *TemplateAST) CollectComponents() []ComponentNode {
 	var comps []ComponentNode
-	ast.collectComponentsFromNodes(ast.Nodes, &comps)
+	tmplAst.collectComponentsFromNodes(tmplAst.Nodes, &comps)
 	return comps
 }
 
-func (ast *TemplateAST) collectComponentsFromNodes(nodes []Node, comps *[]ComponentNode) {
+func (tmplAst *TemplateAST) collectComponentsFromNodes(nodes []Node, comps *[]ComponentNode) {
 	for _, n := range nodes {
 		switch node := n.(type) {
 		case ComponentNode:
 			*comps = append(*comps, node)
 		case IfNode:
-			ast.collectComponentsFromNodes(node.Then, comps)
-			ast.collectComponentsFromNodes(node.Else, comps)
+			for _, branch := range node.Branches {
+				tmplAst.collectComponentsFromNodes(branch.Body, comps)
+			}
 		case EachNode:
-			ast.collectComponentsFromNodes(node.Body, comps)
+			tmplAst.collectComponentsFromNodes(node.Body, comps)
 		}
 	}
+}
+
+// GetExprsByVar returns expressions that depend on a specific var
+func (tmplAst *TemplateAST) GetExprsByVar(varName string) []ExprNode {
+	var result []ExprNode
+	for _, expr := range tmplAst.CollectExprs() {
+		for _, dep := range expr.VarDeps {
+			if dep == varName {
+				result = append(result, expr)
+				break
+			}
+		}
+	}
+	return result
+}
+
+// GetIfsByVar returns if nodes that depend on a specific var
+func (tmplAst *TemplateAST) GetIfsByVar(varName string) []IfNode {
+	var result []IfNode
+	for _, ifn := range tmplAst.CollectIfs() {
+		for _, branch := range ifn.Branches {
+			for _, dep := range branch.VarDeps {
+				if dep == varName {
+					result = append(result, ifn)
+					break
+				}
+			}
+		}
+	}
+	return result
+}
+
+// GetEachesByVar returns each nodes that depend on a specific var
+func (tmplAst *TemplateAST) GetEachesByVar(varName string) []EachNode {
+	var result []EachNode
+	for _, each := range tmplAst.CollectEaches() {
+		for _, dep := range each.VarDeps {
+			if dep == varName {
+				result = append(result, each)
+				break
+			}
+		}
+	}
+	return result
 }

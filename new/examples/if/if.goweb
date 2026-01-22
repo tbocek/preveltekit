@@ -1,29 +1,43 @@
 <script>
-loggedIn := false
-username := ""
+score := 75
 
-func login() {
-    loggedIn = true
-}
-
-func logout() {
-    loggedIn = false
-}
+func setA() { score = 95 }
+func setB() { score = 85 }
+func setC() { score = 75 }
+func setD() { score = 65 }
+func setF() { score = 50 }
 </script>
 
 <template>
 <div class="app">
-    {#if loggedIn}
-        <p>Welcome, {username}!</p>
-        <button @click="logout()">Logout</button>
+    <h1>Grade Calculator</h1>
+    <p>Score: {score}</p>
+    
+    {#if score >= 90}
+        <p class="grade">Grade: A</p>
+    {:else if score >= 80}
+        <p class="grade">Grade: B</p>
+    {:else if score >= 70}
+        <p class="grade">Grade: C</p>
+    {:else if score >= 60}
+        <p class="grade">Grade: D</p>
     {:else}
-        <p>Please log in</p>
-        <input type="text" bind:value="username" placeholder="Username">
-        <button @click="login()">Login</button>
+        <p class="grade">Grade: F</p>
     {/if}
+    
+    <div class="buttons">
+        <button @click="setA()">Set A (95)</button>
+        <button @click="setB()">Set B (85)</button>
+        <button @click="setC()">Set C (75)</button>
+        <button @click="setD()">Set D (65)</button>
+        <button @click="setF()">Set F (50)</button>
+    </div>
 </div>
 </template>
 
 <style>
 .app { font-family: sans-serif; padding: 2em; }
+.grade { font-size: 2em; font-weight: bold; }
+.buttons { margin-top: 1em; }
+button { margin: 0.25em; padding: 0.5em 1em; }
 </style>

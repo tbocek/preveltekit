@@ -1,0 +1,17 @@
+<script>
+Title := ""
+</script>
+
+<template>
+<div class="card">
+    <h2>{Title}</h2>
+    <div class="content">
+        <slot />
+    </div>
+</div>
+</template>
+
+<style>
+.card { border: 1px solid #ccc; border-radius: 8px; padding: 1em; margin: 1em 0; }
+.card h2 { margin-top: 0; }
+</style>
