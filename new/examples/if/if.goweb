@@ -1,0 +1,29 @@
+<script>
+loggedIn := false
+username := ""
+
+func login() {
+    loggedIn = true
+}
+
+func logout() {
+    loggedIn = false
+}
+</script>
+
+<template>
+<div class="app">
+    {#if loggedIn}
+        <p>Welcome, {username}!</p>
+        <button @click="logout()">Logout</button>
+    {:else}
+        <p>Please log in</p>
+        <input type="text" bind:value="username" placeholder="Username">
+        <button @click="login()">Login</button>
+    {/if}
+</div>
+</template>
+
+<style>
+.app { font-family: sans-serif; padding: 2em; }
+</style>

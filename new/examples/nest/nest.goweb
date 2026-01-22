@@ -1,0 +1,8 @@
+<script>
+import "./Button"
+label := "Dynamic"
+</script>
+<template>
+<Button Label="Static" />
+<Button Label={label} />
+</template>

@@ -1,0 +1,31 @@
+<script>
+items := []string{"Apple", "Banana", "Cherry"}
+
+func addItem() {
+    items = append(items, "New Item")
+}
+
+func removeItem() {
+    if len(items) > 0 {
+        items = items[:len(items)-1]
+    }
+}
+</script>
+
+<template>
+<div class="app">
+    <h1>Items ({len(items)})</h1>
+    <ul>
+        {#each items as item, i}
+            <li>{i}: {item}</li>
+        {/each}
+    </ul>
+    <button @click="addItem()">Add</button>
+    <button @click="removeItem()">Remove</button>
+</div>
+</template>
+
+<style>
+.app { font-family: sans-serif; padding: 2em; }
+button { margin: 0.5em; padding: 0.5em 1em; }
+</style>

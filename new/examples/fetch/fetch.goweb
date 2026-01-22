@@ -1,0 +1,44 @@
+<script>
+status := "idle"
+data := ""
+
+func fetchData() {
+	status = "loading"
+	fetch("https://jsonplaceholder.typicode.com/todos/1", onFetchDone)
+}
+
+func onFetchDone(result string, err bool) {
+	if err {
+		status = "error"
+	} else {
+		data = result
+		status = "done"
+	}
+}
+</script>
+
+<template>
+<div class="fetch-demo">
+    <h1>Fetch Example</h1>
+    <p>Status: {status}</p>
+    <pre>{data}</pre>
+    <button @click="fetchData()">Fetch JSON</button>
+</div>
+</template>
+
+<style>
+.fetch-demo {
+    font-family: sans-serif;
+    max-width: 600px;
+    margin: 50px auto;
+}
+pre {
+    background: #f0f0f0;
+    padding: 1em;
+    overflow-x: auto;
+}
+button {
+    font-size: 1.2em;
+    padding: 0.5em 1em;
+}
+</style>

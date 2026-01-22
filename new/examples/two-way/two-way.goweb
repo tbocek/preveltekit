@@ -1,0 +1,41 @@
+<script>
+name := ""
+age := 25
+agreed := false
+
+greeting := "Hello, " + name + "!"
+canSubmit := agreed && name != ""
+</script>
+
+<template>
+<div class="form">
+    <h1>{greeting}</h1>
+    
+    <label>Name:</label>
+    <input type="text" bind:value="name" placeholder="Enter name">
+    
+    <label>Age:</label>
+    <input type="number" bind:value="age">
+    
+    <label>
+        <input type="checkbox" bind:checked="agreed"> I agree to terms
+    </label>
+    
+    <p>Can submit: {canSubmit}</p>
+</div>
+</template>
+
+<style>
+.form {
+    font-family: sans-serif;
+    max-width: 400px;
+    margin: 50px auto;
+}
+label { display: block; margin: 1em 0 0.3em; }
+input[type="text"], input[type="number"] {
+    font-size: 1em;
+    padding: 0.5em;
+    width: 100%;
+    box-sizing: border-box;
+}
+</style>

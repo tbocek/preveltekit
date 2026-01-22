@@ -1,0 +1,33 @@
+<script>
+content := "<strong>Bold</strong> and <em>italic</em>"
+plain := "<script>alert('xss')</script>"
+
+func toggle() {
+    if content == "<strong>Bold</strong> and <em>italic</em>" {
+        content = "<ul><li>Item 1</li><li>Item 2</li></ul>"
+    } else {
+        content = "<strong>Bold</strong> and <em>italic</em>"
+    }
+}
+</script>
+
+<template>
+<div class="app">
+    <h1>Raw HTML Example</h1>
+    <div class="rendered">
+        <p>Rendered HTML:</p>
+        {@html content}
+    </div>
+    <div class="escaped">
+        <p>Escaped (normal):</p>
+        {plain}
+    </div>
+    <button @click="toggle()">Toggle Content</button>
+</div>
+</template>
+
+<style>
+.app { font-family: sans-serif; padding: 2em; }
+.rendered, .escaped { border: 1px solid #ccc; padding: 1em; margin: 1em 0; }
+button { padding: 0.5em 1em; }
+</style>

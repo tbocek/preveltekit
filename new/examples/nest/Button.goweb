@@ -1,0 +1,8 @@
+<script>
+Label := ""   // prop (uppercase)
+count := 0   // state (lowercase)
+func increment() { count++ }
+</script>
+<template>
+<button @click="increment()">{Label}: {count}</button>
+</template>
