@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>App</title>
+	<style>
+.app { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+h1 { color: #333; }
+h2 { margin-top: 0; color: #666; font-size: 1.1em; }
+button { padding: 8px 16px; margin: 4px; cursor: pointer; }
+input[type="text"] { padding: 8px; margin: 4px; }
+.grade { padding: 10px; border-radius: 4px; font-weight: bold; }
+.grade.a { background: #d4edda; color: #155724; }
+.grade.b { background: #cce5ff; color: #004085; }
+.grade.c { background: #fff3cd; color: #856404; }
+.grade.d { background: #ffe5d0; color: #854027; }
+.grade.f { background: #f8d7da; color: #721c24; }
+.dark { background: #333; color: #fff; padding: 10px; border-radius: 4px; margin-top: 10px; }
+.message { padding: 10px; background: #e7f3ff; border-radius: 4px; }
+.hint { color: #666; font-style: italic; }
+.buttons button { min-width: 40px; }
+</style>
+	<script src="wasm_exec.js"></script>
+	<script>
+		const go = new Go();
+		WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject)
+			.then(result => go.run(result.instance));
+	</script>
+</head>
+<body>
+	<div id="app"></div>
+</body>
+</html>
