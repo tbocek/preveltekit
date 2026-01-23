@@ -11,7 +11,7 @@ type Button struct {
 
 func (b *Button) Template() string {
 	return `<button class="btn {Variant}">
-		<slot></slot>
+		<slot/>
 		{Label}
 	</button>`
 }

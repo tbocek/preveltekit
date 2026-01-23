@@ -27,11 +27,10 @@ func main() {
 	mainComponentFile := os.Args[1]
 	dir := filepath.Dir(mainComponentFile)
 	buildDir := filepath.Join(dir, "build")
-	assetsDir := filepath.Join(dir, "assets")
 	distDir := filepath.Join(dir, "dist")
 
 	// Create folders
-	for _, d := range []string{buildDir, assetsDir, distDir} {
+	for _, d := range []string{buildDir, distDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			fatal("mkdir error: %v", err)
 		}
@@ -121,9 +120,6 @@ replace reactive => %s
 `, scriptDir)
 	writeFile(filepath.Join(buildDir, "go.mod"), goMod)
 
-	// Copy wasm_exec.js to assets
-	copyWasmExec(assetsDir)
-
 	// Parse template and generate wiring code
 	tmpl, bindings := parseTemplate(mainComp.template)
 
@@ -190,15 +186,18 @@ replace reactive => %s
 		}
 	}
 
-	// Write skeleton index.html to assets/
-	writeFile(filepath.Join(assetsDir, "index.html"), generateHTML("", allStyles.String()))
+	// Write styles.css to build/
+	writeFile(filepath.Join(buildDir, "styles.css"), allStyles.String())
 
-	fmt.Printf("Generated: build/, assets/\n")
+	fmt.Printf("Generated: build/\n")
 }
 
 func assemble(dir string) {
-	distDir := filepath.Join(dir, "dist")
 	assetsDir := filepath.Join(dir, "assets")
+	buildDir := filepath.Join(dir, "build")
+	distDir := filepath.Join(dir, "dist")
+	scriptDir := findScriptDir()
+	defaultAssetsDir := filepath.Join(scriptDir, "assets")
 
 	// Read pre-rendered HTML
 	prerendered, err := os.ReadFile(filepath.Join(distDir, "prerendered.html"))
@@ -206,37 +205,26 @@ func assemble(dir string) {
 		fatal("read prerendered.html: %v", err)
 	}
 
-	// Read skeleton and extract style
-	skeleton, err := os.ReadFile(filepath.Join(assetsDir, "index.html"))
+	// Read styles from build
+	styles, err := os.ReadFile(filepath.Join(buildDir, "styles.css"))
 	if err != nil {
-		fatal("read skeleton: %v", err)
+		fatal("read styles.css: %v", err)
 	}
-	style := extractStyle(string(skeleton))
 
-	// Copy wasm_exec.js to dist
-	copyFile(filepath.Join(assetsDir, "wasm_exec.js"), filepath.Join(distDir, "wasm_exec.js"), "", "")
+	// Read template from assets (fall back to default)
+	indexPath := filepath.Join(assetsDir, "index.html")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		indexPath = filepath.Join(defaultAssetsDir, "index.html")
+	}
+	template, err := os.ReadFile(indexPath)
+	if err != nil {
+		fatal("read index.html: %v", err)
+	}
 
-	// Write final index.html
-	finalHTML := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<title>App</title>
-	<style>
-%s
-	</style>
-	<script src="wasm_exec.js"></script>
-	<script>
-		const go = new Go();
-		WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject)
-			.then(result => go.run(result.instance));
-	</script>
-</head>
-<body>
-	<div id="app">%s</div>
-</body>
-</html>
-`, style, string(prerendered))
+	// Inject styles and pre-rendered content
+	finalHTML := string(template)
+	finalHTML = strings.Replace(finalHTML, "</head>", "\t<style>\n"+string(styles)+"\t</style>\n</head>", 1)
+	finalHTML = strings.Replace(finalHTML, `<div id="app"></div>`, `<div id="app">`+string(prerendered)+`</div>`, 1)
 
 	writeFile(filepath.Join(distDir, "index.html"), finalHTML)
 	os.Remove(filepath.Join(distDir, "prerendered.html"))

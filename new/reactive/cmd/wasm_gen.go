@@ -105,7 +105,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 			continue
 		}
 		// Process child template with slot content
-		childTmpl := strings.ReplaceAll(childComp.template, "<slot></slot>", compBinding.children)
+		childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
 		childTmplProcessed, childBindings := parseTemplate(childTmpl)
 
 		// Prefix all IDs with component ID to avoid conflicts
@@ -130,7 +130,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 		if childComp == nil {
 			continue
 		}
-		childTmpl := strings.ReplaceAll(childComp.template, "<slot></slot>", compBinding.children)
+		childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
 		_, childBindings := parseTemplate(childTmpl)
 		generateNestedComponentConstants(&sb, childBindings.components, childBindings.ifBlocks, childComponents, cssGenerated, htmlGenerated, compBinding.elementID)
 	}
@@ -446,7 +446,7 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 	}
 
 	// Process child template with slot content
-	childTmpl := strings.ReplaceAll(childComp.template, "<slot></slot>", compBinding.children)
+	childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
 	childTmplProcessed, childBindings := parseTemplate(childTmpl)
 
 	// Categorize expressions into parent (slot) vs child owned
@@ -615,7 +615,7 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 	childFieldTypes := buildFieldTypes(childComp)
 
 	// Parse child template with slot content
-	childTmpl := strings.ReplaceAll(childComp.template, "<slot></slot>", compBinding.children)
+	childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
 	_, childBindings := parseTemplate(childTmpl)
 
 	// Check if element exists (it was just inserted)
@@ -853,7 +853,7 @@ func generateNestedComponentConstants(sb *strings.Builder, nestedComponents []co
 		}
 
 		// Generate HTML constant for this nested component
-		nestedTmpl := strings.ReplaceAll(nestedComp.template, "<slot></slot>", nestedBinding.children)
+		nestedTmpl := strings.ReplaceAll(nestedComp.template, "<slot/>", nestedBinding.children)
 		nestedTmplProcessed, nestedBindings := parseTemplate(nestedTmpl)
 
 		// Prefix IDs to avoid conflicts

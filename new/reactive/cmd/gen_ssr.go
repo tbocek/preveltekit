@@ -179,7 +179,7 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 			slotFields[expr.fieldName] = true
 		}
 
-		childTmpl := strings.ReplaceAll(childComp.template, "<slot></slot>", compBinding.children)
+		childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
 		childTmplProcessed, childBindings := parseTemplate(childTmpl)
 
 		childFieldTypes := buildFieldTypes(childComp)
