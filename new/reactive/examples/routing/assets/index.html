@@ -17,6 +17,29 @@ body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; colo
 .footer { background: #f5f5f5; padding: 1rem 2rem; text-align: center; color: #666; }
 
 
+.notfound-page { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+.notfound-content { text-align: center; }
+.notfound-content h1 { font-size: 6rem; color: #1a1a2e; margin: 0; line-height: 1; }
+.notfound-content p { font-size: 1.5rem; color: #666; margin: 1rem 0 2rem; }
+.notfound-content .btn { display: inline-block; padding: 0.75rem 2rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; transition: background 0.2s; }
+.notfound-content .btn:hover { background: #2d2d44; }
+
+
+.bitcoin-container { max-width: 500px; margin: 2rem auto; padding: 1rem; }
+.bitcoin-container h2 { text-align: center; margin-bottom: 1.5rem; color: #1a1a2e; }
+.bitcoin-card { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; border: 1px solid #e9ecef; }
+.price-info { display: flex; justify-content: space-between; margin-bottom: 1rem; color: #666; }
+.symbol { font-weight: 600; color: #f7931a; }
+.update-time { font-size: 0.875rem; }
+.price { font-size: 2.5rem; font-weight: bold; margin: 1rem 0; color: #1a1a2e; }
+.disclaimer { display: block; color: #888; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e9ecef; font-size: 0.8rem; }
+.loading { color: #666; font-size: 1.1rem; }
+.error { color: #e53e3e; margin-bottom: 1rem; }
+.retry-btn { padding: 0.5rem 1.5rem; background: #e53e3e; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+.retry-btn:hover { background: #c53030; }
+.refresh-note { text-align: center; color: #888; font-size: 0.85rem; margin-top: 1rem; font-style: italic; }
+
+
 .index-page { text-align: center; padding: 3rem 1rem; }
 .index-page h1 { font-size: 3rem; margin-bottom: 0.5rem; color: #1a1a2e; }
 .subtitle { font-size: 1.25rem; color: #666; margin-bottom: 3rem; }
@@ -81,29 +104,6 @@ body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; colo
 .example p { color: #666; margin-bottom: 1.5rem; }
 .example pre { background: #1a1a2e; color: #e9ecef; padding: 1.5rem; border-radius: 8px; overflow-x: auto; }
 .example code { font-family: 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
-
-
-.notfound-page { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-.notfound-content { text-align: center; }
-.notfound-content h1 { font-size: 6rem; color: #1a1a2e; margin: 0; line-height: 1; }
-.notfound-content p { font-size: 1.5rem; color: #666; margin: 1rem 0 2rem; }
-.notfound-content .btn { display: inline-block; padding: 0.75rem 2rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; transition: background 0.2s; }
-.notfound-content .btn:hover { background: #2d2d44; }
-
-
-.bitcoin-container { max-width: 500px; margin: 2rem auto; padding: 1rem; }
-.bitcoin-container h2 { text-align: center; margin-bottom: 1.5rem; color: #1a1a2e; }
-.bitcoin-card { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; border: 1px solid #e9ecef; }
-.price-info { display: flex; justify-content: space-between; margin-bottom: 1rem; color: #666; }
-.symbol { font-weight: 600; color: #f7931a; }
-.update-time { font-size: 0.875rem; }
-.price { font-size: 2.5rem; font-weight: bold; margin: 1rem 0; color: #1a1a2e; }
-.disclaimer { display: block; color: #888; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e9ecef; font-size: 0.8rem; }
-.loading { color: #666; font-size: 1.1rem; }
-.error { color: #e53e3e; margin-bottom: 1rem; }
-.retry-btn { padding: 0.5rem 1.5rem; background: #e53e3e; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
-.retry-btn:hover { background: #c53030; }
-.refresh-note { text-align: center; color: #888; font-size: 0.85rem; margin-top: 1rem; font-style: italic; }
 </style>
 	<script src="wasm_exec.js"></script>
 	<script>

@@ -14,7 +14,7 @@ func findScriptDir() string {
 	if err != nil {
 		fatal("find executable: %v", err)
 	}
-	return filepath.Dir(filepath.Dir(filepath.Dir(exe)))
+	return filepath.Dir(filepath.Dir(exe))
 }
 
 func copyFile(src, dst, oldPkg, newPkg string) {
