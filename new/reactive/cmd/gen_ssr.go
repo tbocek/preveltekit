@@ -145,12 +145,22 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 	// Each blocks
 	for _, each := range bindings.eachBlocks {
 		fmt.Fprintf(&sb, "\t{\n\t\tvar eachContent strings.Builder\n")
-		fmt.Fprintf(&sb, "\t\tfor %s, %s := range component.%s.Get() {\n", each.indexVar, each.itemVar, each.listName)
+		fmt.Fprintf(&sb, "\t\titems := component.%s.Get()\n", each.listName)
+		if each.elseHTML != "" {
+			fmt.Fprintf(&sb, "\t\tif len(items) == 0 {\n")
+			fmt.Fprintf(&sb, "\t\t\teachContent.WriteString(\"<span id=\\\"%s_else\\\">%s</span>\")\n", each.elementID, escapeForGoStringContent(each.elseHTML))
+			fmt.Fprintf(&sb, "\t\t} else {\n")
+			fmt.Fprintf(&sb, "\t\t\teachContent.WriteString(\"<span id=\\\"%s_else\\\" style=\\\"display:none\\\">%s</span>\")\n", each.elementID, escapeForGoStringContent(each.elseHTML))
+		}
+		fmt.Fprintf(&sb, "\t\tfor %s, %s := range items {\n", each.indexVar, each.itemVar)
 		fmt.Fprintf(&sb, "\t\t\titemHTML := %s\n", escapeForGoString(each.bodyHTML))
 		fmt.Fprintf(&sb, "\t\t\titemHTML = strings.ReplaceAll(itemHTML, \"{%s}\", fmt.Sprintf(\"%%v\", %s))\n", each.itemVar, each.itemVar)
 		fmt.Fprintf(&sb, "\t\t\titemHTML = strings.ReplaceAll(itemHTML, \"{%s}\", strconv.Itoa(%s))\n", each.indexVar, each.indexVar)
 		fmt.Fprintf(&sb, "\t\t\teachContent.WriteString(\"<span id=\\\"%s_\" + strconv.Itoa(%s) + \"\\\">\" + itemHTML + \"</span>\")\n", each.elementID, each.indexVar)
 		fmt.Fprintf(&sb, "\t\t}\n")
+		if each.elseHTML != "" {
+			fmt.Fprintf(&sb, "\t\t}\n")
+		}
 		fmt.Fprintf(&sb, "\t\thtml = strings.Replace(html, \"<span id=\\\"%s_anchor\\\"></span>\", eachContent.String() + \"<span id=\\\"%s_anchor\\\"></span>\", 1)\n\t}\n",
 			each.elementID, each.elementID)
 	}

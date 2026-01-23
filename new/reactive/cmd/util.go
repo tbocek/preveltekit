@@ -195,6 +195,15 @@ func escapeForGoString(s string) string {
 	return "`" + strings.Join(parts, "` + \"`\" + `") + "`"
 }
 
+// escapeForGoStringContent escapes content for embedding inside a double-quoted string
+func escapeForGoStringContent(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	return s
+}
+
 // toJS returns Go code to convert a value to JS-compatible format
 func toJS(valueType, expr string) string {
 	switch valueType {

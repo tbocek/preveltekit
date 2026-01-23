@@ -62,6 +62,9 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 			endPos, each := parseEachBlock(tmpl, pos, &eachCount)
 			if each != nil {
 				bindings.eachBlocks = append(bindings.eachBlocks, *each)
+				if each.elseHTML != "" {
+					result.WriteString(fmt.Sprintf(`<span id="%s_else">%s</span>`, each.elementID, each.elseHTML))
+				}
 				result.WriteString(fmt.Sprintf(`<span id="%s_anchor"></span>`, each.elementID))
 				pos = endPos
 				continue
@@ -273,7 +276,7 @@ func escapeCodeBlock(tmpl string, pos int) (escaped string, endPos int, ok bool)
 	return result.String(), codeCloseStart + 7, true
 }
 
-// parseEachBlock parses {#each list as item, i}...{/each}
+// parseEachBlock parses {#each list as item, i}...{:else}...{/each}
 func parseEachBlock(tmpl string, pos int, count *int) (endPos int, binding *eachBinding) {
 	// Find the end of opening tag
 	openEnd := strings.Index(tmpl[pos:], "}")
@@ -297,12 +300,16 @@ func parseEachBlock(tmpl string, pos int, count *int) (endPos int, binding *each
 		indexVar = strings.TrimSpace(varParts[1])
 	}
 
-	// Find matching {/each}
+	// Find matching {/each}, tracking {:else} at depth 1
 	depth := 1
 	searchPos := openEnd + 1
+	elsePos := -1
 	for searchPos < len(tmpl) && depth > 0 {
 		if strings.HasPrefix(tmpl[searchPos:], "{#each ") {
 			depth++
+			searchPos += 7
+		} else if strings.HasPrefix(tmpl[searchPos:], "{:else}") && depth == 1 {
+			elsePos = searchPos
 			searchPos += 7
 		} else if strings.HasPrefix(tmpl[searchPos:], "{/each}") {
 			depth--
@@ -319,7 +326,14 @@ func parseEachBlock(tmpl string, pos int, count *int) (endPos int, binding *each
 		return pos, nil
 	}
 
-	bodyHTML := tmpl[openEnd+1 : searchPos]
+	var bodyHTML, elseHTML string
+	if elsePos != -1 {
+		bodyHTML = tmpl[openEnd+1 : elsePos]
+		elseHTML = tmpl[elsePos+7 : searchPos]
+	} else {
+		bodyHTML = tmpl[openEnd+1 : searchPos]
+	}
+
 	elementID := fmt.Sprintf("each%d", *count)
 	*count++
 
@@ -329,6 +343,7 @@ func parseEachBlock(tmpl string, pos int, count *int) (endPos int, binding *each
 		indexVar:  indexVar,
 		elementID: elementID,
 		bodyHTML:  bodyHTML,
+		elseHTML:  elseHTML,
 	}
 }
 

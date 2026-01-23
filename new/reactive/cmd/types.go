@@ -66,6 +66,7 @@ type eachBinding struct {
 	indexVar  string // "i"
 	elementID string // "each0"
 	bodyHTML  string // the template inside the each block
+	elseHTML  string // content to show when list is empty (optional)
 }
 
 type ifBinding struct {

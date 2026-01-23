@@ -372,8 +372,12 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 		bodyHTML = strings.ReplaceAll(bodyHTML, "{"+each.indexVar+"}", `<span class="__index__"></span>`)
 		itemType := fieldTypes[each.listName]
 		itemToJS := toJS(itemType, "item")
+		hasElse := each.elseHTML != ""
 
 		fmt.Fprintf(sb, "\t%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", each.elementID, each.elementID)
+		if hasElse {
+			fmt.Fprintf(sb, "\t%s_else := document.Call(\"getElementById\", \"%s_else\")\n", each.elementID, each.elementID)
+		}
 		fmt.Fprintf(sb, "\t%s_tmpl := %s\n", each.elementID, escapeForGoString(bodyHTML))
 		fmt.Fprintf(sb, "\t%s_create := func(item %s, index int) js.Value {\n", each.elementID, itemType)
 		fmt.Fprintf(sb, "\t\twrapper := document.Call(\"createElement\", \"span\")\n")
@@ -388,6 +392,9 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 		fmt.Fprintf(sb, "\tcomponent.%s.OnEdit(func(edit reactive.Edit[%s]) {\n\t\tswitch edit.Op {\n", each.listName, itemType)
 		fmt.Fprintf(sb, "\t\tcase reactive.EditInsert:\n")
 		fmt.Fprintf(sb, "\t\t\titems := component.%s.Get()\n", each.listName)
+		if hasElse {
+			fmt.Fprintf(sb, "\t\t\tif len(items) == 1 { %s_else.Get(\"style\").Set(\"display\", \"none\") }\n", each.elementID)
+		}
 		fmt.Fprintf(sb, "\t\t\tfor i := len(items) - 1; i > edit.Index; i-- {\n")
 		fmt.Fprintf(sb, "\t\t\t\tel := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(i-1))\n", each.elementID)
 		fmt.Fprintf(sb, "\t\t\t\tif !el.IsNull() { el.Set(\"id\", \"%s_\" + strconv.Itoa(i)) }\n\t\t\t}\n", each.elementID)
@@ -406,9 +413,16 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 		fmt.Fprintf(sb, "\t\t\tfor i := edit.Index; ; i++ {\n")
 		fmt.Fprintf(sb, "\t\t\t\tnextEl := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(i+1))\n", each.elementID)
 		fmt.Fprintf(sb, "\t\t\t\tif nextEl.IsNull() { break }\n")
-		fmt.Fprintf(sb, "\t\t\t\tnextEl.Set(\"id\", \"%s_\" + strconv.Itoa(i))\n\t\t\t}\n\t\t}\n\t})\n", each.elementID)
+		fmt.Fprintf(sb, "\t\t\t\tnextEl.Set(\"id\", \"%s_\" + strconv.Itoa(i))\n\t\t\t}\n", each.elementID)
+		if hasElse {
+			fmt.Fprintf(sb, "\t\t\tif len(component.%s.Get()) == 0 { %s_else.Get(\"style\").Set(\"display\", \"\") }\n", each.listName, each.elementID)
+		}
+		fmt.Fprintf(sb, "\t\t}\n\t})\n")
 
 		fmt.Fprintf(sb, "\tcomponent.%s.OnRender(func(items []%s) {\n", each.listName, itemType)
+		if hasElse {
+			fmt.Fprintf(sb, "\t\tif len(items) == 0 { %s_else.Get(\"style\").Set(\"display\", \"\") } else { %s_else.Get(\"style\").Set(\"display\", \"none\") }\n", each.elementID, each.elementID)
+		}
 		fmt.Fprintf(sb, "\t\tfor i, item := range items {\n")
 		fmt.Fprintf(sb, "\t\t\tel := %s_create(item, i)\n", each.elementID)
 		fmt.Fprintf(sb, "\t\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", el, %s_anchor)\n\t\t}\n\t})\n", each.elementID, each.elementID)

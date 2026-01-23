@@ -17,6 +17,36 @@ body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; colo
 .footer { background: #f5f5f5; padding: 1rem 2rem; text-align: center; color: #666; }
 
 
+.doc-page { display: grid; grid-template-columns: 200px 1fr; gap: 2rem; }
+.doc-page h1 { grid-column: 1 / -1; margin-bottom: 1rem; color: #1a1a2e; }
+.doc-nav { position: sticky; top: 1rem; align-self: start; display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+.doc-nav a { color: #666; text-decoration: none; padding: 0.5rem; border-radius: 4px; transition: all 0.2s; }
+.doc-nav a:hover { color: #1a1a2e; background: #e9ecef; }
+.doc-section { margin-bottom: 3rem; }
+.doc-section h2 { color: #1a1a2e; border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+.doc-section h3 { color: #444; margin: 1.5rem 0 0.75rem; }
+.doc-section p { color: #555; margin-bottom: 1rem; }
+.doc-section ul, .doc-section ol { margin: 1rem 0; padding-left: 1.5rem; color: #555; }
+.doc-section li { margin-bottom: 0.5rem; }
+.doc-section pre { background: #1a1a2e; color: #e9ecef; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
+.doc-section code { font-family: 'Fira Code', monospace; font-size: 0.9rem; }
+@media (max-width: 768px) { .doc-page { grid-template-columns: 1fr; } .doc-nav { position: static; flex-direction: row; flex-wrap: wrap; } }
+
+
+.example-page h1 { color: #1a1a2e; margin-bottom: 0.5rem; }
+.intro { color: #666; margin-bottom: 2rem; }
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; }
+.tab { background: none; border: none; padding: 0.75rem 1.5rem; font-size: 1rem; color: #666; cursor: pointer; border-radius: 4px 4px 0 0; transition: all 0.2s; }
+.tab:hover { color: #1a1a2e; background: #f5f5f5; }
+.tab.active { color: #1a1a2e; background: #e9ecef; }
+.tab-content { background: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 2rem; }
+.example h2 { color: #1a1a2e; margin-bottom: 0.5rem; }
+.example h3 { color: #1a1a2e; margin-top: 2rem; margin-bottom: 1rem; }
+.example p { color: #666; margin-bottom: 1.5rem; }
+.example pre { background: #1a1a2e; color: #e9ecef; padding: 1.5rem; border-radius: 8px; overflow-x: auto; }
+.example code { font-family: 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
+
+
 .notfound-page { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
 .notfound-content { text-align: center; }
 .notfound-content h1 { font-size: 6rem; color: #1a1a2e; margin: 0; line-height: 1; }
@@ -74,36 +104,6 @@ body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; colo
 .comparison-table th, .comparison-table td { padding: 1rem; text-align: left; border-bottom: 1px solid #e9ecef; }
 .comparison-table th { background: #1a1a2e; color: #fff; }
 .comparison-table .highlight { color: #28a745; font-weight: 600; }
-
-
-.doc-page { display: grid; grid-template-columns: 200px 1fr; gap: 2rem; }
-.doc-page h1 { grid-column: 1 / -1; margin-bottom: 1rem; color: #1a1a2e; }
-.doc-nav { position: sticky; top: 1rem; align-self: start; display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; }
-.doc-nav a { color: #666; text-decoration: none; padding: 0.5rem; border-radius: 4px; transition: all 0.2s; }
-.doc-nav a:hover { color: #1a1a2e; background: #e9ecef; }
-.doc-section { margin-bottom: 3rem; }
-.doc-section h2 { color: #1a1a2e; border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-.doc-section h3 { color: #444; margin: 1.5rem 0 0.75rem; }
-.doc-section p { color: #555; margin-bottom: 1rem; }
-.doc-section ul, .doc-section ol { margin: 1rem 0; padding-left: 1.5rem; color: #555; }
-.doc-section li { margin-bottom: 0.5rem; }
-.doc-section pre { background: #1a1a2e; color: #e9ecef; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
-.doc-section code { font-family: 'Fira Code', monospace; font-size: 0.9rem; }
-@media (max-width: 768px) { .doc-page { grid-template-columns: 1fr; } .doc-nav { position: static; flex-direction: row; flex-wrap: wrap; } }
-
-
-.example-page h1 { color: #1a1a2e; margin-bottom: 0.5rem; }
-.intro { color: #666; margin-bottom: 2rem; }
-.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; }
-.tab { background: none; border: none; padding: 0.75rem 1.5rem; font-size: 1rem; color: #666; cursor: pointer; border-radius: 4px 4px 0 0; transition: all 0.2s; }
-.tab:hover { color: #1a1a2e; background: #f5f5f5; }
-.tab.active { color: #1a1a2e; background: #e9ecef; }
-.tab-content { background: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 2rem; }
-.example h2 { color: #1a1a2e; margin-bottom: 0.5rem; }
-.example h3 { color: #1a1a2e; margin-top: 2rem; margin-bottom: 1rem; }
-.example p { color: #666; margin-bottom: 1.5rem; }
-.example pre { background: #1a1a2e; color: #e9ecef; padding: 1.5rem; border-radius: 8px; overflow-x: auto; }
-.example code { font-family: 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
 </style>
 	<script src="wasm_exec.js"></script>
 	<script>
