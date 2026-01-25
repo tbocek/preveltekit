@@ -9,28 +9,48 @@ import (
 	"strings"
 )
 
+// EmbeddedModulePath can be set at build time with -ldflags "-X main.EmbeddedModulePath=/path/to/preveltekit"
+var EmbeddedModulePath string
+
 func findScriptDir() string {
+	// Check embedded path first (set at build time)
+	if EmbeddedModulePath != "" {
+		if _, err := os.Stat(filepath.Join(EmbeddedModulePath, "go.mod")); err == nil {
+			return EmbeddedModulePath
+		}
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		fatal("find executable: %v", err)
 	}
 	dir := filepath.Dir(filepath.Dir(exe))
 
-	// Check if we're running from go build cache (go run)
-	// In that case, find the preveltekit package via go list
-	if strings.Contains(dir, "go-build") || strings.Contains(dir, "cache") {
-		cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "preveltekit")
-		if out, err := cmd.Output(); err == nil {
-			return strings.TrimSpace(string(out))
+	// Check if the executable's directory has the preveltekit go.mod
+	modFile := filepath.Join(dir, "go.mod")
+	if data, err := os.ReadFile(modFile); err == nil {
+		if strings.Contains(string(data), "module preveltekit") {
+			return dir
 		}
-		// Fallback: look for go.mod with "module preveltekit" in current directory hierarchy
-		wd, _ := os.Getwd()
-		for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
-			modFile := filepath.Join(d, "go.mod")
-			if data, err := os.ReadFile(modFile); err == nil {
-				if strings.Contains(string(data), "module preveltekit") {
-					return d
-				}
+	}
+
+	// Check if we're running from go build cache (go run) or arbitrary location
+	// Try to find the preveltekit package via go list
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "preveltekit")
+	if out, err := cmd.Output(); err == nil {
+		result := strings.TrimSpace(string(out))
+		if result != "" {
+			return result
+		}
+	}
+
+	// Fallback: look for go.mod with "module preveltekit" in current directory hierarchy
+	wd, _ := os.Getwd()
+	for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
+		modFile := filepath.Join(d, "go.mod")
+		if data, err := os.ReadFile(modFile); err == nil {
+			if strings.Contains(string(data), "module preveltekit") {
+				return d
 			}
 		}
 	}

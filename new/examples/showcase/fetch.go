@@ -113,7 +113,11 @@ func (f *Fetch) Template() string {
 			<button @click="FetchPost()">Fetch Post</button>
 		</div>
 
-		<pre>{#if RawData != ""}{RawData}{:else}Click a button to fetch data{/if}</pre>
+		{#if RawData != ""}
+			<pre>{RawData}</pre>
+		{:else}
+			<pre>Click a button to fetch data</pre>
+		{/if}
 		<p class="status">Status: {Status}</p>
 	</section>
 

@@ -76,20 +76,24 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 		if strings.HasPrefix(tmpl[pos:], "{#if ") {
 			endPos, ifBlock := parseIfBlock(tmpl, pos, &ifCount)
 			if ifBlock != nil {
-				// Parse components, each blocks, and class bindings inside each branch
+				// Parse components, each blocks, class bindings, and expressions inside each branch
 				for i := range ifBlock.branches {
 					parsedHTML, comps := parseComponentsInHTML(ifBlock.branches[i].html, &compCount)
 					parsedHTML, eachBlocksInBranch := parseEachBlocksInHTML(parsedHTML, &eachCount)
 					parsedHTML, classBindingsInBranch := parseClassBindingsInHTML(parsedHTML, &classCount)
+					parsedHTML, expressionsInBranch := parseExpressionsInHTML(parsedHTML, &exprCount)
 					ifBlock.branches[i].html = parsedHTML
 					ifBlock.branches[i].eachBlocks = eachBlocksInBranch
 					ifBlock.branches[i].classBindings = classBindingsInBranch
+					ifBlock.branches[i].expressions = expressionsInBranch
 					bindings.components = append(bindings.components, comps...)
 				}
 				if ifBlock.elseHTML != "" {
 					parsedHTML, comps := parseComponentsInHTML(ifBlock.elseHTML, &compCount)
 					parsedHTML, _ = parseClassBindingsInHTML(parsedHTML, &classCount)
+					parsedHTML, elseExprs := parseExpressionsInHTML(parsedHTML, &exprCount)
 					ifBlock.elseHTML = parsedHTML
+					ifBlock.elseExpressions = elseExprs
 					bindings.components = append(bindings.components, comps...)
 				}
 				bindings.ifBlocks = append(bindings.ifBlocks, *ifBlock)
@@ -581,6 +585,56 @@ func parseClassBindingsInHTML(html string, classCount *int) (string, []classBind
 	}
 
 	return result.String(), classBindings
+}
+
+// parseExpressionsInHTML parses {Field} expressions in HTML content (used for if-block branches)
+// Returns the modified HTML with span elements and the list of expression bindings
+func parseExpressionsInHTML(html string, exprCount *int) (string, []exprBinding) {
+	var expressions []exprBinding
+	var result strings.Builder
+	pos := 0
+
+	for pos < len(html) {
+		// Check for {@html Field}
+		if strings.HasPrefix(html[pos:], "{@html ") {
+			if endPos := strings.Index(html[pos:], "}"); endPos != -1 {
+				fieldName := strings.TrimSpace(html[pos+7 : pos+endPos])
+				elementID := fmt.Sprintf("html_%s_%d", fieldName, *exprCount)
+				*exprCount++
+				expressions = append(expressions, exprBinding{
+					fieldName: fieldName, elementID: elementID, isHTML: true,
+				})
+				result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+				pos += endPos + 1
+				continue
+			}
+		}
+
+		// Check for {Field} expressions (but not {#, {:, {/, {@)
+		if html[pos] == '{' && pos+1 < len(html) {
+			nextChar := html[pos+1]
+			if nextChar != '#' && nextChar != ':' && nextChar != '/' && nextChar != '@' {
+				if endPos := strings.Index(html[pos:], "}"); endPos != -1 {
+					fieldName := strings.TrimSpace(html[pos+1 : pos+endPos])
+					if isValidFieldName(fieldName) {
+						elementID := fmt.Sprintf("expr_%s_%d", fieldName, *exprCount)
+						*exprCount++
+						expressions = append(expressions, exprBinding{
+							fieldName: fieldName, elementID: elementID, isHTML: false,
+						})
+						result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+						pos += endPos + 1
+						continue
+					}
+				}
+			}
+		}
+
+		result.WriteByte(html[pos])
+		pos++
+	}
+
+	return result.String(), expressions
 }
 
 // parseComponentTag parses a PascalCase component tag

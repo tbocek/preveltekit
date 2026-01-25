@@ -25,4 +25,14 @@ type Bindable[T any] interface {
 	OnChange(func(T))
 }
 
-func Bind[T any](id string, store Bindable[T]) {}
+// Settable extends Bindable with Set capability for two-way binding
+type Settable[T any] interface {
+	Bindable[T]
+	Set(T)
+}
+
+func Bind[T any](id string, store Bindable[T])       {}
+func BindInput(id string, store Settable[string])    {}
+func BindInputInt(id string, store Settable[int])    {}
+func BindCheckbox(id string, store Settable[bool])   {}
+func ToggleClass(el jsValue, class string, add bool) {}

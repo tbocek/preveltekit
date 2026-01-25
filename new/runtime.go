@@ -87,3 +87,63 @@ func Bind[T any](id string, store Bindable[T]) {
 	store.OnChange(func(v T) { SetText(el, toString(v)) })
 	SetText(el, toString(store.Get()))
 }
+
+// Settable extends Bindable with Set capability for two-way binding
+type Settable[T any] interface {
+	Bindable[T]
+	Set(T)
+}
+
+// BindInput binds a text input to a string store (two-way)
+func BindInput(id string, store Settable[string]) {
+	el := GetEl(id)
+	if el.IsNull() || el.IsUndefined() {
+		return
+	}
+	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
+		store.Set(this.Get("value").String())
+		return nil
+	}))
+	store.OnChange(func(v string) { el.Set("value", v) })
+}
+
+// BindInputInt binds a text input to an int store (two-way)
+func BindInputInt(id string, store Settable[int]) {
+	el := GetEl(id)
+	if el.IsNull() || el.IsUndefined() {
+		return
+	}
+	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
+		if v, err := strconv.Atoi(this.Get("value").String()); err == nil {
+			store.Set(v)
+		}
+		return nil
+	}))
+	store.OnChange(func(v int) { el.Set("value", strconv.Itoa(v)) })
+}
+
+// BindCheckbox binds a checkbox to a bool store (two-way)
+func BindCheckbox(id string, store Settable[bool]) {
+	el := GetEl(id)
+	if el.IsNull() || el.IsUndefined() {
+		return
+	}
+	el.Call("addEventListener", "change", js.FuncOf(func(this js.Value, args []js.Value) any {
+		store.Set(this.Get("checked").Bool())
+		return nil
+	}))
+	store.OnChange(func(v bool) { el.Set("checked", v) })
+	el.Set("checked", store.Get())
+}
+
+// ToggleClass adds or removes a class based on a condition
+func ToggleClass(el js.Value, class string, add bool) {
+	if el.IsNull() || el.IsUndefined() {
+		return
+	}
+	if add {
+		el.Get("classList").Call("add", class)
+	} else {
+		el.Get("classList").Call("remove", class)
+	}
+}

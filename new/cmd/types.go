@@ -70,10 +70,11 @@ type eachBinding struct {
 }
 
 type ifBinding struct {
-	branches  []ifBranch // list of condition/content pairs
-	elseHTML  string     // final else content (optional)
-	elementID string     // "if0"
-	deps      []string   // all fields this if block depends on
+	branches        []ifBranch    // list of condition/content pairs
+	elseHTML        string        // final else content (optional)
+	elseExpressions []exprBinding // expression bindings in the else branch
+	elementID       string        // "if0"
+	deps            []string      // all fields this if block depends on
 }
 
 type ifBranch struct {
@@ -81,6 +82,7 @@ type ifBranch struct {
 	html          string         // content if true
 	eachBlocks    []eachBinding  // each blocks inside this branch
 	classBindings []classBinding // class bindings inside this branch
+	expressions   []exprBinding  // expression bindings inside this branch
 }
 
 type inputBinding struct {
