@@ -35,16 +35,21 @@ func GetEl(id string) js.Value {
 	return Document.Call("getElementById", id)
 }
 
+// ok returns true if el is a valid element
+func ok(el js.Value) bool {
+	return !el.IsNull() && !el.IsUndefined()
+}
+
 // SetText sets textContent on an element if it exists
 func SetText(el js.Value, text string) {
-	if !el.IsUndefined() && !el.IsNull() {
+	if ok(el) {
 		el.Set("textContent", text)
 	}
 }
 
 // On adds an event listener to an element
 func On(el js.Value, event string, handler func()) {
-	if !el.IsUndefined() && !el.IsNull() {
+	if ok(el) {
 		el.Call("addEventListener", event, js.FuncOf(func(this js.Value, args []js.Value) any {
 			handler()
 			return nil
@@ -53,8 +58,8 @@ func On(el js.Value, event string, handler func()) {
 }
 
 // OnEvent adds an event listener with access to the event object
-func OnEvent(el js.Value, event string, handler func(e js.Value)) {
-	if !el.IsUndefined() && !el.IsNull() {
+func OnEvent(el js.Value, event string, handler func(js.Value)) {
+	if ok(el) {
 		el.Call("addEventListener", event, js.FuncOf(func(this js.Value, args []js.Value) any {
 			handler(args[0])
 			return nil
@@ -112,73 +117,57 @@ func FindComment(marker string) js.Value {
 	}
 }
 
-// BindText binds a store to a text node, using a comment marker for hydration.
-// SSR outputs "value<!--marker-->", so we find the text node before the comment and reuse it.
-func BindText[T any](marker string, store Bindable[T]) {
+// bindMarker is the unified implementation for BindText and BindHTML.
+// isHTML=false: binds to text node (nodeType 3), uses nodeValue
+// isHTML=true: binds to element (nodeType 1), uses innerHTML
+func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	comment := FindComment(marker)
 	if comment.IsNull() {
 		return
 	}
-	// Find or create text node before the comment (SSR puts value before marker)
-	var textNode js.Value
+	var node js.Value
 	prevSibling := comment.Get("previousSibling")
-	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == 3 {
-		// Reuse existing text node from SSR
-		textNode = prevSibling
-	} else {
-		// No SSR text node, create one before the marker
-		textNode = Document.Call("createTextNode", toString(store.Get()))
-		comment.Get("parentNode").Call("insertBefore", textNode, comment)
+	nodeType := 3
+	if isHTML {
+		nodeType = 1
 	}
-	// Always update the text node reference (in case DOM was replaced)
-	textNodeRefs[marker] = textNode
-	// Also update the text node with current value (in case it changed since creation)
-	textNode.Set("nodeValue", toString(store.Get()))
-	// Only register OnChange once per marker
+	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == nodeType {
+		node = prevSibling
+	} else {
+		if isHTML {
+			node = Document.Call("createElement", "span")
+			node.Set("innerHTML", toString(store.Get()))
+		} else {
+			node = Document.Call("createTextNode", toString(store.Get()))
+		}
+		comment.Get("parentNode").Call("insertBefore", node, comment)
+	}
+	// Remove comment marker after hydration (no longer needed)
+	comment.Call("remove")
+	textNodeRefs[marker] = node
+	prop := "nodeValue"
+	if isHTML {
+		prop = "innerHTML"
+	}
+	node.Set(prop, toString(store.Get()))
 	if !boundMarkers[marker] {
 		boundMarkers[marker] = true
 		store.OnChange(func(v T) {
-			// Use map lookup to get current text node (may have been updated by rebind)
-			if node, ok := textNodeRefs[marker]; ok {
-				node.Set("nodeValue", toString(v))
+			if n, ok := textNodeRefs[marker]; ok {
+				n.Set(prop, toString(v))
 			}
 		})
 	}
 }
 
+// BindText binds a store to a text node, using a comment marker for hydration.
+func BindText[T any](marker string, store Bindable[T]) {
+	bindMarker(marker, store, false)
+}
+
 // BindHTML binds a store to innerHTML, using a comment marker for hydration.
-// SSR outputs "htmlvalue<!--marker-->", so we find the previous sibling element and reuse it.
 func BindHTML[T any](marker string, store Bindable[T]) {
-	comment := FindComment(marker)
-	if comment.IsNull() {
-		return
-	}
-	// Find or create element before the comment
-	var container js.Value
-	prevSibling := comment.Get("previousSibling")
-	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == 1 {
-		// Reuse existing element from SSR
-		container = prevSibling
-	} else {
-		// No SSR element, create a span before the marker
-		container = Document.Call("createElement", "span")
-		container.Set("innerHTML", toString(store.Get()))
-		comment.Get("parentNode").Call("insertBefore", container, comment)
-	}
-	// Always update the container reference (in case DOM was replaced)
-	textNodeRefs[marker] = container
-	// Also update the container with current value (in case it changed since creation)
-	container.Set("innerHTML", toString(store.Get()))
-	// Only register OnChange once per marker
-	if !boundMarkers[marker] {
-		boundMarkers[marker] = true
-		store.OnChange(func(v T) {
-			// Use map lookup to get current container (may have been updated by rebind)
-			if node, ok := textNodeRefs[marker]; ok {
-				node.Set("innerHTML", toString(v))
-			}
-		})
-	}
+	bindMarker(marker, store, true)
 }
 
 // Settable extends Bindable with Set capability for two-way binding
@@ -190,7 +179,7 @@ type Settable[T any] interface {
 // BindInput binds a text input to a string store (two-way)
 func BindInput(id string, store Settable[string]) {
 	el := GetEl(id)
-	if el.IsNull() || el.IsUndefined() {
+	if !ok(el) {
 		return
 	}
 	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -203,7 +192,7 @@ func BindInput(id string, store Settable[string]) {
 // BindInputInt binds a text input to an int store (two-way)
 func BindInputInt(id string, store Settable[int]) {
 	el := GetEl(id)
-	if el.IsNull() || el.IsUndefined() {
+	if !ok(el) {
 		return
 	}
 	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -218,7 +207,7 @@ func BindInputInt(id string, store Settable[int]) {
 // BindCheckbox binds a checkbox to a bool store (two-way)
 func BindCheckbox(id string, store Settable[bool]) {
 	el := GetEl(id)
-	if el.IsNull() || el.IsUndefined() {
+	if !ok(el) {
 		return
 	}
 	el.Call("addEventListener", "change", js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -231,13 +220,8 @@ func BindCheckbox(id string, store Settable[bool]) {
 
 // ToggleClass adds or removes a class based on a condition
 func ToggleClass(el js.Value, class string, add bool) {
-	if el.IsNull() || el.IsUndefined() {
-		return
-	}
-	if add {
-		el.Get("classList").Call("add", class)
-	} else {
-		el.Get("classList").Call("remove", class)
+	if ok(el) {
+		el.Get("classList").Call("toggle", class, add)
 	}
 }
 
@@ -246,10 +230,10 @@ func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value
 	anchor := FindComment(anchorMarker)
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
-	if !current.IsNull() && !current.IsUndefined() && current.Truthy() {
+	if ok(current) && current.Truthy() {
 		current.Call("remove")
 	}
-	if !anchor.IsNull() {
+	if ok(anchor) {
 		anchor.Get("parentNode").Call("insertBefore", newEl, anchor)
 	}
 	return newEl
