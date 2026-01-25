@@ -9,9 +9,12 @@ type Lists struct {
 }
 
 func (l *Lists) OnMount() {
-	l.Items.Set([]string{"Apple", "Banana", "Cherry"})
+	// Only initialize if empty (preserve state across navigation)
+	if l.Items.Len() == 0 {
+		l.Items.Set([]string{"Apple", "Banana", "Cherry"})
+		l.ItemCount.Set(3)
+	}
 	l.NewItem.Set("")
-	l.ItemCount.Set(3)
 }
 
 func (l *Lists) AddItem() {

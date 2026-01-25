@@ -4,23 +4,17 @@ import "reactive"
 
 // Routing showcase - demonstrates navigation patterns
 type Routing struct {
-	CurrentTab   *reactive.Store[string]
-	CurrentStep  *reactive.Store[int]
-	History      *reactive.List[string]
-	HistoryCount *reactive.Store[int]
+	CurrentTab  *reactive.Store[string]
+	CurrentStep *reactive.Store[int]
 }
 
 func (r *Routing) OnMount() {
 	r.CurrentTab.Set("home")
 	r.CurrentStep.Set(1)
-	r.History.Set([]string{"home"})
-	r.HistoryCount.Set(1)
 }
 
 func (r *Routing) GoToTab(tab string) {
 	r.CurrentTab.Set(tab)
-	r.History.Append(tab)
-	r.HistoryCount.Set(r.History.Len())
 }
 
 func (r *Routing) GoHome() {
@@ -71,11 +65,6 @@ func (r *Routing) Step3() {
 
 func (r *Routing) Step4() {
 	r.GoToStep(4)
-}
-
-func (r *Routing) ClearHistory() {
-	r.History.Set([]string{r.CurrentTab.Get()})
-	r.HistoryCount.Set(1)
 }
 
 func (r *Routing) Template() string {
@@ -174,25 +163,6 @@ func (r *Routing) Template() string {
 			<button @click="NextStep()" class:disabled={CurrentStep == 4}>Next</button>
 		</div>
 	</section>
-
-	<section>
-		<h2>Navigation History</h2>
-		<p>Track navigation history (tab clicks):</p>
-
-		<div class="history-list">
-			{#if HistoryCount > 0}
-				<ul>
-					{#each History as page, i}
-						<li><span class="index">{i}</span> {page}</li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="empty">No history yet</p>
-			{/if}
-		</div>
-
-		<button @click="ClearHistory()">Clear History</button>
-	</section>
 </div>`
 }
 
@@ -229,11 +199,5 @@ func (r *Routing) Style() string {
 .step-panel h3 { margin-top: 0; color: #004085; }
 
 .step-buttons { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
-
-.history-list { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
-.history-list ul { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
-.history-list li { padding: 6px 10px; margin: 4px 0; background: white; border-radius: 4px; display: flex; align-items: center; gap: 10px; }
-.history-list .index { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; background: #007bff; color: white; border-radius: 50%; font-size: 11px; }
-.history-list .empty { color: #999; font-style: italic; text-align: center; margin: 10px 0; }
 `
 }

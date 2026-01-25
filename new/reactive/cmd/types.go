@@ -108,6 +108,6 @@ var (
 	eventRegex        = regexp.MustCompile(`@(\w+)((?:\.\w+)*)="(\w+)\(([^)]*)\)"`)
 	bindRegex         = regexp.MustCompile(`bind:(\w+)="(\w+)"`)
 	classBindRegex    = regexp.MustCompile(`class:(\w+)=\{([^}]+)\}`)
-	attrWithExprRegex = regexp.MustCompile(`(\w+)="([^"]*\{[^}]+\}[^"]*)"`)
-	propRegex         = regexp.MustCompile(`(\w+)="([^"]*)"`)
+	attrWithExprRegex = regexp.MustCompile(`([\w-]+)="([^"]*\{[^}]+\}[^"]*)"`)
+	propRegex         = regexp.MustCompile(`([\w-]+)="([^"]*)"`)
 )

@@ -443,6 +443,17 @@ func prefixClassBindingIDs(prefix string, html string, bindings []classBinding) 
 	return html
 }
 
+// prefixComponentPlaceholders prefixes <!--compN--> placeholders in HTML.
+func prefixComponentPlaceholders(prefix string, html string, components []componentBinding) string {
+	for i := range components {
+		oldID := components[i].elementID
+		newID := prefix + "_" + oldID
+		html = strings.ReplaceAll(html, "<!--"+oldID+"-->", "<!--"+newID+"-->")
+		components[i].elementID = newID
+	}
+	return html
+}
+
 // generateFieldInit generates the initialization code for component fields
 // indent is the base indentation (e.g., "\t" or "\t\t")
 func generateFieldInit(sb *strings.Builder, fields []storeField, indent string) {

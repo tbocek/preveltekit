@@ -151,6 +151,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 		childTmplProcessed = prefixInputBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.bindings)
 		childTmplProcessed = prefixEachBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.eachBlocks)
 		childTmplProcessed = prefixClassBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.classBindings)
+		childTmplProcessed = prefixComponentPlaceholders(compBinding.elementID, childTmplProcessed, childBindings.components)
 
 		childTmplProcessed = injectIDIntoFirstTag(childTmplProcessed, compBinding.elementID)
 		fmt.Fprintf(&sb, "const %sHTML = %s\n", compBinding.elementID, escapeForGoString(childTmplProcessed))
@@ -295,6 +296,22 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 			}
 		}
 
+		// Create component instances BEFORE the update function (so state persists)
+		for _, compBinding := range compsInBlock {
+			childComp := childComponents[compBinding.name]
+			if childComp == nil {
+				continue
+			}
+			_, childBindings := parseTemplate(strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children))
+			needsVar := len(childComp.fields) > 0 || len(compBinding.props) > 0 ||
+				len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childComp.hasOnMount
+			if needsVar {
+				fmt.Fprintf(sb, "\t%s := &%s{\n", compBinding.elementID, compBinding.name)
+				generateFieldInit(sb, childComp.fields, "\t\t")
+				sb.WriteString("\t}\n")
+			}
+		}
+
 		fmt.Fprintf(sb, "\tupdate%s := func() {\n", ifb.elementID)
 		sb.WriteString("\t\tvar html string\n")
 		sb.WriteString("\t\tvar branchIdx int\n")
@@ -325,6 +342,25 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 			fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", compID, compID)
 		}
 
+		// Also replace nested component placeholders (components inside the page components)
+		for _, compBinding := range compsInBlock {
+			childComp := childComponents[compBinding.name]
+			if childComp == nil {
+				continue
+			}
+			childTmpl := strings.ReplaceAll(childComp.template, "<slot/>", compBinding.children)
+			_, childBindings := parseTemplate(childTmpl)
+			// These nested components have prefixed IDs like comp1_comp0
+			for _, nestedComp := range childBindings.components {
+				nestedID := compBinding.elementID + "_" + nestedComp.elementID
+				if seen[nestedID] {
+					continue
+				}
+				seen[nestedID] = true
+				fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", nestedID, nestedID)
+			}
+		}
+
 		fmt.Fprintf(sb, "\t\tnewEl := document.Call(\"createElement\", \"span\")\n")
 		fmt.Fprintf(sb, "\t\tnewEl.Set(\"innerHTML\", html)\n")
 		fmt.Fprintf(sb, "\t\tif !%s_current.IsNull() { %s_current.Call(\"remove\") }\n", ifb.elementID, ifb.elementID)
@@ -332,8 +368,9 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 		fmt.Fprintf(sb, "\t\t%s_current = newEl\n", ifb.elementID)
 
 		// Wire up child components AFTER inserting HTML into DOM
+		// skipInstanceCreation=true because instances were created before the update function
 		for _, compBinding := range compsInBlock {
-			generateComponentInline(sb, compBinding, childComponents, "\t\t", "")
+			generateComponentInline(sb, compBinding, childComponents, "\t\t", "", true)
 		}
 
 		// Wire up each blocks inside if branches AFTER inserting HTML into DOM
@@ -787,7 +824,8 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 
 // generateComponentInline generates inline wiring code for a child component.
 // compID overrides compBinding.elementID when provided (used for nested components with prefixed IDs).
-func generateComponentInline(sb *strings.Builder, compBinding componentBinding, childComponents map[string]*component, indent string, compID string) {
+// skipInstanceCreation: if true, assumes component instance already exists (for if-block components)
+func generateComponentInline(sb *strings.Builder, compBinding componentBinding, childComponents map[string]*component, indent string, compID string, skipInstanceCreation bool) {
 	childComp := childComponents[compBinding.name]
 	if childComp == nil {
 		return
@@ -808,14 +846,16 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 	fmt.Fprintf(sb, "%s%s_el := reactive.GetEl(\"%s\")\n", indent, compID, compID)
 	fmt.Fprintf(sb, "%sif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", indent, compID, compID)
 
-	// Create component instance if needed
-	needsVar := len(childComp.fields) > 0 || len(compBinding.props) > 0 ||
-		len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childComp.hasOnMount
+	// Create component instance if needed (skip if already created outside)
+	if !skipInstanceCreation {
+		needsVar := len(childComp.fields) > 0 || len(compBinding.props) > 0 ||
+			len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childComp.hasOnMount
 
-	if needsVar {
-		fmt.Fprintf(sb, "%s\t%s := &%s{\n", indent, compID, compBinding.name)
-		generateFieldInit(sb, childComp.fields, indent+"\t\t")
-		fmt.Fprintf(sb, "%s\t}\n", indent)
+		if needsVar {
+			fmt.Fprintf(sb, "%s\t%s := &%s{\n", indent, compID, compBinding.name)
+			generateFieldInit(sb, childComp.fields, indent+"\t\t")
+			fmt.Fprintf(sb, "%s\t}\n", indent)
+		}
 	}
 
 	// Style injection
@@ -919,8 +959,123 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 		generateChildIfBlockInline(sb, ifb, childFieldTypes, compID, prefixedID, indent+"\t", childBindings.components, childComponents, compID)
 	}
 
+	// Wire up nested components (e.g., Badge, Card inside Components page)
+	for _, nestedBinding := range childBindings.components {
+		nestedCompID := compID + "_" + nestedBinding.elementID
+		generateNestedComponentInline(sb, nestedBinding, childComponents, indent+"\t", nestedCompID, compID)
+	}
+
 	if childComp.hasOnMount {
 		fmt.Fprintf(sb, "%s\t%s.OnMount()\n", indent, compID)
+	}
+
+	fmt.Fprintf(sb, "%s}\n", indent)
+}
+
+// generateNestedComponentInline wires up a nested component (e.g., Badge inside Components page)
+// nestedCompID is the prefixed ID (e.g., comp1_comp0)
+// parentCompID is the parent component ID (e.g., comp1) - used for prop bindings from parent stores
+func generateNestedComponentInline(sb *strings.Builder, nestedBinding componentBinding, childComponents map[string]*component, indent string, nestedCompID string, parentCompID string) {
+	nestedComp := childComponents[nestedBinding.name]
+	if nestedComp == nil {
+		return
+	}
+
+	nestedFieldTypes := buildFieldTypes(nestedComp)
+
+	// Parse nested component template
+	nestedTmpl := strings.ReplaceAll(nestedComp.template, "<slot/>", nestedBinding.children)
+	_, nestedBindings := parseTemplate(nestedTmpl)
+
+	// Check if element exists
+	fmt.Fprintf(sb, "%s%s_el := reactive.GetEl(\"%s\")\n", indent, nestedCompID, nestedCompID)
+	fmt.Fprintf(sb, "%sif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", indent, nestedCompID, nestedCompID)
+
+	// Create component instance if it has fields
+	needsVar := len(nestedComp.fields) > 0 || len(nestedBinding.props) > 0 || nestedComp.hasOnMount
+	if needsVar {
+		fmt.Fprintf(sb, "%s\t%s := &%s{\n", indent, nestedCompID, nestedBinding.name)
+		generateFieldInit(sb, nestedComp.fields, indent+"\t\t")
+		fmt.Fprintf(sb, "%s\t}\n", indent)
+	}
+
+	// Style injection
+	if nestedComp.style != "" {
+		fmt.Fprintf(sb, "%s\treactive.InjectStyle(\"%s\", %sCSS)\n", indent, nestedBinding.name, strings.ToLower(nestedBinding.name))
+	}
+
+	// Set props from parent - handle both static and dynamic props
+	for propName, propValue := range nestedBinding.props {
+		fieldName := strings.ToUpper(propName[:1]) + propName[1:] // Ensure proper casing (e.g., label -> Label)
+		// Check if dynamic prop (wrapped in {})
+		if strings.HasPrefix(propValue, "{") && strings.HasSuffix(propValue, "}") {
+			// Dynamic prop bound to parent's store - set up OnChange
+			storeField := propValue[1 : len(propValue)-1] // Remove { and }
+			fmt.Fprintf(sb, "%s\t%s.%s.Set(%s.%s.Get())\n", indent, nestedCompID, fieldName, parentCompID, storeField)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v string) { %s.%s.Set(v) })\n", indent, parentCompID, storeField, nestedCompID, fieldName)
+		} else {
+			// Static prop - just set the value
+			fmt.Fprintf(sb, "%s\t%s.%s.Set(%q)\n", indent, nestedCompID, fieldName, propValue)
+		}
+	}
+
+	// Expression bindings (with prefixed IDs)
+	for _, expr := range nestedBindings.expressions {
+		prefixedID := nestedCompID + "_" + expr.elementID
+		fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, nestedCompID, expr.fieldName)
+	}
+
+	// Events from parent (e.g., @click on the nested component)
+	for evtName, evt := range nestedBinding.events {
+		fmt.Fprintf(sb, "%s\treactive.On(%s_el, \"%s\", func() { %s.%s(%s) })\n",
+			indent, nestedCompID, evtName, parentCompID, evt.method, evt.args)
+	}
+
+	// Internal events within the nested component
+	for _, evt := range nestedBindings.events {
+		prefixedID := nestedCompID + "_" + evt.elementID
+		fmt.Fprintf(sb, "%s\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+			indent, prefixedID, evt.event, nestedCompID, evt.methodName, evt.args)
+	}
+
+	// Input bindings within nested component
+	for _, bind := range nestedBindings.bindings {
+		prefixedID := nestedCompID + "_" + bind.elementID
+		valueType := nestedFieldTypes[bind.fieldName]
+		if bind.bindType == "checked" {
+			fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Call(\"addEventListener\", \"change\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", indent, prefixedID)
+			fmt.Fprintf(sb, "%s\t\t%s.%s.Set(this.Get(\"checked\").Bool())\n%s\t\treturn nil\n%s\t}))\n", indent, nestedCompID, bind.fieldName, indent, indent)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v bool) { %s.Set(\"checked\", v) })\n", indent, nestedCompID, bind.fieldName, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Set(\"checked\", %s.%s.Get())\n", indent, prefixedID, nestedCompID, bind.fieldName)
+		} else {
+			fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Call(\"addEventListener\", \"input\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", indent, prefixedID)
+			fmt.Fprintf(sb, "%s\t\tval := this.Get(\"value\").String()\n", indent)
+			fmt.Fprintf(sb, "%s\t\t%s.%s.Set(val)\n", indent, nestedCompID, bind.fieldName)
+			fmt.Fprintf(sb, "%s\t\treturn nil\n%s\t}))\n", indent, indent)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v %s) { %s.Set(\"value\", %s) })\n",
+				indent, nestedCompID, bind.fieldName, valueType, prefixedID, toJS(valueType, "v"))
+		}
+	}
+
+	// Attribute bindings within nested component (e.g., data-type="{Type}")
+	for _, ab := range nestedBindings.attrBindings {
+		prefixedID := nestedCompID + "_" + ab.elementID
+		fmt.Fprintf(sb, "%s\tattr%s := document.Call(\"querySelector\", \"[data-attrbind=\\\"%s\\\"]\")\n", indent, prefixedID, prefixedID)
+		fmt.Fprintf(sb, "%s\tupdateAttr%s := func() {\n%s\t\tval := %s\n", indent, prefixedID, indent, escapeForGoString(ab.template))
+		for _, field := range ab.fields {
+			fmt.Fprintf(sb, "%s\t\tval = strings.ReplaceAll(val, \"{%s}\", %s)\n", indent, field, toJS(nestedFieldTypes[field], nestedCompID+"."+field+".Get()"))
+		}
+		fmt.Fprintf(sb, "%s\t\tattr%s.Call(\"setAttribute\", \"%s\", val)\n%s\t}\n", indent, prefixedID, ab.attrName, indent)
+		for _, field := range ab.fields {
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(_ %s) { updateAttr%s() })\n", indent, nestedCompID, field, nestedFieldTypes[field], prefixedID)
+		}
+		fmt.Fprintf(sb, "%s\tupdateAttr%s()\n", indent, prefixedID)
+	}
+
+	if nestedComp.hasOnMount {
+		fmt.Fprintf(sb, "%s\t%s.OnMount()\n", indent, nestedCompID)
 	}
 
 	fmt.Fprintf(sb, "%s}\n", indent)
@@ -1025,7 +1180,7 @@ func generateChildIfBlockInline(sb *strings.Builder, ifb ifBinding, fieldTypes m
 	// Wire up nested components after inserting HTML (using prefixed IDs)
 	for _, comp := range compsInBlock {
 		prefixedID := parentCompID + "_" + comp.elementID
-		generateComponentInline(sb, comp, childComponents, indent+"\t", prefixedID)
+		generateComponentInline(sb, comp, childComponents, indent+"\t", prefixedID, false)
 	}
 
 	// Wire up each blocks inside if branches AFTER inserting HTML into DOM
@@ -1106,28 +1261,16 @@ func isInsideCodeBlock(html string, pos int) bool {
 
 // generateNestedComponentConstants generates CSS and HTML constants for components nested inside child templates
 func generateNestedComponentConstants(sb *strings.Builder, nestedComponents []componentBinding, ifBlocks []ifBinding, childComponents map[string]*component, cssGenerated map[string]bool, htmlGenerated map[string]bool, parentCompID string) {
-	// Collect all HTML from if-blocks to find which components are inside them
-	allIfHTML := ""
-	for _, ifb := range ifBlocks {
-		for _, branch := range ifb.branches {
-			allIfHTML += branch.html
-		}
-		allIfHTML += ifb.elseHTML
-	}
-
+	// Generate HTML constants for ALL nested components
+	// These are components inside a parent that's already in an if-block, so they all need HTML constants
 	for _, nestedBinding := range nestedComponents {
-		// Check if this component is inside an if-block
-		if !strings.Contains(allIfHTML, "<!--"+nestedBinding.elementID+"-->") {
-			continue
-		}
-
 		nestedComp := childComponents[nestedBinding.name]
 		if nestedComp == nil {
 			continue
 		}
 
-		// Create a unique prefixed ID for nested components
-		prefixedID := parentCompID + "_" + nestedBinding.elementID
+		// nestedBinding.elementID is already prefixed (e.g., comp1_comp0)
+		prefixedID := nestedBinding.elementID
 
 		// Skip if already generated
 		if htmlGenerated[prefixedID] {
@@ -1175,6 +1318,11 @@ func generateNestedComponentConstants(sb *strings.Builder, nestedComponents []co
 			oldID := each.elementID
 			newID := prefixedID + "_" + oldID
 			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
+		}
+		for _, ab := range nestedBindings.attrBindings {
+			oldID := ab.elementID
+			newID := prefixedID + "_" + oldID
+			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `data-attrbind="`+oldID+`"`, `data-attrbind="`+newID+`"`)
 		}
 
 		nestedTmplProcessed = injectIDIntoFirstTag(nestedTmplProcessed, prefixedID)

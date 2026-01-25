@@ -15,23 +15,19 @@ type User struct {
 }
 
 type Fetch struct {
-	Status    *reactive.Store[string]
-	RawData   *reactive.Store[string]
-	Users     *reactive.List[string]
-	UserCount *reactive.Store[int]
+	Status  *reactive.Store[string]
+	RawData *reactive.Store[string]
 }
 
 func (f *Fetch) OnMount() {
 	if reactive.IsBuildTime {
-		f.Status.Set("loading...")
-		f.RawData.Set("Loading data...")
-		f.UserCount.Set(0)
+		f.Status.Set("ready")
+		f.RawData.Set("")
 		return
 	}
 
-	f.Status.Set("idle")
+	f.Status.Set("ready")
 	f.RawData.Set("")
-	f.UserCount.Set(0)
 }
 
 func (f *Fetch) FetchTodo() {
@@ -53,50 +49,42 @@ func (f *Fetch) FetchTodo() {
 	}()
 }
 
-func (f *Fetch) FetchUsers() {
-	f.Status.Set("loading users...")
+func (f *Fetch) FetchUser() {
+	f.Status.Set("loading...")
+	f.RawData.Set("")
 
 	go func() {
-		users, err := reactive.Get[[]User]("https://jsonplaceholder.typicode.com/users")
+		user, err := reactive.Get[User]("https://jsonplaceholder.typicode.com/users/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
 
-		names := make([]string, len(users))
-		for i, u := range users {
-			names[i] = u.Name
-		}
-		f.Users.Set(names)
-		f.UserCount.Set(len(names))
-		f.Status.Set("loaded " + itoa(len(names)) + " users")
+		f.RawData.Set("ID: " + itoa(user.ID) + "\nName: " + user.Name)
+		f.Status.Set("done")
 	}()
 }
 
-func (f *Fetch) FetchFewUsers() {
-	f.Status.Set("loading subset...")
+func (f *Fetch) FetchPost() {
+	f.Status.Set("loading...")
+	f.RawData.Set("")
 
 	go func() {
-		users, err := reactive.Get[[]User]("https://jsonplaceholder.typicode.com/users?_limit=3")
+		type Post struct {
+			ID     int    `js:"id"`
+			UserID int    `js:"userId"`
+			Title  string `js:"title"`
+			Body   string `js:"body"`
+		}
+		post, err := reactive.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
 
-		names := make([]string, len(users))
-		for i, u := range users {
-			names[i] = u.Name
-		}
-		f.Users.Set(names)
-		f.UserCount.Set(len(names))
-		f.Status.Set("loaded " + itoa(len(names)) + " users (subset)")
+		f.RawData.Set("ID: " + itoa(post.ID) + "\nUser: " + itoa(post.UserID) + "\nTitle: " + post.Title)
+		f.Status.Set("done")
 	}()
-}
-
-func (f *Fetch) ClearUsers() {
-	f.Users.Set([]string{})
-	f.UserCount.Set(0)
-	f.Status.Set("cleared")
 }
 
 func itoa(n int) string {
@@ -117,32 +105,26 @@ func (f *Fetch) Template() string {
 
 	<section>
 		<h2>Typed Fetch</h2>
-		<p>Fetch a todo item with typed response:</p>
-		<button @click="FetchTodo()">Fetch Todo</button>
-		<pre>{RawData}</pre>
+		<p>Fetch data with automatic JSON decoding into Go structs:</p>
+
+		<div class="buttons">
+			<button @click="FetchTodo()">Fetch Todo</button>
+			<button @click="FetchUser()">Fetch User</button>
+			<button @click="FetchPost()">Fetch Post</button>
+		</div>
+
+		<pre>{#if RawData != ""}{RawData}{:else}Click a button to fetch data{/if}</pre>
 		<p class="status">Status: {Status}</p>
 	</section>
 
 	<section>
-		<h2>Fetch List (Diff Demo)</h2>
-		<p>Fetches user names. Try loading all, then 3 to see diff in action.</p>
-		<div class="buttons">
-			<button @click="FetchUsers()">Fetch All Users</button>
-			<button @click="FetchFewUsers()">Fetch 3 Users</button>
-			<button @click="ClearUsers()">Clear</button>
-		</div>
+		<h2>Usage</h2>
+		<pre class="code">type User struct {
+    ID   int    ` + "`js:\"id\"`" + `
+    Name string ` + "`js:\"name\"`" + `
+}
 
-		<p>Users: <strong>{UserCount}</strong></p>
-
-		{#if UserCount > 0}
-			<ul>
-				{#each Users as user, i}
-					<li><span class="index">{i}</span> {user}</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="empty">No users loaded</p>
-		{/if}
+user, err := reactive.Get[User](url)</pre>
 	</section>
 </div>`
 }
@@ -155,12 +137,9 @@ func (f *Fetch) Style() string {
 .demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
 .demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
 .demo button:hover { background: #e5e5e5; }
-.demo pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; min-height: 50px; font-size: 12px; }
-.demo .status { color: #666; font-size: 0.9em; }
-.demo ul { list-style: none; padding: 0; margin: 10px 0; }
-.demo li { padding: 8px 12px; margin: 4px 0; background: #f9f9f9; border-radius: 4px; border-left: 3px solid #007bff; }
-.index { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; background: #007bff; color: white; border-radius: 50%; font-size: 11px; margin-right: 10px; }
-.empty { color: #999; font-style: italic; }
+.demo pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; min-height: 60px; font-size: 12px; white-space: pre-wrap; }
+.demo pre.code { background: #1a1a2e; color: #e0e0e0; }
+.demo .status { color: #666; font-size: 0.9em; margin-top: 10px; }
 .buttons { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
 `
 }
