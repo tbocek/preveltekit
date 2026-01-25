@@ -13,12 +13,10 @@ func (jsValue) IsNull() bool      { return true }
 // Document is a no-op stub for SSR
 var Document = jsValue{}
 
-func InjectStyle(name, css string)                              {}
-func GetEl(id string) jsValue                                   { return jsValue{} }
-func FindComment(marker string) jsValue                         { return jsValue{} }
-func SetText(el jsValue, text string)                           {}
-func On(el jsValue, event string, handler func())               {}
-func OnEvent(el jsValue, event string, handler func(e jsValue)) {}
+func InjectStyle(name, css string)                {}
+func GetEl(id string) jsValue                     { return jsValue{} }
+func FindComment(marker string) jsValue           { return jsValue{} }
+func On(el jsValue, event string, handler func()) {}
 
 // Bindable is implemented by types that can be bound to DOM elements.
 type Bindable[T any] interface {
@@ -32,7 +30,6 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-func Bind[T any](id string, store Bindable[T])                                 {}
 func BindText[T any](marker string, store Bindable[T])                         {}
 func BindHTML[T any](marker string, store Bindable[T])                         {}
 func BindInput(id string, store Settable[string])                              {}

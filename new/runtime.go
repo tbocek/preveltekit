@@ -40,28 +40,11 @@ func ok(el js.Value) bool {
 	return !el.IsNull() && !el.IsUndefined()
 }
 
-// SetText sets textContent on an element if it exists
-func SetText(el js.Value, text string) {
-	if ok(el) {
-		el.Set("textContent", text)
-	}
-}
-
 // On adds an event listener to an element
 func On(el js.Value, event string, handler func()) {
 	if ok(el) {
 		el.Call("addEventListener", event, js.FuncOf(func(this js.Value, args []js.Value) any {
 			handler()
-			return nil
-		}))
-	}
-}
-
-// OnEvent adds an event listener with access to the event object
-func OnEvent(el js.Value, event string, handler func(js.Value)) {
-	if ok(el) {
-		el.Call("addEventListener", event, js.FuncOf(func(this js.Value, args []js.Value) any {
-			handler(args[0])
 			return nil
 		}))
 	}
@@ -90,13 +73,6 @@ func toString[T any](v T) string {
 	default:
 		return ""
 	}
-}
-
-// Bind binds any store to an element's textContent (legacy, uses getElementById).
-func Bind[T any](id string, store Bindable[T]) {
-	el := GetEl(id)
-	store.OnChange(func(v T) { SetText(el, toString(v)) })
-	SetText(el, toString(store.Get()))
 }
 
 // FindComment finds a comment node with the given marker text using TreeWalker
@@ -230,7 +206,7 @@ func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value
 	anchor := FindComment(anchorMarker)
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
-	if ok(current) && current.Truthy() {
+	if current.Truthy() {
 		current.Call("remove")
 	}
 	if ok(anchor) {
