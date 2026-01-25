@@ -180,7 +180,7 @@ func generateConstants(sb *strings.Builder, bindings templateBindings, childComp
 		}
 		if childDef.style != "" && !tracker.CSS[compBinding.name] {
 			tracker.CSS[compBinding.name] = true
-			fmt.Fprintf(sb, "const %sCSS = `%s`\n", strings.ToLower(compBinding.name), childDef.style)
+			fmt.Fprintf(sb, "const %sCSS = `%s`\n", strings.ToLower(compBinding.name), minifyCSS(childDef.style))
 		}
 	}
 
@@ -227,7 +227,7 @@ func generateHTMLConstant(sb *strings.Builder, compBinding componentBinding, com
 	// Generate CSS if not already done
 	if compDef.style != "" && !tracker.CSS[compBinding.name] {
 		tracker.CSS[compBinding.name] = true
-		fmt.Fprintf(sb, "const %sCSS = `%s`\n", strings.ToLower(compBinding.name), compDef.style)
+		fmt.Fprintf(sb, "const %sCSS = `%s`\n", strings.ToLower(compBinding.name), minifyCSS(compDef.style))
 	}
 
 	// Process template with slot content
@@ -240,7 +240,7 @@ func generateHTMLConstant(sb *strings.Builder, compBinding componentBinding, com
 	// Inject component ID into root element
 	processedTmpl = injectIDIntoFirstTag(processedTmpl, fullID)
 
-	fmt.Fprintf(sb, "const %sHTML = %s\n", fullID, escapeForGoString(processedTmpl))
+	fmt.Fprintf(sb, "const %sHTML = %s\n", fullID, escapeForGoString(minifyHTML(processedTmpl)))
 
 	// Recursively generate constants for nested components
 	for _, nestedBinding := range childBindings.components {
@@ -685,11 +685,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 		}
 
 		// Insert HTML into DOM
-		fmt.Fprintf(sb, "%s\tnewEl := document.Call(\"createElement\", \"span\")\n", indent)
-		fmt.Fprintf(sb, "%s\tnewEl.Set(\"innerHTML\", html)\n", indent)
-		fmt.Fprintf(sb, "%s\tif !%s_current.IsNull() { %s_current.Call(\"remove\") }\n", indent, fullID, fullID)
-		fmt.Fprintf(sb, "%s\tif !%s_anchor.IsNull() { %s_anchor.Get(\"parentNode\").Call(\"insertBefore\", newEl, %s_anchor) }\n", indent, fullID, fullID, fullID)
-		fmt.Fprintf(sb, "%s\t%s_current = newEl\n", indent, fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(%s_anchor, %s_current, html)\n", indent, fullID, fullID, fullID)
 
 		// Wire up child components
 		for _, compBinding := range compsInBlock {
@@ -1084,11 +1080,7 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 		}
 
 		// Insert HTML
-		fmt.Fprintf(sb, "%s\tnewEl := document.Call(\"createElement\", \"span\")\n", indent)
-		fmt.Fprintf(sb, "%s\tnewEl.Set(\"innerHTML\", html)\n", indent)
-		fmt.Fprintf(sb, "%s\tif !%s_current.IsNull() { %s_current.Call(\"remove\") }\n", indent, fullID, fullID)
-		fmt.Fprintf(sb, "%s\tif !%s_anchor.IsNull() { %s_anchor.Get(\"parentNode\").Call(\"insertBefore\", newEl, %s_anchor) }\n", indent, fullID, fullID, fullID)
-		fmt.Fprintf(sb, "%s\t%s_current = newEl\n", indent, fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(%s_anchor, %s_current, html)\n", indent, fullID, fullID, fullID)
 
 		// Wire up components inside
 		for _, compBinding := range compsInBlock {

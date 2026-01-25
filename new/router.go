@@ -71,8 +71,6 @@ func (r *Router) Start() {
 // SetupLinks intercepts clicks on all internal anchor elements for SPA navigation
 // This is called automatically by Start(), but can be called again after dynamic content is added
 func (r *Router) SetupLinks() {
-	console := js.Global().Get("console")
-	console.Call("log", "[Router] SetupLinks called")
 
 	js.Global().Get("document").Call("addEventListener", "click", js.FuncOf(func(this js.Value, args []js.Value) any {
 		if len(args) == 0 {
@@ -110,7 +108,6 @@ func (r *Router) SetupLinks() {
 			return nil
 		}
 		hrefStr := href.String()
-		console.Call("log", "[Router] Click on link:", hrefStr)
 
 		// Skip external links
 		if strings.HasPrefix(hrefStr, "http://") || strings.HasPrefix(hrefStr, "https://") ||
@@ -138,7 +135,6 @@ func (r *Router) SetupLinks() {
 
 		// Resolve and navigate
 		path := resolvePath(hrefStr)
-		console.Call("log", "[Router] Navigating to:", path)
 		r.Navigate(path)
 
 		return nil
@@ -147,8 +143,6 @@ func (r *Router) SetupLinks() {
 
 // Navigate programmatically navigates to a path
 func (r *Router) Navigate(path string) {
-	console := js.Global().Get("console")
-	console.Call("log", "[Router] Navigate called with path:", path)
 	currentPath := r.currentPath.Get()
 
 	// Check beforeNav hook
@@ -173,9 +167,6 @@ func (r *Router) Replace(path string) {
 }
 
 func (r *Router) handleRoute(path string) {
-	console := js.Global().Get("console")
-	console.Call("log", "[Router] handleRoute called with path:", path)
-
 	// Normalize path
 	if path == "" {
 		path = "/"
@@ -184,7 +175,6 @@ func (r *Router) handleRoute(path string) {
 		path = path[:len(path)-1]
 	}
 
-	console.Call("log", "[Router] Setting currentPath to:", path)
 	r.currentPath.Set(path)
 
 	// Find matching route (most specific first)
@@ -203,13 +193,9 @@ func (r *Router) handleRoute(path string) {
 	}
 
 	if bestMatch != nil {
-		console.Call("log", "[Router] Matched route:", bestMatch.Path)
 		bestMatch.Handler(bestParams)
 	} else if r.notFound != nil {
-		console.Call("log", "[Router] No route matched, calling notFound")
 		r.notFound()
-	} else {
-		console.Call("log", "[Router] No route matched and no notFound handler")
 	}
 }
 

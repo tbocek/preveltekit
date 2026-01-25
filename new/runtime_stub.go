@@ -31,8 +31,9 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-func Bind[T any](id string, store Bindable[T])       {}
-func BindInput(id string, store Settable[string])    {}
-func BindInputInt(id string, store Settable[int])    {}
-func BindCheckbox(id string, store Settable[bool])   {}
-func ToggleClass(el jsValue, class string, add bool) {}
+func Bind[T any](id string, store Bindable[T])                    {}
+func BindInput(id string, store Settable[string])                 {}
+func BindInputInt(id string, store Settable[int])                 {}
+func BindCheckbox(id string, store Settable[bool])                {}
+func ToggleClass(el jsValue, class string, add bool)              {}
+func ReplaceContent(anchor, current jsValue, html string) jsValue { return jsValue{} }

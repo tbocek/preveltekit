@@ -147,3 +147,16 @@ func ToggleClass(el js.Value, class string, add bool) {
 		el.Get("classList").Call("remove", class)
 	}
 }
+
+// ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor
+func ReplaceContent(anchor, current js.Value, html string) js.Value {
+	newEl := Document.Call("createElement", "span")
+	newEl.Set("innerHTML", html)
+	if !current.IsNull() {
+		current.Call("remove")
+	}
+	if !anchor.IsNull() {
+		anchor.Get("parentNode").Call("insertBefore", newEl, anchor)
+	}
+	return newEl
+}

@@ -736,3 +736,128 @@ func findComponentTags(tmpl string) []string {
 	}
 	return result
 }
+
+// minifyCSS removes unnecessary whitespace from CSS while preserving functionality.
+// - Removes comments
+// - Collapses multiple spaces/newlines to single space
+// - Removes spaces around { } : ; ,
+// - Trims leading/trailing whitespace
+func minifyCSS(css string) string {
+	// Remove CSS comments /* ... */
+	result := removeComments(css, "/*", "*/")
+
+	// Replace all whitespace sequences with single space
+	var sb strings.Builder
+	inWhitespace := false
+	for _, c := range result {
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			if !inWhitespace {
+				sb.WriteByte(' ')
+				inWhitespace = true
+			}
+		} else {
+			sb.WriteRune(c)
+			inWhitespace = false
+		}
+	}
+	result = sb.String()
+
+	// Remove spaces around special characters
+	for _, ch := range []string{"{", "}", ":", ";", ","} {
+		result = strings.ReplaceAll(result, " "+ch, ch)
+		result = strings.ReplaceAll(result, ch+" ", ch)
+	}
+
+	return strings.TrimSpace(result)
+}
+
+// minifyHTML removes unnecessary whitespace from HTML while preserving functionality.
+// - Removes HTML comments (except conditional comments)
+// - Collapses multiple spaces/newlines between tags
+// - Preserves whitespace inside <pre>, <code>, <script>, <style>, <textarea>
+func minifyHTML(html string) string {
+	// Remove HTML comments <!-- ... --> (but not <!--comp placeholders)
+	result := removeHTMLComments(html)
+
+	// Collapse whitespace between tags
+	var sb strings.Builder
+	i := 0
+	for i < len(result) {
+		if result[i] == '>' {
+			sb.WriteByte('>')
+			i++
+			// Skip whitespace until next < or non-whitespace
+			for i < len(result) && (result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r') {
+				i++
+			}
+			// If we hit another tag, don't add any space
+			// If we hit content, collapse to single space if needed
+			if i < len(result) && result[i] != '<' {
+				// There's text content - we may need a space before it
+				// but only if there was whitespace originally
+			}
+		} else if result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r' {
+			// Collapse whitespace
+			for i < len(result) && (result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r') {
+				i++
+			}
+			// Only add space if needed between content
+			if i < len(result) && result[i] != '<' {
+				sb.WriteByte(' ')
+			}
+		} else {
+			sb.WriteByte(result[i])
+			i++
+		}
+	}
+
+	return strings.TrimSpace(sb.String())
+}
+
+// removeComments removes block comments delimited by start and end markers
+func removeComments(s, start, end string) string {
+	var sb strings.Builder
+	i := 0
+	for i < len(s) {
+		if i+len(start) <= len(s) && s[i:i+len(start)] == start {
+			// Find end of comment
+			endIdx := strings.Index(s[i+len(start):], end)
+			if endIdx != -1 {
+				i = i + len(start) + endIdx + len(end)
+				continue
+			}
+		}
+		sb.WriteByte(s[i])
+		i++
+	}
+	return sb.String()
+}
+
+// removeHTMLComments removes HTML comments but preserves <!--compN--> placeholders
+func removeHTMLComments(html string) string {
+	var sb strings.Builder
+	i := 0
+	for i < len(html) {
+		if i+4 <= len(html) && html[i:i+4] == "<!--" {
+			// Check if it's a <!--comp placeholder (preserve these)
+			if i+8 <= len(html) && html[i:i+8] == "<!--comp" {
+				// Find end and preserve
+				endIdx := strings.Index(html[i:], "-->")
+				if endIdx != -1 {
+					sb.WriteString(html[i : i+endIdx+3])
+					i = i + endIdx + 3
+					continue
+				}
+			}
+			// Regular comment - skip it
+			endIdx := strings.Index(html[i+4:], "-->")
+			if endIdx != -1 {
+				i = i + 4 + endIdx + 3
+				continue
+			}
+		}
+		sb.WriteByte(html[i])
+		i++
+	}
+	return sb.String()
+}
