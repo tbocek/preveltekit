@@ -375,12 +375,37 @@ func prefixBindingIDs(prefix string, html string, exprs []exprBinding, events []
 		html = strings.ReplaceAll(html, `data-attrbind="`+oldID+`"`, `data-attrbind="`+newID+`"`)
 		attrBindings[i].elementID = newID
 	}
-	// Prefix if-block anchor IDs
+	// Prefix if-block anchor IDs and each blocks inside branches
 	for i := range ifBlocks {
 		oldID := ifBlocks[i].elementID
 		newID := prefix + "_" + oldID
 		html = strings.ReplaceAll(html, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
 		ifBlocks[i].elementID = newID
+
+		// Also prefix each blocks inside each branch
+		for j := range ifBlocks[i].branches {
+			for k := range ifBlocks[i].branches[j].eachBlocks {
+				oldEachID := ifBlocks[i].branches[j].eachBlocks[k].elementID
+				newEachID := prefix + "_" + oldEachID
+				// Update the branch HTML
+				ifBlocks[i].branches[j].html = strings.ReplaceAll(
+					ifBlocks[i].branches[j].html,
+					`id="`+oldEachID+`_anchor"`,
+					`id="`+newEachID+`_anchor"`)
+				// Update the binding's elementID
+				ifBlocks[i].branches[j].eachBlocks[k].elementID = newEachID
+			}
+			// Also prefix class bindings inside branches
+			for k := range ifBlocks[i].branches[j].classBindings {
+				oldClassID := ifBlocks[i].branches[j].classBindings[k].elementID
+				newClassID := prefix + "_" + oldClassID
+				ifBlocks[i].branches[j].html = strings.ReplaceAll(
+					ifBlocks[i].branches[j].html,
+					`id="`+oldClassID+`"`,
+					`id="`+newClassID+`"`)
+				ifBlocks[i].branches[j].classBindings[k].elementID = newClassID
+			}
+		}
 	}
 	return html
 }

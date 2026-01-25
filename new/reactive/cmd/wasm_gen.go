@@ -575,6 +575,8 @@ func generateEachBlockInlineWithPrefix(sb *strings.Builder, each eachBinding, fi
 
 	// For each blocks inside if blocks, we use OnRender to render all items
 	// OnEdit is not used since the if block re-renders everything on change
+	// Clear existing callbacks first to prevent accumulation on re-render
+	fmt.Fprintf(sb, "%s%s.%s.ClearCallbacks()\n", indent, compPrefix, each.listName)
 	fmt.Fprintf(sb, "%s%s.%s.OnRender(func(items []%s) {\n", indent, compPrefix, each.listName, itemType)
 	if hasElse {
 		fmt.Fprintf(sb, "%s\tif len(items) == 0 { %s_else.Get(\"style\").Set(\"display\", \"\") } else { %s_else.Get(\"style\").Set(\"display\", \"none\") }\n", indent, each.elementID, each.elementID)
@@ -956,6 +958,13 @@ func generateChildIfBlockInline(sb *strings.Builder, ifb ifBinding, fieldTypes m
 
 	for i, branch := range ifb.branches {
 		processedHTML, exprs := processIfBranchExpressions(branch.html, anchorID, &exprCounter)
+		// Prefix each block anchor IDs in the branch HTML
+		for j := range ifb.branches[i].eachBlocks {
+			oldEachID := ifb.branches[i].eachBlocks[j].elementID
+			newEachID := compID + "_" + oldEachID
+			processedHTML = strings.ReplaceAll(processedHTML, `id="`+oldEachID+`_anchor"`, `id="`+newEachID+`_anchor"`)
+			ifb.branches[i].eachBlocks[j].elementID = newEachID
+		}
 		processedBranches[i].condition = branch.condition
 		processedBranches[i].html = processedHTML
 		processedBranches[i].exprs = exprs

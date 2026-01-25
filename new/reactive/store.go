@@ -174,6 +174,14 @@ func (l *List[T]) OnChange(cb func([]T)) {
 	l.onChange = append(l.onChange, cb)
 }
 
+// ClearCallbacks removes all registered callbacks.
+// Used when re-rendering if-blocks to prevent callback accumulation.
+func (l *List[T]) ClearCallbacks() {
+	l.onEdit = nil
+	l.onRender = nil
+	l.onChange = nil
+}
+
 // Render triggers initial render callbacks
 func (l *List[T]) Render() {
 	for _, cb := range l.onRender {
