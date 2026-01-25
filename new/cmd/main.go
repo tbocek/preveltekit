@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,98 +37,41 @@ func main() {
 		}
 	}
 
-	// Parse child components
-	// Track all source files for each component (to handle build-tag variants)
-	childComponents := make(map[string]*component)
-	childSourceFiles := make(map[string][]string) // component name -> list of source files
-	for i := 2; i < len(os.Args); i++ {
-		childFile := os.Args[i]
-		comps, err := parseComponents(childFile)
+	// Collect all source files
+	sourceFiles := []string{mainComponentFile}
+	sourceFiles = append(sourceFiles, os.Args[2:]...)
+
+	// Auto-discover additional component files in the same directory
+	sourceFiles = autoDiscoverComponents(dir, sourceFiles)
+
+	// Extract struct names from all source files
+	allStructNames := make(map[string]bool)
+	for _, file := range sourceFiles {
+		names, err := parseComponentNames(file)
 		if err != nil {
-			fatal("parse child component %s: %v", childFile, err)
+			fatal("parse %s: %v", file, err)
 		}
-		for _, comp := range comps {
-			childComponents[comp.name] = comp
-			childSourceFiles[comp.name] = append(childSourceFiles[comp.name], childFile)
-		}
-	}
-
-	// Parse main component
-	mainComp, err := parseComponent(mainComponentFile)
-	if err != nil {
-		fatal("parse error: %v", err)
-	}
-
-	// Track which files have been parsed (to avoid re-parsing)
-	parsedFiles := make(map[string]bool)
-	parsedFiles[mainComponentFile] = true
-
-	// Auto-discover components referenced in templates (including child templates)
-	// Use a queue to recursively discover nested component references
-	discovered := make(map[string]bool)
-	queue := findReferencedComponents(mainComp.template)
-
-	for len(queue) > 0 {
-		compName := queue[0]
-		queue = queue[1:]
-
-		if discovered[compName] {
-			continue
-		}
-		discovered[compName] = true
-
-		if _, exists := childComponents[compName]; exists {
-			// Already loaded, but check its template for more components
-			childComp := childComponents[compName]
-			nestedRefs := findReferencedComponents(childComp.template)
-			queue = append(queue, nestedRefs...)
-			continue
-		}
-
-		// Try to find the component file in the same directory
-		possibleFiles := []string{
-			filepath.Join(dir, strings.ToLower(compName)+".go"),
-			filepath.Join(dir, compName+".go"),
-		}
-		for _, f := range possibleFiles {
-			if _, err := os.Stat(f); err == nil {
-				// Skip if already parsed
-				if parsedFiles[f] {
-					continue
-				}
-				parsedFiles[f] = true
-
-				// Parse all components from this file
-				comps, err := parseComponents(f)
-				if err != nil {
-					fatal("auto-discovered component %s: %v", f, err)
-				}
-
-				// Add all components found in this file
-				for _, comp := range comps {
-					if _, exists := childComponents[comp.name]; !exists {
-						childComponents[comp.name] = comp
-						childSourceFiles[comp.name] = append(childSourceFiles[comp.name], f)
-
-						// Also check this component's template for nested references
-						nestedRefs := findReferencedComponents(comp.template)
-						queue = append(queue, nestedRefs...)
-					}
-				}
-
-				// Also look for _stub.go variant (build-tag variants)
-				stubFile := filepath.Join(dir, strings.ToLower(compName)+"_stub.go")
-				if _, err := os.Stat(stubFile); err == nil && !parsedFiles[stubFile] {
-					parsedFiles[stubFile] = true
-					childSourceFiles[compName] = append(childSourceFiles[compName], stubFile)
-				}
-
-				break
-			}
+		for _, name := range names {
+			allStructNames[name] = true
 		}
 	}
 
-	// Write go.mod that imports reactive package
+	// Get main component name (first struct in main file)
+	mainNames, err := parseComponentNames(mainComponentFile)
+	if err != nil || len(mainNames) == 0 {
+		fatal("no structs found in %s", mainComponentFile)
+	}
+	mainCompName := mainNames[0]
+
+	// Child component names (all others)
+	var childCompNames []string
+	for name := range allStructNames {
+		if name != mainCompName {
+			childCompNames = append(childCompNames, name)
+		}
+	}
+
+	// Write go.mod
 	scriptDir := findScriptDir()
 	goMod := fmt.Sprintf(`module app
 
@@ -139,13 +83,89 @@ replace preveltekit => %s
 `, scriptDir)
 	writeFile(filepath.Join(buildDir, "go.mod"), goMod)
 
+	// Copy source files to build/ (strip Template/Style method bodies for cleaner code)
+	writtenFiles := make(map[string]bool)
+	for _, srcFile := range sourceFiles {
+		baseName := filepath.Base(srcFile)
+		if writtenFiles[baseName] {
+			continue
+		}
+		writtenFiles[baseName] = true
+
+		src, err := os.ReadFile(srcFile)
+		if err != nil {
+			fatal("read %s: %v", srcFile, err)
+		}
+		writeFile(filepath.Join(buildDir, baseName), string(src))
+	}
+
+	// Run go mod tidy before generating reflect.go
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = buildDir
+	if err := cmd.Run(); err != nil {
+		fatal("go mod tidy: %v", err)
+	}
+
+	// Clean up old generated files before running reflect
+	os.Remove(filepath.Join(buildDir, "main.go"))
+	os.Remove(filepath.Join(buildDir, "render.go"))
+
+	// Generate reflect.go directly in build/ (same package main as source files)
+	reflectGo := generateReflect(mainCompName, childCompNames)
+	writeFile(filepath.Join(buildDir, "reflect.go"), reflectGo)
+
+	// Run reflect.go to get component metadata
+	var stdout, stderr bytes.Buffer
+	cmd = exec.Command("go", "run", "-tags", "!wasm", ".")
+	cmd.Dir = buildDir
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		fatal("reflect.go failed: %v\n%s", err, stderr.String())
+	}
+
+	// Clean up reflect.go
+	os.Remove(filepath.Join(buildDir, "reflect.go"))
+
+	// Parse reflection output
+	components, routes, err := parseReflectOutput(stdout.String())
+	if err != nil {
+		fatal("parse reflect output: %v", err)
+	}
+
+	if len(components) == 0 {
+		fatal("no components found")
+	}
+
+	// Find main component and build child map
+	var mainComp *component
+	childComponents := make(map[string]*component)
+	for _, comp := range components {
+		if comp.name == mainCompName {
+			mainComp = comp
+		} else {
+			childComponents[comp.name] = comp
+		}
+	}
+
+	if mainComp == nil {
+		fatal("main component %s not found", mainCompName)
+	}
+
+	// Default routes if none specified
+	if len(routes) == 0 {
+		routes = []staticRoute{{path: "/", htmlFile: "index.html"}}
+	}
+
+	// Write routes.txt for build.sh
+	var routeLines []string
+	for _, r := range routes {
+		routeLines = append(routeLines, r.path+":"+r.htmlFile)
+	}
+	writeFile(filepath.Join(buildDir, "routes.txt"), strings.Join(routeLines, "\n")+"\n")
+
 	// Parse template and generate wiring code
 	tmpl, bindings := parseTemplate(mainComp.template)
-
-	// Validate template bindings
-	if err := validateBindings(mainComp, bindings); err != nil {
-		fatal("%s", err)
-	}
 
 	// Validate component references exist
 	for _, comp := range bindings.components {
@@ -154,45 +174,22 @@ replace preveltekit => %s
 			for name := range childComponents {
 				available = append(available, name)
 			}
-			fatal("template error: <%s /> references unknown component\n\n  Available components: %v\n\n  Hint: Pass the component file as an argument: preveltekit app.go %s.go",
-				comp.name, available, strings.ToLower(comp.name))
+			fatal("template error: <%s /> references unknown component\n\n  Available: %v",
+				comp.name, available)
 		}
 	}
 
-	// Generate files
+	// Generate main.go (WASM) and render.go (SSR)
 	mainGo := generateMain(mainComp, tmpl, bindings, childComponents)
 	renderGo := generateRender(mainComp, tmpl, bindings, childComponents)
-
-	// Write generated files to build/
-	componentSrc := stripTemplateAndStyle(mainComp.source)
-	writeFile(filepath.Join(buildDir, "component.go"), componentSrc)
-
-	// Collect unique source files (a file may contain multiple components)
-	writtenFiles := make(map[string]bool)
-	for _, sourceFiles := range childSourceFiles {
-		for _, srcFile := range sourceFiles {
-			if writtenFiles[srcFile] {
-				continue
-			}
-			writtenFiles[srcFile] = true
-			src, _ := os.ReadFile(srcFile)
-			childSrc := stripTemplateAndStyle(string(src))
-			baseName := filepath.Base(srcFile)
-			writeFile(filepath.Join(buildDir, baseName), childSrc)
-		}
-	}
 
 	writeFile(filepath.Join(buildDir, "main.go"), mainGo)
 	writeFile(filepath.Join(buildDir, "render.go"), renderGo)
 
-	// Run go mod tidy to create go.sum
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = buildDir
-	if err := cmd.Run(); err != nil {
-		fatal("go mod tidy: %v", err)
-	}
+	// Remove reflect.go (no longer needed)
+	os.Remove(filepath.Join(buildDir, "reflect.go"))
 
-	// Collect all styles (main + children)
+	// Collect all styles
 	var allStyles strings.Builder
 	allStyles.WriteString(mainComp.style)
 	for _, child := range childComponents {
@@ -201,11 +198,48 @@ replace preveltekit => %s
 			allStyles.WriteString(child.style)
 		}
 	}
-
-	// Write styles.css to build/
 	writeFile(filepath.Join(buildDir, "styles.css"), allStyles.String())
 
 	fmt.Printf("Generated: build/\n")
+	fmt.Printf("Routes: %d\n", len(routes))
+	for _, r := range routes {
+		fmt.Printf("  %s -> %s\n", r.path, r.htmlFile)
+	}
+}
+
+// autoDiscoverComponents finds additional component files in the directory
+func autoDiscoverComponents(dir string, existingFiles []string) []string {
+	existing := make(map[string]bool)
+	for _, f := range existingFiles {
+		existing[filepath.Base(f)] = true
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return existingFiles
+	}
+
+	result := existingFiles
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") {
+			continue
+		}
+		if existing[name] {
+			continue
+		}
+		// Skip test files and build artifacts
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		result = append(result, filepath.Join(dir, name))
+		existing[name] = true
+	}
+
+	return result
 }
 
 func assemble(dir string) {
@@ -215,19 +249,22 @@ func assemble(dir string) {
 	scriptDir := findScriptDir()
 	defaultAssetsDir := filepath.Join(scriptDir, "assets")
 
-	// Read pre-rendered HTML
-	prerendered, err := os.ReadFile(filepath.Join(distDir, "prerendered.html"))
+	// Read routes
+	routesData, err := os.ReadFile(filepath.Join(buildDir, "routes.txt"))
 	if err != nil {
-		fatal("read prerendered.html: %v", err)
+		// Default to single route
+		routesData = []byte("/:index.html")
 	}
 
-	// Read styles from build
+	routes := parseRoutesFile(string(routesData))
+
+	// Read styles
 	styles, err := os.ReadFile(filepath.Join(buildDir, "styles.css"))
 	if err != nil {
-		fatal("read styles.css: %v", err)
+		styles = []byte{}
 	}
 
-	// Read template from assets (fall back to default)
+	// Read template
 	indexPath := filepath.Join(assetsDir, "index.html")
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 		indexPath = filepath.Join(defaultAssetsDir, "index.html")
@@ -237,13 +274,42 @@ func assemble(dir string) {
 		fatal("read index.html: %v", err)
 	}
 
-	// Inject styles and pre-rendered content
-	finalHTML := string(template)
-	finalHTML = strings.Replace(finalHTML, "</head>", "\t<style>\n"+string(styles)+"\t</style>\n</head>", 1)
-	finalHTML = strings.Replace(finalHTML, `<div id="app"></div>`, `<div id="app">`+string(prerendered)+`</div>`, 1)
+	// Assemble each route
+	for _, route := range routes {
+		prerenderedFile := filepath.Join(distDir, strings.TrimSuffix(route.htmlFile, ".html")+"_prerendered.html")
+		prerendered, err := os.ReadFile(prerenderedFile)
+		if err != nil {
+			fatal("read %s: %v", prerenderedFile, err)
+		}
 
-	writeFile(filepath.Join(distDir, "index.html"), finalHTML)
-	os.Remove(filepath.Join(distDir, "prerendered.html"))
+		finalHTML := string(template)
+		finalHTML = strings.Replace(finalHTML, "</head>", "\t<style>\n"+string(styles)+"\t</style>\n</head>", 1)
+		finalHTML = strings.Replace(finalHTML, `<div id="app"></div>`, `<div id="app">`+string(prerendered)+`</div>`, 1)
 
-	fmt.Println("Assembled: dist/")
+		writeFile(filepath.Join(distDir, route.htmlFile), finalHTML)
+		os.Remove(prerenderedFile)
+	}
+
+	fmt.Printf("Assembled: %d HTML files\n", len(routes))
+}
+
+func parseRoutesFile(content string) []staticRoute {
+	var routes []staticRoute
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			routes = append(routes, staticRoute{
+				path:     parts[0],
+				htmlFile: parts[1],
+			})
+		}
+	}
+	if len(routes) == 0 {
+		routes = []staticRoute{{path: "/", htmlFile: "index.html"}}
+	}
+	return routes
 }

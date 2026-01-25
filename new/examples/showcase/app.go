@@ -8,43 +8,26 @@ type App struct {
 
 func (a *App) OnMount() {
 	router := preveltekit.NewRouter()
-
-	router.Handle("/", func(p map[string]string) {
-		a.CurrentPage.Set("basics")
-	})
-	router.Handle("/basics", func(p map[string]string) {
-		a.CurrentPage.Set("basics")
-	})
-	router.Handle("/components", func(p map[string]string) {
-		a.CurrentPage.Set("components")
-	})
-	router.Handle("/lists", func(p map[string]string) {
-		a.CurrentPage.Set("lists")
-	})
-	router.Handle("/routing", func(p map[string]string) {
-		a.CurrentPage.Set("routing")
-	})
-	router.Handle("/links", func(p map[string]string) {
-		a.CurrentPage.Set("links")
-	})
-	router.Handle("/fetch", func(p map[string]string) {
-		a.CurrentPage.Set("fetch")
-	})
-	router.Handle("/storage", func(p map[string]string) {
-		a.CurrentPage.Set("storage")
-	})
-	router.Handle("/debounce", func(p map[string]string) {
-		a.CurrentPage.Set("debounce")
-	})
-	router.Handle("/bitcoin", func(p map[string]string) {
-		a.CurrentPage.Set("bitcoin")
-	})
-
+	router.RegisterRoutes(a.Routes())
 	router.NotFound(func() {
 		a.CurrentPage.Set("notfound")
 	})
-
 	router.Start()
+}
+
+func (a *App) Routes() []preveltekit.StaticRoute {
+	return []preveltekit.StaticRoute{
+		{Path: "/", HTMLFile: "index.html", Handler: func(p map[string]string) { a.CurrentPage.Set("basics") }},
+		{Path: "/basics", HTMLFile: "basics.html", Handler: func(p map[string]string) { a.CurrentPage.Set("basics") }},
+		{Path: "/components", HTMLFile: "components.html", Handler: func(p map[string]string) { a.CurrentPage.Set("components") }},
+		{Path: "/lists", HTMLFile: "lists.html", Handler: func(p map[string]string) { a.CurrentPage.Set("lists") }},
+		{Path: "/routing", HTMLFile: "routing.html", Handler: func(p map[string]string) { a.CurrentPage.Set("routing") }},
+		{Path: "/links", HTMLFile: "links.html", Handler: func(p map[string]string) { a.CurrentPage.Set("links") }},
+		{Path: "/fetch", HTMLFile: "fetch.html", Handler: func(p map[string]string) { a.CurrentPage.Set("fetch") }},
+		{Path: "/storage", HTMLFile: "storage.html", Handler: func(p map[string]string) { a.CurrentPage.Set("storage") }},
+		{Path: "/debounce", HTMLFile: "debounce.html", Handler: func(p map[string]string) { a.CurrentPage.Set("debounce") }},
+		{Path: "/bitcoin", HTMLFile: "bitcoin.html", Handler: func(p map[string]string) { a.CurrentPage.Set("bitcoin") }},
+	}
 }
 
 func (a *App) Template() string {

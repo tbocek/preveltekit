@@ -34,6 +34,16 @@ func (r *Router) Handle(path string, handler func(params map[string]string)) {
 	r.routes = append(r.routes, Route{Path: path, Handler: handler})
 }
 
+// RegisterRoutes registers multiple routes from StaticRoute definitions.
+// This allows using Routes() as single source of truth for both SSR and runtime.
+func (r *Router) RegisterRoutes(routes []StaticRoute) {
+	for _, route := range routes {
+		if route.Handler != nil {
+			r.routes = append(r.routes, Route{Path: route.Path, Handler: route.Handler})
+		}
+	}
+}
+
 // NotFound sets the handler for unmatched routes
 func (r *Router) NotFound(handler func()) {
 	r.notFound = handler
