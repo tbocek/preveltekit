@@ -180,12 +180,14 @@ func generateSSRComponentInstances(sb *strings.Builder, components []componentBi
 func generateSSRBindings(sb *strings.Builder, bindings templateBindings, ctx *SSRContext) {
 	varName := ctx.Scope.VarName
 
-	// Expression substitutions
+	// Expression substitutions - replace comment markers with value while keeping marker
 	for _, expr := range bindings.expressions {
 		fullID := ctx.prefixID(expr.elementID)
+		shortMarker := toShortMarker(fullID)
 		varRef := varName + "." + expr.fieldName
-		fmt.Fprintf(sb, "\thtml = strings.Replace(html, \"<span id=\\\"%s\\\"></span>\", fmt.Sprintf(\"<span id=\\\"%s\\\">%%v</span>\", %s.Get()), 1)\n",
-			fullID, fullID, varRef)
+		// Replace <!--marker--> with value<!--marker--> so hydration can still find the marker
+		fmt.Fprintf(sb, "\thtml = strings.Replace(html, \"<!--%s-->\", fmt.Sprintf(\"%%v<!--%s-->\", %s.Get()), 1)\n",
+			shortMarker, shortMarker, varRef)
 	}
 
 	// Attribute bindings
@@ -227,8 +229,9 @@ func generateSSRBindings(sb *strings.Builder, bindings templateBindings, ctx *SS
 		} else {
 			sb.WriteString("\t\t}\n")
 		}
-		fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<span id=\\\"%s_anchor\\\"></span>\", ifContent + \"<span id=\\\"%s_anchor\\\"></span>\", 1)\n\t}\n",
-			fullID, fullID)
+		shortMarker := toShortMarker(fullID)
+		fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", ifContent + \"<!--%s-->\", 1)\n\t}\n",
+			shortMarker, shortMarker)
 	}
 
 	// Each blocks
@@ -251,8 +254,9 @@ func generateSSRBindings(sb *strings.Builder, bindings templateBindings, ctx *SS
 		if each.elseHTML != "" {
 			fmt.Fprintf(sb, "\t\t}\n")
 		}
-		fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<span id=\\\"%s_anchor\\\"></span>\", eachContent.String() + \"<span id=\\\"%s_anchor\\\"></span>\", 1)\n\t}\n",
-			fullID, fullID)
+		shortMarker := toShortMarker(fullID)
+		fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", eachContent.String() + \"<!--%s-->\", 1)\n\t}\n",
+			shortMarker, shortMarker)
 	}
 }
 
@@ -303,8 +307,9 @@ func generateSSRComponent(sb *strings.Builder, ctx *SSRContext) {
 
 	// Child's own expressions
 	for _, expr := range childOwnExprs {
-		fmt.Fprintf(sb, "\t\tchildHTML = strings.Replace(childHTML, \"<span id=\\\"%s\\\"></span>\", fmt.Sprintf(\"<span id=\\\"%s\\\">%%v</span>\", %s.%s.Get()), 1)\n",
-			expr.elementID, expr.elementID, compID, expr.fieldName)
+		shortMarker := toShortMarker(expr.elementID)
+		fmt.Fprintf(sb, "\t\tchildHTML = strings.Replace(childHTML, \"<!--%s-->\", fmt.Sprintf(\"%%v<!--%s-->\", %s.%s.Get()), 1)\n",
+			shortMarker, shortMarker, compID, expr.fieldName)
 	}
 
 	// Slot expressions (parent bindings)
@@ -313,8 +318,9 @@ func generateSSRComponent(sb *strings.Builder, ctx *SSRContext) {
 		parentVarName = ctx.Parent.Scope.VarName
 	}
 	for _, expr := range slotExprs {
-		fmt.Fprintf(sb, "\t\tchildHTML = strings.Replace(childHTML, \"<span id=\\\"%s\\\"></span>\", fmt.Sprintf(\"<span id=\\\"%s\\\">%%v</span>\", %s.%s.Get()), 1)\n",
-			expr.elementID, expr.elementID, parentVarName, expr.fieldName)
+		shortMarker := toShortMarker(expr.elementID)
+		fmt.Fprintf(sb, "\t\tchildHTML = strings.Replace(childHTML, \"<!--%s-->\", fmt.Sprintf(\"%%v<!--%s-->\", %s.%s.Get()), 1)\n",
+			shortMarker, shortMarker, parentVarName, expr.fieldName)
 	}
 
 	// Attribute bindings
@@ -343,8 +349,9 @@ func generateSSRComponent(sb *strings.Builder, ctx *SSRContext) {
 		}
 	}
 
-	// Replace placeholder with rendered HTML
-	fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", childHTML, 1)\n\t}\n", compBinding.elementID)
+	// Replace placeholder with rendered HTML (short marker format)
+	shortMarker := toShortMarker(compBinding.elementID)
+	fmt.Fprintf(sb, "\t\thtml = strings.Replace(html, \"<!--%s-->\", childHTML, 1)\n\t}\n", shortMarker)
 }
 
 // generateSSRNestedComponent generates SSR rendering for a nested component.
@@ -368,8 +375,9 @@ func generateSSRNestedComponent(sb *strings.Builder, ctx *SSRContext, htmlVar st
 
 	// Expressions
 	for _, expr := range childBindings.expressions {
-		fmt.Fprintf(sb, "\t\t\tnestedHTML = strings.Replace(nestedHTML, \"<span id=\\\"%s\\\"></span>\", fmt.Sprintf(\"<span id=\\\"%s\\\">%%v</span>\", %s.%s.Get()), 1)\n",
-			expr.elementID, expr.elementID, compID, expr.fieldName)
+		shortMarker := toShortMarker(expr.elementID)
+		fmt.Fprintf(sb, "\t\t\tnestedHTML = strings.Replace(nestedHTML, \"<!--%s-->\", fmt.Sprintf(\"%%v<!--%s-->\", %s.%s.Get()), 1)\n",
+			shortMarker, shortMarker, compID, expr.fieldName)
 	}
 
 	// Attribute bindings
@@ -402,7 +410,8 @@ func generateSSRNestedComponent(sb *strings.Builder, ctx *SSRContext, htmlVar st
 		}
 	}
 
-	// Replace placeholder - use the full prefixed ID since the parent's HTML
-	// has been processed by prefixAllBindingIDs and contains prefixed placeholders
-	fmt.Fprintf(sb, "\t\t\t%s = strings.Replace(%s, \"<!--%s-->\", nestedHTML, 1)\n\t\t}\n", htmlVar, htmlVar, compID)
+	// Replace placeholder - use short marker format
+	// The parent's HTML has been processed by prefixAllBindingIDs which uses short markers
+	shortMarker := toShortMarker(compID)
+	fmt.Fprintf(sb, "\t\t\t%s = strings.Replace(%s, \"<!--%s-->\", nestedHTML, 1)\n\t\t}\n", htmlVar, htmlVar, shortMarker)
 }

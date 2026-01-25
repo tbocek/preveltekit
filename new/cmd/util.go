@@ -7,7 +7,25 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
+	"github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
 )
+
+var minifier *minify.M
+
+func init() {
+	minifier = minify.New()
+	minifier.AddFunc("text/css", css.Minify)
+	minifier.AddFunc("text/javascript", js.Minify)
+	minifier.Add("text/html", &html.Minifier{
+		KeepComments:     true,
+		KeepDocumentTags: true,
+		KeepEndTags:      true,
+	})
+}
 
 // EmbeddedModulePath can be set at build time with -ldflags "-X main.EmbeddedModulePath=/path/to/preveltekit"
 var EmbeddedModulePath string
@@ -556,43 +574,120 @@ func transformCondition(cond string, fieldTypes map[string]string, prefix string
 	return cond
 }
 
-// findCompPlaceholders finds all <!--compN--> placeholders in HTML and returns the comp IDs
+// expandSegment converts a short segment back to full format.
+// Examples: "c0" -> "comp0", "i0" -> "if0", "e0" -> "each0"
+func expandSegment(segment string) string {
+	if len(segment) < 2 {
+		return segment
+	}
+	switch segment[0] {
+	case 'c':
+		// Check if rest is numeric
+		rest := segment[1:]
+		for _, c := range rest {
+			if c < '0' || c > '9' {
+				return segment
+			}
+		}
+		return "comp" + rest
+	case 'i':
+		rest := segment[1:]
+		for _, c := range rest {
+			if c < '0' || c > '9' {
+				return segment
+			}
+		}
+		return "if" + rest
+	case 'e':
+		rest := segment[1:]
+		for _, c := range rest {
+			if c < '0' || c > '9' {
+				return segment
+			}
+		}
+		return "each" + rest
+	}
+	return segment
+}
+
+// fromShortMarker converts a fully short marker back to a full element ID.
+// Examples:
+//
+//	"c0" -> "comp0"
+//	"i0" -> "if0"
+//	"e0" -> "each0"
+//	"c1_c0" -> "comp1_comp0"
+//	"c1_i0" -> "comp1_if0"
+//	"c1_c2_e0" -> "comp1_comp2_each0"
+func fromShortMarker(shortMarker string) string {
+	parts := strings.Split(shortMarker, "_")
+	for i, part := range parts {
+		parts[i] = expandSegment(part)
+	}
+	return strings.Join(parts, "_")
+}
+
+// findCompPlaceholders finds all component placeholders in HTML and returns the comp IDs.
+// Handles fully short format: <!--cN--> and <!--cN_cN--> etc.
+// Returns IDs in full format: "compN" or "compN_compN" (e.g., "comp0", "comp1_comp0")
 func findCompPlaceholders(html string) []string {
 	var result []string
-	marker := "<!--comp"
+	// Look for component markers: <!--cN--> or <!--cN_cN-->
+	// Component markers end with 'c' followed by a digit
 	pos := 0
 	for {
-		idx := strings.Index(html[pos:], marker)
+		// Find next <!--
+		idx := strings.Index(html[pos:], "<!--")
 		if idx == -1 {
 			break
 		}
-		start := pos + idx + len(marker)
+		start := pos + idx + 4 // Position after "<!--"
 		// Find the end -->
 		end := strings.Index(html[start:], "-->")
 		if end == -1 {
 			break
 		}
-		// Extract the number part
-		numStr := html[start : start+end]
-		// Validate it's a number
-		isNum := true
-		for _, c := range numStr {
-			if c < '0' || c > '9' {
-				isNum = false
-				break
+		content := html[start : start+end]
+
+		// Check if this is a component marker
+		// The last segment must be "cN" format (component)
+		if len(content) > 0 {
+			// Find the last segment after underscore
+			lastUnderscore := strings.LastIndex(content, "_")
+			var markerPart string
+			if lastUnderscore == -1 {
+				markerPart = content
+			} else {
+				markerPart = content[lastUnderscore+1:]
 			}
-		}
-		if isNum && len(numStr) > 0 {
-			result = append(result, "comp"+numStr)
+
+			// Check if markerPart is "cN" format (component marker)
+			if len(markerPart) > 1 && markerPart[0] == 'c' {
+				numPart := markerPart[1:]
+				isNum := true
+				for _, c := range numPart {
+					if c < '0' || c > '9' {
+						isNum = false
+						break
+					}
+				}
+				if isNum {
+					// Convert entire short marker back to full ID
+					// "c0" -> "comp0", "c1_c0" -> "comp1_comp0"
+					result = append(result, fromShortMarker(content))
+				}
+			}
 		}
 		pos = start + end + 3
 	}
 	return result
 }
 
-// hasCompPlaceholder checks if HTML contains any <!--compN--> placeholder
+// hasCompPlaceholder checks if HTML contains any component placeholder
+// Handles both <!--cN--> and <!--PREFIX_cN--> formats
 func hasCompPlaceholder(html string) bool {
-	return strings.Contains(html, "<!--comp")
+	// Use findCompPlaceholders and check if any were found
+	return len(findCompPlaceholders(html)) > 0
 }
 
 // extractPascalCaseWords extracts all PascalCase words from a string
@@ -737,137 +832,29 @@ func findComponentTags(tmpl string) []string {
 	return result
 }
 
-// minifyCSS removes unnecessary whitespace from CSS while preserving functionality.
-// - Removes comments
-// - Collapses multiple spaces/newlines to single space
-// - Removes spaces around { } : ; ,
-// - Trims leading/trailing whitespace
-func minifyCSS(css string) string {
-	// Remove CSS comments /* ... */
-	result := removeComments(css, "/*", "*/")
-
-	// Replace all whitespace sequences with single space
-	var sb strings.Builder
-	inWhitespace := false
-	for _, c := range result {
-		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
-			if !inWhitespace {
-				sb.WriteByte(' ')
-				inWhitespace = true
-			}
-		} else {
-			sb.WriteRune(c)
-			inWhitespace = false
-		}
+// minifyCSS minifies CSS using tdewolff/minify
+func minifyCSS(s string) string {
+	result, err := minifier.String("text/css", s)
+	if err != nil {
+		return s
 	}
-	result = sb.String()
-
-	// Remove spaces around special characters
-	for _, ch := range []string{"{", "}", ":", ";", ","} {
-		result = strings.ReplaceAll(result, " "+ch, ch)
-		result = strings.ReplaceAll(result, ch+" ", ch)
-	}
-
-	return strings.TrimSpace(result)
+	return result
 }
 
-// minifyHTML removes unnecessary whitespace from HTML while preserving functionality.
-// - Removes HTML comments (except conditional comments)
-// - Collapses multiple spaces/newlines between tags
-// - Preserves whitespace inside <pre>, <code>, <script>, <style>, <textarea>
-func minifyHTML(html string) string {
-	// Remove HTML comments <!-- ... --> (but not <!--comp placeholders)
-	result := removeHTMLComments(html)
-
-	// Collapse whitespace between tags
-	var sb strings.Builder
-	i := 0
-	for i < len(result) {
-		if result[i] == '>' {
-			sb.WriteByte('>')
-			i++
-			// Skip whitespace until next < or non-whitespace
-			for i < len(result) && (result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r') {
-				i++
-			}
-			// If we hit another tag, don't add any space
-			// If we hit content, collapse to single space if needed
-			if i < len(result) && result[i] != '<' {
-				// There's text content - we may need a space before it
-				// but only if there was whitespace originally
-			}
-		} else if result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r' {
-			// Collapse whitespace
-			for i < len(result) && (result[i] == ' ' || result[i] == '\t' || result[i] == '\n' || result[i] == '\r') {
-				i++
-			}
-			// Only add space if needed between content
-			if i < len(result) && result[i] != '<' {
-				sb.WriteByte(' ')
-			}
-		} else {
-			sb.WriteByte(result[i])
-			i++
-		}
+// minifyHTML minifies HTML using tdewolff/minify
+func minifyHTML(s string) string {
+	result, err := minifier.String("text/html", s)
+	if err != nil {
+		return s
 	}
-
-	return strings.TrimSpace(sb.String())
+	return result
 }
 
-// removeComments removes block comments delimited by start and end markers
-func removeComments(s, start, end string) string {
-	var sb strings.Builder
-	i := 0
-	for i < len(s) {
-		if i+len(start) <= len(s) && s[i:i+len(start)] == start {
-			// Find end of comment
-			endIdx := strings.Index(s[i+len(start):], end)
-			if endIdx != -1 {
-				i = i + len(start) + endIdx + len(end)
-				continue
-			}
-		}
-		sb.WriteByte(s[i])
-		i++
+// minifyJS minifies JavaScript using tdewolff/minify
+func minifyJS(s string) string {
+	result, err := minifier.String("text/javascript", s)
+	if err != nil {
+		return s
 	}
-	return sb.String()
-}
-
-// removeHTMLComments removes HTML comments but preserves binding placeholders
-// Preserved: <!--compN-->, <!--tN-->, <!--eachN_anchor-->, <!--ifN_anchor-->
-func removeHTMLComments(html string) string {
-	var sb strings.Builder
-	i := 0
-	for i < len(html) {
-		if i+4 <= len(html) && html[i:i+4] == "<!--" {
-			// Check for preserved comment markers
-			preserve := false
-			if i+8 <= len(html) && html[i:i+8] == "<!--comp" {
-				preserve = true
-			} else if i+5 <= len(html) && html[i:i+5] == "<!--t" {
-				preserve = true
-			} else if i+8 <= len(html) && html[i:i+8] == "<!--each" {
-				preserve = true
-			} else if i+6 <= len(html) && html[i:i+6] == "<!--if" {
-				preserve = true
-			}
-			if preserve {
-				endIdx := strings.Index(html[i:], "-->")
-				if endIdx != -1 {
-					sb.WriteString(html[i : i+endIdx+3])
-					i = i + endIdx + 3
-					continue
-				}
-			}
-			// Regular comment - skip it
-			endIdx := strings.Index(html[i+4:], "-->")
-			if endIdx != -1 {
-				i = i + 4 + endIdx + 3
-				continue
-			}
-		}
-		sb.WriteByte(html[i])
-		i++
-	}
-	return sb.String()
+	return result
 }

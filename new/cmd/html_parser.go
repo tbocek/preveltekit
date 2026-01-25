@@ -66,7 +66,7 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 				if each.elseHTML != "" {
 					fmt.Fprintf(&result, `<span id="%s_else">%s</span>`, each.elementID, each.elseHTML)
 				}
-				fmt.Fprintf(&result, `<!--%s_anchor-->`, each.elementID)
+				fmt.Fprintf(&result, `<!--e%s-->`, strings.TrimPrefix(each.elementID, "each"))
 				pos = endPos
 				continue
 			}
@@ -97,7 +97,7 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 					bindings.components = append(bindings.components, comps...)
 				}
 				bindings.ifBlocks = append(bindings.ifBlocks, *ifBlock)
-				fmt.Fprintf(&result, `<!--%s_anchor-->`, ifBlock.elementID)
+				fmt.Fprintf(&result, `<!--i%s-->`, strings.TrimPrefix(ifBlock.elementID, "if"))
 				pos = endPos
 				continue
 			}
@@ -144,7 +144,7 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 			if pos+1 < len(tmpl) && tmpl[pos+1] >= 'A' && tmpl[pos+1] <= 'Z' {
 				if compEnd, comp := parseComponentTag(tmpl, pos, &compCount); comp != nil {
 					bindings.components = append(bindings.components, *comp)
-					fmt.Fprintf(&result, `<!--%s-->`, comp.elementID)
+					fmt.Fprintf(&result, `<!--c%s-->`, strings.TrimPrefix(comp.elementID, "comp"))
 					pos = compEnd
 					continue
 				}
@@ -481,7 +481,7 @@ func parseComponentsInHTML(html string, compCount *int) (string, []componentBind
 		if html[pos] == '<' && pos+1 < len(html) && html[pos+1] >= 'A' && html[pos+1] <= 'Z' {
 			if compEnd, comp := parseComponentTag(html, pos, compCount); comp != nil {
 				components = append(components, *comp)
-				fmt.Fprintf(&result, `<!--%s-->`, comp.elementID)
+				fmt.Fprintf(&result, `<!--c%s-->`, strings.TrimPrefix(comp.elementID, "comp"))
 				pos = compEnd
 				continue
 			}
@@ -510,7 +510,7 @@ func parseEachBlocksInHTML(html string, eachCount *int) (string, []eachBinding) 
 				if each.elseHTML != "" {
 					fmt.Fprintf(&result, `<span id="%s_else">%s</span>`, each.elementID, each.elseHTML)
 				}
-				fmt.Fprintf(&result, `<!--%s_anchor-->`, each.elementID)
+				fmt.Fprintf(&result, `<!--e%s-->`, strings.TrimPrefix(each.elementID, "each"))
 				pos = endPos
 				continue
 			}

@@ -283,11 +283,18 @@ func assemble(dir string) {
 		}
 
 		finalHTML := string(template)
-		finalHTML = strings.Replace(finalHTML, "</head>", "\t<style>\n"+string(styles)+"\t</style>\n</head>", 1)
+		finalHTML = strings.Replace(finalHTML, "</head>", "<style>"+minifyCSS(string(styles))+"</style></head>", 1)
 		finalHTML = strings.Replace(finalHTML, `<div id="app"></div>`, `<div id="app">`+string(prerendered)+`</div>`, 1)
+		finalHTML = minifyHTML(finalHTML)
 
 		writeFile(filepath.Join(distDir, route.htmlFile), finalHTML)
 		os.Remove(prerenderedFile)
+	}
+
+	// Minify wasm_exec.js if it exists
+	wasmExecPath := filepath.Join(distDir, "wasm_exec.js")
+	if jsContent, err := os.ReadFile(wasmExecPath); err == nil {
+		writeFile(wasmExecPath, minifyJS(string(jsContent)))
 	}
 
 	fmt.Printf("Assembled: %d HTML files\n", len(routes))

@@ -1,0 +1,1 @@
+Never run build scripts, tests, or `go run` commands without explicit permission. Only make code changes.

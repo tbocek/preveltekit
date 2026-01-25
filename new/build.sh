@@ -186,10 +186,6 @@ wasm-strip "$PROJECT_DIR/dist/app.wasm"
 echo "Optimizing JS runtime..."
 wasm_shake "$WASM_EXEC" "$PROJECT_DIR/dist/app.wasm" "$PROJECT_DIR/dist/wasm_exec.js"
 
-if command -v minify &> /dev/null; then
-    minify --type=js "$PROJECT_DIR/dist/wasm_exec.js" -o "$PROJECT_DIR/dist/wasm_exec.js"
-fi
-
 # -----------------------------------------------------------------------------
 # Assemble Final Output
 # -----------------------------------------------------------------------------

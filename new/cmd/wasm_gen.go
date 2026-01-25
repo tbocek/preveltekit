@@ -256,11 +256,14 @@ func generateHTMLConstant(sb *strings.Builder, compBinding componentBinding, com
 
 // prefixAllBindingIDs prefixes all binding IDs in the template and updates the bindings struct.
 func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings) string {
-	// Prefix expression IDs (now comment markers <!--tN-->)
+	shortPrefix := toShortMarker(prefix) // "comp1" -> "c1"
+
+	// Prefix expression IDs (comment markers <!--tN--> -> <!--cN_tN-->)
 	for i := range bindings.expressions {
 		oldID := bindings.expressions[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `<!--`+oldID+`-->`, `<!--`+newID+`-->`)
+		// Use short prefix in markers: <!--t0--> -> <!--c1_t0-->
+		html = strings.ReplaceAll(html, `<!--`+oldID+`-->`, `<!--`+shortPrefix+`_`+oldID+`-->`)
 		bindings.expressions[i].elementID = newID
 	}
 	// Prefix event IDs
@@ -284,11 +287,15 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 		html = strings.ReplaceAll(html, `id="`+oldID+`"`, `id="`+newID+`"`)
 		bindings.classBindings[i].elementID = newID
 	}
-	// Prefix each block IDs (anchor is comment marker, else is span with id)
+	// Prefix each block IDs (anchor is comment marker <!--eN-->, else is span with id)
 	for i := range bindings.eachBlocks {
 		oldID := bindings.eachBlocks[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `<!--`+oldID+`_anchor-->`, `<!--`+newID+`_anchor-->`)
+		// Comment marker uses fully short format: <!--eN--> -> <!--cN_eN-->
+		// e.g., <!--e0--> with prefix "comp1" becomes <!--c1_e0-->
+		oldShort := toShortMarker(oldID)         // "each0" -> "e0"
+		newShort := shortPrefix + "_" + oldShort // "c1_e0"
+		html = strings.ReplaceAll(html, `<!--`+oldShort+`-->`, `<!--`+newShort+`-->`)
 		html = strings.ReplaceAll(html, `id="`+oldID+`_else"`, `id="`+newID+`_else"`)
 		bindings.eachBlocks[i].elementID = newID
 	}
@@ -299,30 +306,38 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 		html = strings.ReplaceAll(html, `data-attrbind="`+oldID+`"`, `data-attrbind="`+newID+`"`)
 		bindings.attrBindings[i].elementID = newID
 	}
-	// Prefix if block IDs and nested bindings (comment markers)
+	// Prefix if block IDs and nested bindings (comment markers <!--iN-->)
 	for i := range bindings.ifBlocks {
 		oldID := bindings.ifBlocks[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `<!--`+oldID+`_anchor-->`, `<!--`+newID+`_anchor-->`)
+		// Comment marker uses fully short format: <!--iN--> -> <!--cN_iN-->
+		// e.g., <!--i0--> with prefix "comp1" becomes <!--c1_i0-->
+		oldShort := toShortMarker(oldID)         // "if0" -> "i0"
+		newShort := shortPrefix + "_" + oldShort // "c1_i0"
+		html = strings.ReplaceAll(html, `<!--`+oldShort+`-->`, `<!--`+newShort+`-->`)
 		bindings.ifBlocks[i].elementID = newID
 
 		// Prefix bindings inside branches
 		for j := range bindings.ifBlocks[i].branches {
-			// Prefix expression markers in branch HTML
+			// Prefix expression markers in branch HTML (use short prefix)
 			for k := range bindings.ifBlocks[i].branches[j].expressions {
 				oldExprID := bindings.ifBlocks[i].branches[j].expressions[k].elementID
 				newExprID := prefix + "_" + oldExprID
+				// Use short prefix: <!--t0--> -> <!--c1_t0-->
 				bindings.ifBlocks[i].branches[j].html = strings.ReplaceAll(
 					bindings.ifBlocks[i].branches[j].html,
-					`<!--`+oldExprID+`-->`, `<!--`+newExprID+`-->`)
+					`<!--`+oldExprID+`-->`, `<!--`+shortPrefix+`_`+oldExprID+`-->`)
 				bindings.ifBlocks[i].branches[j].expressions[k].elementID = newExprID
 			}
 			for k := range bindings.ifBlocks[i].branches[j].eachBlocks {
 				oldEachID := bindings.ifBlocks[i].branches[j].eachBlocks[k].elementID
 				newEachID := prefix + "_" + oldEachID
+				// Comment marker uses fully short format: <!--eN--> -> <!--cN_eN-->
+				oldEachShort := toShortMarker(oldEachID)         // "each0" -> "e0"
+				newEachShort := shortPrefix + "_" + oldEachShort // "c1_e0"
 				bindings.ifBlocks[i].branches[j].html = strings.ReplaceAll(
 					bindings.ifBlocks[i].branches[j].html,
-					`<!--`+oldEachID+`_anchor-->`, `<!--`+newEachID+`_anchor-->`)
+					`<!--`+oldEachShort+`-->`, `<!--`+newEachShort+`-->`)
 				bindings.ifBlocks[i].branches[j].eachBlocks[k].elementID = newEachID
 			}
 			for k := range bindings.ifBlocks[i].branches[j].classBindings {
@@ -334,23 +349,28 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 				bindings.ifBlocks[i].branches[j].classBindings[k].elementID = newClassID
 			}
 		}
-		// Also prefix else branch expressions
+		// Also prefix else branch expressions (use short prefix)
 		for k := range bindings.ifBlocks[i].elseExpressions {
 			oldExprID := bindings.ifBlocks[i].elseExpressions[k].elementID
 			newExprID := prefix + "_" + oldExprID
+			// Use short prefix: <!--t0--> -> <!--c1_t0-->
 			bindings.ifBlocks[i].elseHTML = strings.ReplaceAll(
 				bindings.ifBlocks[i].elseHTML,
-				`<!--`+oldExprID+`-->`, `<!--`+newExprID+`-->`)
+				`<!--`+oldExprID+`-->`, `<!--`+shortPrefix+`_`+oldExprID+`-->`)
 			bindings.ifBlocks[i].elseExpressions[k].elementID = newExprID
 		}
 	}
 	// Prefix component placeholders in HTML only (don't mutate the binding IDs)
 	// The component IDs will be prefixed when we create child contexts
-	for i := range bindings.components {
-		oldID := bindings.components[i].elementID
-		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, "<!--"+oldID+"-->", "<!--"+newID+"-->")
-		// Note: We intentionally do NOT mutate bindings.components[i].elementID here
+	// Comment marker uses fully short format: <!--cN-->
+	for _, comp := range bindings.components {
+		oldID := comp.elementID
+		// Fully short format: <!--cN--> -> <!--cN_cN-->
+		// e.g., <!--c0--> with prefix "comp1" becomes <!--c1_c0-->
+		oldShort := toShortMarker(oldID)         // "comp0" -> "c0"
+		newShort := shortPrefix + "_" + oldShort // "c1_c0"
+		html = strings.ReplaceAll(html, "<!--"+oldShort+"-->", "<!--"+newShort+"-->")
+		// Note: We intentionally do NOT mutate comp.elementID here
 		// because ChildContext will prefix it when creating nested contexts
 	}
 	return html
@@ -365,6 +385,7 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 	// Expression bindings
 	for _, expr := range bindings.expressions {
 		fullID := ctx.prefixID(expr.elementID)
+		shortMarker := toShortMarker(fullID) // "comp1_t0" -> "c1_t0"
 		// Resolve the field in scope chain
 		varRef, _, found := ctx.Scope.Resolve(expr.fieldName)
 		if !found {
@@ -377,9 +398,9 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 			varRef = varName + "." + expr.fieldName
 		}
 		if expr.isHTML {
-			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", indent, fullID, varRef)
+			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", indent, shortMarker, varRef)
 		} else {
-			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", indent, fullID, varRef)
+			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", indent, shortMarker, varRef)
 		}
 	}
 
@@ -532,7 +553,8 @@ func generateEachBlocksWiring(sb *strings.Builder, eachBlocks []eachBinding, ctx
 		itemToJS := toJS(itemType, "item")
 		hasElse := each.elseHTML != ""
 
-		fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s_anchor\")\n", indent, fullID, fullID)
+		shortMarker := toShortMarker(fullID)
+		fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s\")\n", indent, fullID, shortMarker)
 		if hasElse {
 			fmt.Fprintf(sb, "%s%s_else := document.Call(\"getElementById\", \"%s_else\")\n", indent, fullID, fullID)
 		}
@@ -669,7 +691,8 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			}
 			seen[compID] = true
 			prefixedCompID := ctx.prefixID(compID)
-			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, compID, prefixedCompID)
+			shortCompMarker := toShortMarker(compID)
+			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortCompMarker, prefixedCompID)
 		}
 
 		// Replace nested component placeholders
@@ -687,12 +710,14 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				}
 				seen[nestedID] = true
 				prefixedNestedID := ctx.prefixID(nestedID)
-				fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, nestedID, prefixedNestedID)
+				shortNestedMarker := toShortMarker(nestedID)
+				fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortNestedMarker, prefixedNestedID)
 			}
 		}
 
 		// Insert HTML into DOM
-		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s_anchor\", %s_current, html)\n", indent, fullID, fullID, fullID)
+		shortMarker := toShortMarker(fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s\", %s_current, html)\n", indent, fullID, shortMarker, fullID)
 
 		// Wire up child components
 		for _, compBinding := range compsInBlock {
@@ -734,11 +759,12 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
 				for _, expr := range branch.expressions {
 					fullExprID := ctx.prefixID(expr.elementID)
+					shortMarker := toShortMarker(fullExprID)
 					varRef := varName + "." + expr.fieldName
 					if expr.isHTML {
-						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, shortMarker, varRef)
 					} else {
-						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, shortMarker, varRef)
 					}
 				}
 				fmt.Fprintf(sb, "%s\t}\n", indent)
@@ -750,11 +776,12 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			fmt.Fprintf(sb, "%s\tif branchIdx == -1 {\n", indent)
 			for _, expr := range ifb.elseExpressions {
 				fullExprID := ctx.prefixID(expr.elementID)
+				shortMarker := toShortMarker(fullExprID)
 				varRef := varName + "." + expr.fieldName
 				if expr.isHTML {
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, shortMarker, varRef)
 				} else {
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, shortMarker, varRef)
 				}
 			}
 			fmt.Fprintf(sb, "%s\t}\n", indent)
@@ -783,8 +810,9 @@ func generateEachBlockInline(sb *strings.Builder, each eachBinding, ctx *WiringC
 
 	// each.elementID is already prefixed
 	fullID := each.elementID
+	shortMarker := toShortMarker(fullID)
 
-	fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s_anchor\")\n", indent, fullID, fullID)
+	fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s\")\n", indent, fullID, shortMarker)
 	if hasElse {
 		fmt.Fprintf(sb, "%s%s_else := document.Call(\"getElementById\", \"%s_else\")\n", indent, fullID, fullID)
 	}
@@ -901,15 +929,16 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 	// Expression bindings
 	for _, expr := range childBindings.expressions {
 		fullID := compID + "_" + expr.elementID
+		shortMarker := toShortMarker(fullID)
 		// Resolve field in scope chain
 		varRef, _, found := childScope.Resolve(expr.fieldName)
 		if !found {
 			varRef = compID + "." + expr.fieldName
 		}
 		if expr.isHTML {
-			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", innerIndent, fullID, varRef)
+			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", innerIndent, shortMarker, varRef)
 		} else {
-			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", innerIndent, fullID, varRef)
+			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", innerIndent, shortMarker, varRef)
 		}
 	}
 
@@ -1094,11 +1123,13 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 		// Replace nested component placeholders
 		for _, comp := range compsInBlock {
 			nestedID := compID + "_" + comp.elementID
-			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, comp.elementID, nestedID)
+			shortCompMarker := toShortMarker(comp.elementID)
+			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortCompMarker, nestedID)
 		}
 
 		// Insert HTML
-		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s_anchor\", %s_current, html)\n", indent, fullID, fullID, fullID)
+		shortMarker := toShortMarker(fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s\", %s_current, html)\n", indent, fullID, shortMarker, fullID)
 
 		// Wire up components inside
 		for _, compBinding := range compsInBlock {
@@ -1129,11 +1160,12 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 				fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
 				for _, expr := range branch.expressions {
 					fullExprID := ctx.prefixID(expr.elementID)
+					shortMarker := toShortMarker(fullExprID)
 					varRef := compID + "." + expr.fieldName
 					if expr.isHTML {
-						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, shortMarker, varRef)
 					} else {
-						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, shortMarker, varRef)
 					}
 				}
 				fmt.Fprintf(sb, "%s\t}\n", indent)
@@ -1145,11 +1177,12 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 			fmt.Fprintf(sb, "%s\tif branchIdx == -1 {\n", indent)
 			for _, expr := range ifb.elseExpressions {
 				fullExprID := ctx.prefixID(expr.elementID)
+				shortMarker := toShortMarker(fullExprID)
 				varRef := compID + "." + expr.fieldName
 				if expr.isHTML {
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, shortMarker, varRef)
 				} else {
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, shortMarker, varRef)
 				}
 			}
 			fmt.Fprintf(sb, "%s\t}\n", indent)
@@ -1174,13 +1207,46 @@ func prefixIDStr(prefix, id string) string {
 	return prefix + "_" + id
 }
 
+// shortenSegment converts a single ID segment to short format.
+// Examples: "if0" -> "i0", "each0" -> "e0", "comp0" -> "c0"
+func shortenSegment(segment string) string {
+	if strings.HasPrefix(segment, "if") {
+		return "i" + strings.TrimPrefix(segment, "if")
+	} else if strings.HasPrefix(segment, "each") {
+		return "e" + strings.TrimPrefix(segment, "each")
+	} else if strings.HasPrefix(segment, "comp") {
+		return "c" + strings.TrimPrefix(segment, "comp")
+	}
+	return segment // Unknown prefix, return as-is
+}
+
+// toShortMarker converts a full element ID to a fully short comment marker ID.
+// ALL segments are shortened, not just the last one.
+// Examples:
+//
+//	"if0" -> "i0"
+//	"each0" -> "e0"
+//	"comp0" -> "c0"
+//	"comp0_if0" -> "c0_i0"
+//	"comp1_comp0" -> "c1_c0"
+//	"comp1_comp2_each0" -> "c1_c2_e0"
+func toShortMarker(fullID string) string {
+	parts := strings.Split(fullID, "_")
+	for i, part := range parts {
+		parts[i] = shortenSegment(part)
+	}
+	return strings.Join(parts, "_")
+}
+
 // prefixExprIDs prefixes expression comment markers (<!--t0-->) in HTML with the given prefix
+// Uses fully short format: <!--t0--> with prefix "comp1" becomes <!--c1_t0-->
 func prefixExprIDs(html, prefix string) string {
 	if prefix == "" {
 		return html
 	}
-	// Prefix <!--tN--> comment markers
-	result := regexp.MustCompile(`<!--(t\d+)-->`).ReplaceAllString(html, `<!--`+prefix+`_$1-->`)
+	// Prefix <!--tN--> comment markers using short prefix
+	shortPrefix := toShortMarker(prefix)
+	result := regexp.MustCompile(`<!--(t\d+)-->`).ReplaceAllString(html, `<!--`+shortPrefix+`_$1-->`)
 	return result
 }
 
