@@ -11,6 +11,43 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 
 	// Check what imports we need
 	needsStrconv := len(bindings.eachBlocks) > 0
+	// Also check for each blocks inside if blocks
+	if !needsStrconv {
+		for _, ifb := range bindings.ifBlocks {
+			for _, branch := range ifb.branches {
+				if len(branch.eachBlocks) > 0 {
+					needsStrconv = true
+					break
+				}
+			}
+			if needsStrconv {
+				break
+			}
+		}
+	}
+	// Also check child components for each blocks inside if blocks
+	if !needsStrconv {
+		for _, compBinding := range bindings.components {
+			childComp := childComponents[compBinding.name]
+			if childComp != nil {
+				_, childBindings := parseTemplate(childComp.template)
+				for _, ifb := range childBindings.ifBlocks {
+					for _, branch := range ifb.branches {
+						if len(branch.eachBlocks) > 0 {
+							needsStrconv = true
+							break
+						}
+					}
+					if needsStrconv {
+						break
+					}
+				}
+			}
+			if needsStrconv {
+				break
+			}
+		}
+	}
 	for _, bind := range bindings.bindings {
 		if needsStrconvForType(fieldTypes[bind.fieldName]) {
 			needsStrconv = true
@@ -260,20 +297,21 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 
 		fmt.Fprintf(sb, "\tupdate%s := func() {\n", ifb.elementID)
 		sb.WriteString("\t\tvar html string\n")
+		sb.WriteString("\t\tvar branchIdx int\n")
 
 		for i, branch := range ifb.branches {
 			cond := transformCondition(branch.condition, fieldTypes, "component")
 			if i == 0 {
-				fmt.Fprintf(sb, "\t\tif %s {\n\t\t\thtml = %s\n", cond, escapeForGoString(branch.html))
+				fmt.Fprintf(sb, "\t\tif %s {\n\t\t\thtml = %s\n\t\t\tbranchIdx = %d\n", cond, escapeForGoString(branch.html), i)
 			} else {
-				fmt.Fprintf(sb, "\t\t} else if %s {\n\t\t\thtml = %s\n", cond, escapeForGoString(branch.html))
+				fmt.Fprintf(sb, "\t\t} else if %s {\n\t\t\thtml = %s\n\t\t\tbranchIdx = %d\n", cond, escapeForGoString(branch.html), i)
 			}
 		}
 
 		if ifb.elseHTML != "" {
-			fmt.Fprintf(sb, "\t\t} else {\n\t\t\thtml = %s\n\t\t}\n", escapeForGoString(ifb.elseHTML))
+			fmt.Fprintf(sb, "\t\t} else {\n\t\t\thtml = %s\n\t\t\tbranchIdx = -1\n\t\t}\n", escapeForGoString(ifb.elseHTML))
 		} else {
-			sb.WriteString("\t\t}\n")
+			sb.WriteString("\t\t} else {\n\t\t\tbranchIdx = -1\n\t\t}\n")
 		}
 
 		// Replace component placeholders with actual HTML constants
@@ -297,6 +335,18 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 		for _, compBinding := range compsInBlock {
 			generateComponentInline(sb, compBinding, childComponents, "\t\t", "")
 		}
+
+		// Wire up each blocks inside if branches AFTER inserting HTML into DOM
+		for i, branch := range ifb.branches {
+			if len(branch.eachBlocks) > 0 {
+				fmt.Fprintf(sb, "\t\tif branchIdx == %d {\n", i)
+				for _, each := range branch.eachBlocks {
+					generateEachBlockInline(sb, each, fieldTypes, "\t\t\t")
+				}
+				sb.WriteString("\t\t}\n")
+			}
+		}
+		sb.WriteString("\t\t_ = branchIdx\n") // Avoid unused variable error
 
 		sb.WriteString("\t}\n")
 
@@ -424,6 +474,51 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 	}
 }
 
+// generateEachBlockInline generates code for an each block inside an if block
+func generateEachBlockInline(sb *strings.Builder, each eachBinding, fieldTypes map[string]string, indent string) {
+	generateEachBlockInlineWithPrefix(sb, each, fieldTypes, "component", indent)
+}
+
+// generateEachBlockInlineForChild generates code for an each block inside a child component's if block
+func generateEachBlockInlineForChild(sb *strings.Builder, each eachBinding, fieldTypes map[string]string, compID string, indent string) {
+	generateEachBlockInlineWithPrefix(sb, each, fieldTypes, compID, indent)
+}
+
+// generateEachBlockInlineWithPrefix generates code for an each block with a configurable component prefix
+func generateEachBlockInlineWithPrefix(sb *strings.Builder, each eachBinding, fieldTypes map[string]string, compPrefix string, indent string) {
+	bodyHTML := strings.ReplaceAll(each.bodyHTML, "{"+each.itemVar+"}", `<span class="__item__"></span>`)
+	bodyHTML = strings.ReplaceAll(bodyHTML, "{"+each.indexVar+"}", `<span class="__index__"></span>`)
+	itemType := fieldTypes[each.listName]
+	itemToJS := toJS(itemType, "item")
+	hasElse := each.elseHTML != ""
+
+	fmt.Fprintf(sb, "%s%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", indent, each.elementID, each.elementID)
+	if hasElse {
+		fmt.Fprintf(sb, "%s%s_else := document.Call(\"getElementById\", \"%s_else\")\n", indent, each.elementID, each.elementID)
+	}
+	fmt.Fprintf(sb, "%s%s_tmpl := %s\n", indent, each.elementID, escapeForGoString(bodyHTML))
+	fmt.Fprintf(sb, "%s%s_create := func(item %s, index int) js.Value {\n", indent, each.elementID, itemType)
+	fmt.Fprintf(sb, "%s\twrapper := document.Call(\"createElement\", \"span\")\n", indent)
+	fmt.Fprintf(sb, "%s\twrapper.Set(\"id\", \"%s_\" + strconv.Itoa(index))\n", indent, each.elementID)
+	fmt.Fprintf(sb, "%s\twrapper.Set(\"innerHTML\", %s_tmpl)\n", indent, each.elementID)
+	fmt.Fprintf(sb, "%s\tif itemEl := wrapper.Call(\"querySelector\", \".__item__\"); !itemEl.IsNull() {\n", indent)
+	fmt.Fprintf(sb, "%s\t\titemEl.Set(\"textContent\", %s)\n%s\t\titemEl.Get(\"classList\").Call(\"remove\", \"__item__\")\n%s\t}\n", indent, itemToJS, indent, indent)
+	fmt.Fprintf(sb, "%s\tif idxEl := wrapper.Call(\"querySelector\", \".__index__\"); !idxEl.IsNull() {\n", indent)
+	fmt.Fprintf(sb, "%s\t\tidxEl.Set(\"textContent\", strconv.Itoa(index))\n%s\t\tidxEl.Get(\"classList\").Call(\"remove\", \"__index__\")\n%s\t}\n", indent, indent, indent)
+	fmt.Fprintf(sb, "%s\treturn wrapper\n%s}\n", indent, indent)
+
+	// For each blocks inside if blocks, we use OnRender to render all items
+	// OnEdit is not used since the if block re-renders everything on change
+	fmt.Fprintf(sb, "%s%s.%s.OnRender(func(items []%s) {\n", indent, compPrefix, each.listName, itemType)
+	if hasElse {
+		fmt.Fprintf(sb, "%s\tif len(items) == 0 { %s_else.Get(\"style\").Set(\"display\", \"\") } else { %s_else.Get(\"style\").Set(\"display\", \"none\") }\n", indent, each.elementID, each.elementID)
+	}
+	fmt.Fprintf(sb, "%s\tfor i, item := range items {\n", indent)
+	fmt.Fprintf(sb, "%s\t\tel := %s_create(item, i)\n", indent, each.elementID)
+	fmt.Fprintf(sb, "%s\t\t%s_anchor.Get(\"parentNode\").Call(\"insertBefore\", el, %s_anchor)\n%s\t}\n%s})\n", indent, each.elementID, each.elementID, indent, indent)
+	fmt.Fprintf(sb, "%s%s.%s.Render()\n", indent, compPrefix, each.listName)
+}
+
 func generateChildComponent(sb *strings.Builder, compBinding componentBinding, childComponents map[string]*component, fieldTypes map[string]string) {
 	childComp := childComponents[compBinding.name]
 	if childComp == nil {
@@ -511,9 +606,17 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 
 	// Child attribute bindings
 	for _, ab := range childBindings.attrBindings {
-		if len(ab.fields) == 1 && childFieldTypes[ab.fields[0]] == "string" {
-			fmt.Fprintf(sb, "\treactive.BindAttr(\"[data-attrbind=\\\"%s\\\"]\", \"%s\", `%s`, \"%s\", %s.%s)\n",
-				ab.elementID, ab.attrName, ab.template, ab.fields[0], compBinding.elementID, ab.fields[0])
+		if len(ab.fields) == 1 {
+			field := ab.fields[0]
+			fieldType := childFieldTypes[field]
+			if fieldType == "" {
+				fieldType = "string"
+			}
+			fmt.Fprintf(sb, "\t%s_el := document.Call(\"querySelector\", \"[data-attrbind=\\\"%s\\\"]\")\n", ab.elementID, ab.elementID)
+			fmt.Fprintf(sb, "\t%s.%s.OnChange(func(v %s) { %s_el.Call(\"setAttribute\", \"%s\", strings.ReplaceAll(`%s`, \"{%s}\", %s)) })\n",
+				compBinding.elementID, field, fieldType, ab.elementID, ab.attrName, ab.template, field, toJS(fieldType, "v"))
+			fmt.Fprintf(sb, "\t%s_el.Call(\"setAttribute\", \"%s\", strings.ReplaceAll(`%s`, \"{%s}\", %s))\n",
+				ab.elementID, ab.attrName, ab.template, field, toJS(fieldType, compBinding.elementID+"."+field+".Get()"))
 		} else {
 			fmt.Fprintf(sb, "\t%s_el := document.Call(\"querySelector\", \"[data-attrbind=\\\"%s\\\"]\")\n", ab.elementID, ab.elementID)
 			fmt.Fprintf(sb, "\tupdate%s := func() {\n\t\tval := %s\n", ab.elementID, escapeForGoString(ab.template))
@@ -729,20 +832,21 @@ func generateChildIfBlockInline(sb *strings.Builder, ifb ifBinding, fieldTypes m
 
 	fmt.Fprintf(sb, "%supdate%s := func() {\n", indent, anchorID)
 	fmt.Fprintf(sb, "%s\tvar html string\n", indent)
+	fmt.Fprintf(sb, "%s\tvar branchIdx int\n", indent)
 
 	for i, branch := range processedBranches {
 		cond := transformCondition(ifb.branches[i].condition, fieldTypes, compID)
 		if i == 0 {
-			fmt.Fprintf(sb, "%s\tif %s {\n%s\t\thtml = %s\n", indent, cond, indent, escapeForGoString(branch.html))
+			fmt.Fprintf(sb, "%s\tif %s {\n%s\t\thtml = %s\n%s\t\tbranchIdx = %d\n", indent, cond, indent, escapeForGoString(branch.html), indent, i)
 		} else {
-			fmt.Fprintf(sb, "%s\t} else if %s {\n%s\t\thtml = %s\n", indent, cond, indent, escapeForGoString(branch.html))
+			fmt.Fprintf(sb, "%s\t} else if %s {\n%s\t\thtml = %s\n%s\t\tbranchIdx = %d\n", indent, cond, indent, escapeForGoString(branch.html), indent, i)
 		}
 	}
 
 	if elseHTML != "" {
-		fmt.Fprintf(sb, "%s\t} else {\n%s\t\thtml = %s\n%s\t}\n", indent, indent, escapeForGoString(elseHTML), indent)
+		fmt.Fprintf(sb, "%s\t} else {\n%s\t\thtml = %s\n%s\t\tbranchIdx = -1\n%s\t}\n", indent, indent, escapeForGoString(elseHTML), indent, indent)
 	} else {
-		fmt.Fprintf(sb, "%s\t}\n", indent)
+		fmt.Fprintf(sb, "%s\t} else {\n%s\t\tbranchIdx = -1\n%s\t}\n", indent, indent, indent)
 	}
 
 	// Replace nested component placeholders with their HTML constants (using prefixed IDs)
@@ -775,6 +879,18 @@ func generateChildIfBlockInline(sb *strings.Builder, ifb ifBinding, fieldTypes m
 		prefixedID := parentCompID + "_" + comp.elementID
 		generateComponentInline(sb, comp, childComponents, indent+"\t", prefixedID)
 	}
+
+	// Wire up each blocks inside if branches AFTER inserting HTML into DOM
+	for i, branch := range ifb.branches {
+		if len(branch.eachBlocks) > 0 {
+			fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
+			for _, each := range branch.eachBlocks {
+				generateEachBlockInlineForChild(sb, each, fieldTypes, compID, indent+"\t\t")
+			}
+			fmt.Fprintf(sb, "%s\t}\n", indent)
+		}
+	}
+	fmt.Fprintf(sb, "%s\t_ = branchIdx\n", indent)
 
 	fmt.Fprintf(sb, "%s}\n", indent)
 
@@ -931,27 +1047,42 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes
 
 		fmt.Fprintf(sb, "\tupdate%s := func() {\n", anchorID)
 		sb.WriteString("\t\tvar html string\n")
+		sb.WriteString("\t\tvar branchIdx int\n")
 
 		for i, branch := range ifb.branches {
 			cond := transformCondition(branch.condition, fieldTypes, compID)
 			if i == 0 {
-				fmt.Fprintf(sb, "\t\tif %s {\n\t\t\thtml = %s\n", cond, escapeForGoString(branch.html))
+				fmt.Fprintf(sb, "\t\tif %s {\n\t\t\thtml = %s\n\t\t\tbranchIdx = %d\n", cond, escapeForGoString(branch.html), i)
 			} else {
-				fmt.Fprintf(sb, "\t\t} else if %s {\n\t\t\thtml = %s\n", cond, escapeForGoString(branch.html))
+				fmt.Fprintf(sb, "\t\t} else if %s {\n\t\t\thtml = %s\n\t\t\tbranchIdx = %d\n", cond, escapeForGoString(branch.html), i)
 			}
 		}
 
 		if ifb.elseHTML != "" {
-			fmt.Fprintf(sb, "\t\t} else {\n\t\t\thtml = %s\n\t\t}\n", escapeForGoString(ifb.elseHTML))
+			fmt.Fprintf(sb, "\t\t} else {\n\t\t\thtml = %s\n\t\t\tbranchIdx = -1\n\t\t}\n", escapeForGoString(ifb.elseHTML))
 		} else {
-			sb.WriteString("\t\t}\n")
+			sb.WriteString("\t\t} else {\n\t\t\tbranchIdx = -1\n\t\t}\n")
 		}
 
 		fmt.Fprintf(sb, "\t\tnewEl := document.Call(\"createElement\", \"span\")\n")
 		fmt.Fprintf(sb, "\t\tnewEl.Set(\"innerHTML\", html)\n")
 		fmt.Fprintf(sb, "\t\tif !%s_current.IsNull() { %s_current.Call(\"remove\") }\n", anchorID, anchorID)
 		fmt.Fprintf(sb, "\t\tif !%s_anchor.IsNull() { %s_anchor.Get(\"parentNode\").Call(\"insertBefore\", newEl, %s_anchor) }\n", anchorID, anchorID, anchorID)
-		fmt.Fprintf(sb, "\t\t%s_current = newEl\n\t}\n", anchorID)
+		fmt.Fprintf(sb, "\t\t%s_current = newEl\n", anchorID)
+
+		// Wire up each blocks inside if branches AFTER inserting HTML into DOM
+		for i, branch := range ifb.branches {
+			if len(branch.eachBlocks) > 0 {
+				fmt.Fprintf(sb, "\t\tif branchIdx == %d {\n", i)
+				for _, each := range branch.eachBlocks {
+					generateEachBlockInlineForChild(sb, each, fieldTypes, compID, "\t\t\t")
+				}
+				sb.WriteString("\t\t}\n")
+			}
+		}
+		sb.WriteString("\t\t_ = branchIdx\n")
+
+		sb.WriteString("\t}\n")
 
 		for _, dep := range ifb.deps {
 			fmt.Fprintf(sb, "\t%s.%s.OnChange(func(_ %s) { update%s() })\n", compID, dep, fieldTypes[dep], anchorID)

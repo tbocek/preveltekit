@@ -77,8 +77,9 @@ type ifBinding struct {
 }
 
 type ifBranch struct {
-	condition string // "Score >= 90"
-	html      string // content if true
+	condition  string        // "Score >= 90"
+	html       string        // content if true
+	eachBlocks []eachBinding // each blocks inside this branch
 }
 
 type inputBinding struct {

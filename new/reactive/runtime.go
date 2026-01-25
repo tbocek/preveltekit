@@ -4,7 +4,6 @@ package reactive
 
 import (
 	"strconv"
-	"strings"
 	"syscall/js"
 )
 
@@ -87,17 +86,4 @@ func Bind[T any](id string, store Bindable[T]) {
 	el := GetEl(id)
 	store.OnChange(func(v T) { SetText(el, toString(v)) })
 	SetText(el, toString(store.Get()))
-}
-
-// BindAttr binds a string store to an element's attribute with template substitution
-func BindAttr(selector, attr, tmpl, field string, store *Store[string]) {
-	el := Document.Call("querySelector", selector)
-	if el.IsUndefined() || el.IsNull() {
-		return
-	}
-	update := func() {
-		el.Call("setAttribute", attr, strings.ReplaceAll(tmpl, "{"+field+"}", store.Get()))
-	}
-	store.OnChange(func(_ string) { update() })
-	update()
 }

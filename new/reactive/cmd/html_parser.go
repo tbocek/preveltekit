@@ -75,10 +75,12 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 		if strings.HasPrefix(tmpl[pos:], "{#if ") {
 			endPos, ifBlock := parseIfBlock(tmpl, pos, &ifCount)
 			if ifBlock != nil {
-				// Parse components inside each branch
+				// Parse components and each blocks inside each branch
 				for i := range ifBlock.branches {
 					parsedHTML, comps := parseComponentsInHTML(ifBlock.branches[i].html, &compCount)
+					parsedHTML, eachBlocksInBranch := parseEachBlocksInHTML(parsedHTML, &eachCount)
 					ifBlock.branches[i].html = parsedHTML
+					ifBlock.branches[i].eachBlocks = eachBlocksInBranch
 					bindings.components = append(bindings.components, comps...)
 				}
 				if ifBlock.elseHTML != "" {
@@ -482,6 +484,35 @@ func parseComponentsInHTML(html string, compCount *int) (string, []componentBind
 	}
 
 	return result.String(), components
+}
+
+// parseEachBlocksInHTML parses {#each} blocks in an HTML string (used for if-block content)
+// Returns the modified HTML with anchors and the list of each bindings
+func parseEachBlocksInHTML(html string, eachCount *int) (string, []eachBinding) {
+	var eachBlocks []eachBinding
+	var result strings.Builder
+	pos := 0
+
+	for pos < len(html) {
+		// Check for {#each ...}...{/each}
+		if strings.HasPrefix(html[pos:], "{#each ") {
+			endPos, each := parseEachBlock(html, pos, eachCount)
+			if each != nil {
+				eachBlocks = append(eachBlocks, *each)
+				if each.elseHTML != "" {
+					result.WriteString(fmt.Sprintf(`<span id="%s_else">%s</span>`, each.elementID, each.elseHTML))
+				}
+				result.WriteString(fmt.Sprintf(`<span id="%s_anchor"></span>`, each.elementID))
+				pos = endPos
+				continue
+			}
+		}
+
+		result.WriteByte(html[pos])
+		pos++
+	}
+
+	return result.String(), eachBlocks
 }
 
 // parseComponentTag parses a PascalCase component tag

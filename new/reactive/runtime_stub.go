@@ -25,5 +25,4 @@ type Bindable[T any] interface {
 	OnChange(func(T))
 }
 
-func Bind[T any](id string, store Bindable[T])                          {}
-func BindAttr(selector, attr, tmpl, field string, store *Store[string]) {}
+func Bind[T any](id string, store Bindable[T]) {}
