@@ -190,17 +190,8 @@ func generateExprBindings(sb *strings.Builder, expressions []exprBinding, fieldT
 				prefix, expr.fieldName, valueType, expr.elementID, expr.elementID, expr.elementID, jsConv)
 			fmt.Fprintf(sb, "\tif !%s.IsUndefined() && !%s.IsNull() { %s.Set(\"innerHTML\", %s) }\n",
 				expr.elementID, expr.elementID, expr.elementID, jsConvInit)
-		} else if valueType == "string" {
-			fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, prefix, expr.fieldName)
-		} else if valueType == "int" {
-			fmt.Fprintf(sb, "\treactive.BindInt(\"%s\", %s.%s)\n", expr.elementID, prefix, expr.fieldName)
 		} else {
-			jsConv := toJS(valueType, "v")
-			jsConvInit := toJS(valueType, prefix+"."+expr.fieldName+".Get()")
-			fmt.Fprintf(sb, "\t%s := reactive.GetEl(\"%s\")\n", expr.elementID, expr.elementID)
-			fmt.Fprintf(sb, "\t%s.%s.OnChange(func(v %s) { reactive.SetText(%s, %s) })\n",
-				prefix, expr.fieldName, valueType, expr.elementID, jsConv)
-			fmt.Fprintf(sb, "\treactive.SetText(%s, %s)\n", expr.elementID, jsConvInit)
+			fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, prefix, expr.fieldName)
 		}
 	}
 }
@@ -510,42 +501,12 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 
 	// Child's own expressions
 	for _, expr := range childOwnExprs {
-		valueType := childFieldTypes[expr.fieldName]
-		if valueType == "string" {
-			fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, compBinding.elementID, expr.fieldName)
-		} else if valueType == "int" {
-			fmt.Fprintf(sb, "\treactive.BindInt(\"%s\", %s.%s)\n", expr.elementID, compBinding.elementID, expr.fieldName)
-		} else {
-			if valueType == "" {
-				valueType = "any"
-			}
-			jsConv := toJS(valueType, "v")
-			jsConvInit := toJS(valueType, compBinding.elementID+"."+expr.fieldName+".Get()")
-			fmt.Fprintf(sb, "\t%s := reactive.GetEl(\"%s\")\n", expr.elementID, expr.elementID)
-			fmt.Fprintf(sb, "\t%s.%s.OnChange(func(v %s) { reactive.SetText(%s, %s) })\n",
-				compBinding.elementID, expr.fieldName, valueType, expr.elementID, jsConv)
-			fmt.Fprintf(sb, "\treactive.SetText(%s, %s)\n", expr.elementID, jsConvInit)
-		}
+		fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, compBinding.elementID, expr.fieldName)
 	}
 
 	// Slot expressions (parent bindings)
 	for _, expr := range slotExprs {
-		valueType := fieldTypes[expr.fieldName]
-		if valueType == "string" {
-			fmt.Fprintf(sb, "\treactive.Bind(\"%s\", component.%s)\n", expr.elementID, expr.fieldName)
-		} else if valueType == "int" {
-			fmt.Fprintf(sb, "\treactive.BindInt(\"%s\", component.%s)\n", expr.elementID, expr.fieldName)
-		} else {
-			if valueType == "" {
-				valueType = "any"
-			}
-			jsConv := toJS(valueType, "v")
-			jsConvInit := toJS(valueType, "component."+expr.fieldName+".Get()")
-			fmt.Fprintf(sb, "\t%s := reactive.GetEl(\"%s\")\n", expr.elementID, expr.elementID)
-			fmt.Fprintf(sb, "\tcomponent.%s.OnChange(func(v %s) { reactive.SetText(%s, %s) })\n",
-				expr.fieldName, valueType, expr.elementID, jsConv)
-			fmt.Fprintf(sb, "\treactive.SetText(%s, %s)\n", expr.elementID, jsConvInit)
-		}
+		fmt.Fprintf(sb, "\treactive.Bind(\"%s\", component.%s)\n", expr.elementID, expr.fieldName)
 	}
 
 	// Child attribute bindings
@@ -652,12 +613,7 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 	// Child expression bindings (with prefixed IDs)
 	for _, expr := range childBindings.expressions {
 		prefixedID := compID + "_" + expr.elementID
-		valueType := childFieldTypes[expr.fieldName]
-		if valueType == "int" {
-			fmt.Fprintf(sb, "%s\treactive.BindInt(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
-		} else {
-			fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
-		}
+		fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
 	}
 
 	// Child input bindings (two-way binding, with prefixed IDs)

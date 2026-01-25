@@ -37,13 +37,6 @@ func SetText(el js.Value, text string) {
 	}
 }
 
-// SetAttr sets an attribute on an element if it exists
-func SetAttr(el js.Value, attr, val string) {
-	if !el.IsUndefined() && !el.IsNull() {
-		el.Call("setAttribute", attr, val)
-	}
-}
-
 // On adds an event listener to an element
 func On(el js.Value, event string, handler func()) {
 	if !el.IsUndefined() && !el.IsNull() {
@@ -65,29 +58,35 @@ func OnEvent(el js.Value, event string, handler func(e js.Value)) {
 }
 
 // Bindable is implemented by types that can be bound to DOM elements.
-type Bindable interface {
-	Get() string
-	OnChange(func(string))
+type Bindable[T any] interface {
+	Get() T
+	OnChange(func(T))
 }
 
-// BindableInt is implemented by int stores.
-type BindableInt interface {
-	Get() int
-	OnChange(func(int))
+// toString converts a value to string for display
+func toString[T any](v T) string {
+	switch val := any(v).(type) {
+	case string:
+		return val
+	case int:
+		return strconv.Itoa(val)
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	default:
+		return ""
+	}
 }
 
-// Bind binds a string store to an element's textContent.
-func Bind(id string, store Bindable) {
+// Bind binds any store to an element's textContent.
+func Bind[T any](id string, store Bindable[T]) {
 	el := GetEl(id)
-	store.OnChange(func(v string) { SetText(el, v) })
-	SetText(el, store.Get())
-}
-
-// BindInt binds an int store to an element's textContent.
-func BindInt(id string, store BindableInt) {
-	el := GetEl(id)
-	store.OnChange(func(v int) { SetText(el, strconv.Itoa(v)) })
-	SetText(el, strconv.Itoa(store.Get()))
+	store.OnChange(func(v T) { SetText(el, toString(v)) })
+	SetText(el, toString(store.Get()))
 }
 
 // BindAttr binds a string store to an element's attribute with template substitution
@@ -97,18 +96,8 @@ func BindAttr(selector, attr, tmpl, field string, store *Store[string]) {
 		return
 	}
 	update := func() {
-		SetAttr(el, attr, strings.ReplaceAll(tmpl, "{"+field+"}", store.Get()))
+		el.Call("setAttribute", attr, strings.ReplaceAll(tmpl, "{"+field+"}", store.Get()))
 	}
 	store.OnChange(func(_ string) { update() })
 	update()
-}
-
-// QuerySelector returns the first element matching a CSS selector
-func QuerySelector(selector string) js.Value {
-	return Document.Call("querySelector", selector)
-}
-
-// CreateElement creates a new DOM element
-func CreateElement(tag string) js.Value {
-	return Document.Call("createElement", tag)
 }
