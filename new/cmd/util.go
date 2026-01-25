@@ -833,15 +833,25 @@ func removeComments(s, start, end string) string {
 	return sb.String()
 }
 
-// removeHTMLComments removes HTML comments but preserves <!--compN--> placeholders
+// removeHTMLComments removes HTML comments but preserves binding placeholders
+// Preserved: <!--compN-->, <!--tN-->, <!--eachN_anchor-->, <!--ifN_anchor-->
 func removeHTMLComments(html string) string {
 	var sb strings.Builder
 	i := 0
 	for i < len(html) {
 		if i+4 <= len(html) && html[i:i+4] == "<!--" {
-			// Check if it's a <!--comp placeholder (preserve these)
+			// Check for preserved comment markers
+			preserve := false
 			if i+8 <= len(html) && html[i:i+8] == "<!--comp" {
-				// Find end and preserve
+				preserve = true
+			} else if i+5 <= len(html) && html[i:i+5] == "<!--t" {
+				preserve = true
+			} else if i+8 <= len(html) && html[i:i+8] == "<!--each" {
+				preserve = true
+			} else if i+6 <= len(html) && html[i:i+6] == "<!--if" {
+				preserve = true
+			}
+			if preserve {
 				endIdx := strings.Index(html[i:], "-->")
 				if endIdx != -1 {
 					sb.WriteString(html[i : i+endIdx+3])

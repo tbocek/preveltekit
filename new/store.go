@@ -189,177 +189,51 @@ func (l *List[T]) Render() {
 	}
 }
 
-// diff computes minimal edit operations to transform old into new
-// Uses Myers diff algorithm with early termination of suboptimal paths
+// diff computes edit operations to transform old into new using O(n) set comparison.
+// Returns removes first (in reverse index order), then inserts.
 func diff[T comparable](old, new []T) []Edit[T] {
-	n, m := len(old), len(new)
-
-	// Fast paths
-	if n == 0 {
-		edits := make([]Edit[T], m)
-		for i, v := range new {
-			edits[i] = Edit[T]{Op: EditInsert, Index: i, Value: v}
-		}
-		return edits
+	// Build sets for O(1) lookup
+	oldSet := make(map[T]bool, len(old))
+	for _, v := range old {
+		oldSet[v] = true
 	}
-	if m == 0 {
-		edits := make([]Edit[T], n)
-		for i := n - 1; i >= 0; i-- {
-			var zero T
-			edits[n-1-i] = Edit[T]{Op: EditRemove, Index: i, Value: zero}
-		}
-		return edits
+	newSet := make(map[T]bool, len(new))
+	for _, v := range new {
+		newSet[v] = true
 	}
 
-	// Check for simple append
-	if m > n {
-		match := true
-		for i := 0; i < n; i++ {
-			if old[i] != new[i] {
-				match = false
-				break
-			}
-		}
-		if match {
-			edits := make([]Edit[T], m-n)
-			for i := n; i < m; i++ {
-				edits[i-n] = Edit[T]{Op: EditInsert, Index: i, Value: new[i]}
-			}
-			return edits
-		}
-	}
-
-	// Check for simple prepend
-	if m > n {
-		diff := m - n
-		match := true
-		for i := 0; i < n; i++ {
-			if old[i] != new[i+diff] {
-				match = false
-				break
-			}
-		}
-		if match {
-			edits := make([]Edit[T], diff)
-			for i := 0; i < diff; i++ {
-				edits[i] = Edit[T]{Op: EditInsert, Index: i, Value: new[i]}
-			}
-			return edits
-		}
-	}
-
-	// Check for simple removal from end
-	if n > m {
-		match := true
-		for i := 0; i < m; i++ {
-			if old[i] != new[i] {
-				match = false
-				break
-			}
-		}
-		if match {
-			edits := make([]Edit[T], n-m)
-			for i := n - 1; i >= m; i-- {
-				var zero T
-				edits[n-1-i] = Edit[T]{Op: EditRemove, Index: i, Value: zero}
-			}
-			return edits
-		}
-	}
-
-	// Myers diff algorithm
-	max := n + m
-	v := make(map[int]int)
-	v[1] = 0
-	var trace []map[int]int
-
-	for d := 0; d <= max; d++ {
-		// Copy v for backtracking
-		vc := make(map[int]int)
-		for k, val := range v {
-			vc[k] = val
-		}
-		trace = append(trace, vc)
-
-		for k := -d; k <= d; k += 2 {
-			var x int
-			if k == -d || (k != d && v[k-1] < v[k+1]) {
-				x = v[k+1] // move down (insert)
-			} else {
-				x = v[k-1] + 1 // move right (remove)
-			}
-			y := x - k
-
-			// Follow diagonal (matches)
-			for x < n && y < m && old[x] == new[y] {
-				x++
-				y++
-			}
-
-			v[k] = x
-
-			if x >= n && y >= m {
-				// Found path, backtrack to build edits
-				return backtrack(trace, old, new, n, m)
-			}
-		}
-	}
-
-	return nil // unreachable
-}
-
-// backtrack reconstructs edit operations from Myers diff trace
-func backtrack[T comparable](trace []map[int]int, old, new []T, n, m int) []Edit[T] {
 	var edits []Edit[T]
-	x, y := n, m
 
-	for d := len(trace) - 1; d >= 0; d-- {
-		v := trace[d]
-		k := x - y
-
-		var prevK int
-		if k == -d || (k != d && v[k-1] < v[k+1]) {
-			prevK = k + 1 // came from above (insert)
-		} else {
-			prevK = k - 1 // came from left (remove)
-		}
-
-		prevX := v[prevK]
-		prevY := prevX - prevK
-
-		// Follow diagonal backwards
-		for x > prevX && y > prevY {
-			x--
-			y--
-			// match, no edit needed
-		}
-
-		if d > 0 {
-			if x == prevX {
-				// insert
-				y--
-				edits = append(edits, Edit[T]{Op: EditInsert, Index: y, Value: new[y]})
-			} else {
-				// remove
-				x--
-				var zero T
-				edits = append(edits, Edit[T]{Op: EditRemove, Index: x, Value: zero})
-			}
+	// Find removals (in old but not in new) - reverse order for stable indices
+	for i := len(old) - 1; i >= 0; i-- {
+		if !newSet[old[i]] {
+			var zero T
+			edits = append(edits, Edit[T]{Op: EditRemove, Index: i, Value: zero})
 		}
 	}
 
-	// Reverse to get correct order
-	for i, j := 0, len(edits)-1; i < j; i, j = i+1, j-1 {
-		edits[i], edits[j] = edits[j], edits[i]
+	// Find insertions (in new but not in old)
+	for i, v := range new {
+		if !oldSet[v] {
+			edits = append(edits, Edit[T]{Op: EditInsert, Index: i, Value: v})
+		}
 	}
 
 	return edits
 }
 
+// MapEdit represents a single map edit operation
+type MapEdit[K comparable, V any] struct {
+	Op    EditOp
+	Key   K
+	Value V // Value for Insert, zero for Remove
+}
+
 // Map is a reactive map with methods that trigger updates
 type Map[K comparable, V any] struct {
-	items     map[K]V
-	callbacks []func(map[K]V)
+	items    map[K]V
+	onEdit   []func(MapEdit[K, V])
+	onChange []func(map[K]V)
 }
 
 // NewMap creates a reactive map
@@ -389,29 +263,75 @@ func (m *Map[K, V]) Len() int {
 
 // Set sets a key-value pair
 func (m *Map[K, V]) Set(key K, value V) {
+	_, exists := m.items[key]
 	m.items[key] = value
+	if !exists {
+		for _, cb := range m.onEdit {
+			cb(MapEdit[K, V]{Op: EditInsert, Key: key, Value: value})
+		}
+	}
+	m.notify()
+}
+
+// SetAll replaces all entries, computing minimal diff
+func (m *Map[K, V]) SetAll(items map[K]V) {
+	// Find removals (in old but not in new)
+	for k := range m.items {
+		if _, exists := items[k]; !exists {
+			var zero V
+			for _, cb := range m.onEdit {
+				cb(MapEdit[K, V]{Op: EditRemove, Key: k, Value: zero})
+			}
+		}
+	}
+	// Find insertions (in new but not in old)
+	for k, v := range items {
+		if _, exists := m.items[k]; !exists {
+			for _, cb := range m.onEdit {
+				cb(MapEdit[K, V]{Op: EditInsert, Key: k, Value: v})
+			}
+		}
+	}
+	m.items = items
 	m.notify()
 }
 
 // Delete removes a key
 func (m *Map[K, V]) Delete(key K) {
+	if _, exists := m.items[key]; exists {
+		var zero V
+		for _, cb := range m.onEdit {
+			cb(MapEdit[K, V]{Op: EditRemove, Key: key, Value: zero})
+		}
+	}
 	delete(m.items, key)
 	m.notify()
 }
 
 // Clear removes all entries
 func (m *Map[K, V]) Clear() {
+	var zero V
+	for k := range m.items {
+		for _, cb := range m.onEdit {
+			cb(MapEdit[K, V]{Op: EditRemove, Key: k, Value: zero})
+		}
+	}
 	m.items = make(map[K]V)
 	m.notify()
 }
 
+// OnEdit adds a callback for edit operations (Insert, Remove)
+func (m *Map[K, V]) OnEdit(cb func(MapEdit[K, V])) {
+	m.onEdit = append(m.onEdit, cb)
+}
+
 // OnChange adds a callback for when the map changes
 func (m *Map[K, V]) OnChange(cb func(map[K]V)) {
-	m.callbacks = append(m.callbacks, cb)
+	m.onChange = append(m.onChange, cb)
 }
 
 func (m *Map[K, V]) notify() {
-	for _, cb := range m.callbacks {
+	for _, cb := range m.onChange {
 		cb(m.items)
 	}
 }

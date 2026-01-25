@@ -256,11 +256,11 @@ func generateHTMLConstant(sb *strings.Builder, compBinding componentBinding, com
 
 // prefixAllBindingIDs prefixes all binding IDs in the template and updates the bindings struct.
 func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings) string {
-	// Prefix expression IDs
+	// Prefix expression IDs (now comment markers <!--tN-->)
 	for i := range bindings.expressions {
 		oldID := bindings.expressions[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `id="`+oldID+`"`, `id="`+newID+`"`)
+		html = strings.ReplaceAll(html, `<!--`+oldID+`-->`, `<!--`+newID+`-->`)
 		bindings.expressions[i].elementID = newID
 	}
 	// Prefix event IDs
@@ -284,11 +284,11 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 		html = strings.ReplaceAll(html, `id="`+oldID+`"`, `id="`+newID+`"`)
 		bindings.classBindings[i].elementID = newID
 	}
-	// Prefix each block IDs
+	// Prefix each block IDs (anchor is comment marker, else is span with id)
 	for i := range bindings.eachBlocks {
 		oldID := bindings.eachBlocks[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
+		html = strings.ReplaceAll(html, `<!--`+oldID+`_anchor-->`, `<!--`+newID+`_anchor-->`)
 		html = strings.ReplaceAll(html, `id="`+oldID+`_else"`, `id="`+newID+`_else"`)
 		bindings.eachBlocks[i].elementID = newID
 	}
@@ -299,21 +299,30 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 		html = strings.ReplaceAll(html, `data-attrbind="`+oldID+`"`, `data-attrbind="`+newID+`"`)
 		bindings.attrBindings[i].elementID = newID
 	}
-	// Prefix if block IDs and nested bindings
+	// Prefix if block IDs and nested bindings (comment markers)
 	for i := range bindings.ifBlocks {
 		oldID := bindings.ifBlocks[i].elementID
 		newID := prefix + "_" + oldID
-		html = strings.ReplaceAll(html, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
+		html = strings.ReplaceAll(html, `<!--`+oldID+`_anchor-->`, `<!--`+newID+`_anchor-->`)
 		bindings.ifBlocks[i].elementID = newID
 
 		// Prefix bindings inside branches
 		for j := range bindings.ifBlocks[i].branches {
+			// Prefix expression markers in branch HTML
+			for k := range bindings.ifBlocks[i].branches[j].expressions {
+				oldExprID := bindings.ifBlocks[i].branches[j].expressions[k].elementID
+				newExprID := prefix + "_" + oldExprID
+				bindings.ifBlocks[i].branches[j].html = strings.ReplaceAll(
+					bindings.ifBlocks[i].branches[j].html,
+					`<!--`+oldExprID+`-->`, `<!--`+newExprID+`-->`)
+				bindings.ifBlocks[i].branches[j].expressions[k].elementID = newExprID
+			}
 			for k := range bindings.ifBlocks[i].branches[j].eachBlocks {
 				oldEachID := bindings.ifBlocks[i].branches[j].eachBlocks[k].elementID
 				newEachID := prefix + "_" + oldEachID
 				bindings.ifBlocks[i].branches[j].html = strings.ReplaceAll(
 					bindings.ifBlocks[i].branches[j].html,
-					`id="`+oldEachID+`_anchor"`, `id="`+newEachID+`_anchor"`)
+					`<!--`+oldEachID+`_anchor-->`, `<!--`+newEachID+`_anchor-->`)
 				bindings.ifBlocks[i].branches[j].eachBlocks[k].elementID = newEachID
 			}
 			for k := range bindings.ifBlocks[i].branches[j].classBindings {
@@ -324,6 +333,15 @@ func prefixAllBindingIDs(prefix string, html string, bindings *templateBindings)
 					`id="`+oldClassID+`"`, `id="`+newClassID+`"`)
 				bindings.ifBlocks[i].branches[j].classBindings[k].elementID = newClassID
 			}
+		}
+		// Also prefix else branch expressions
+		for k := range bindings.ifBlocks[i].elseExpressions {
+			oldExprID := bindings.ifBlocks[i].elseExpressions[k].elementID
+			newExprID := prefix + "_" + oldExprID
+			bindings.ifBlocks[i].elseHTML = strings.ReplaceAll(
+				bindings.ifBlocks[i].elseHTML,
+				`<!--`+oldExprID+`-->`, `<!--`+newExprID+`-->`)
+			bindings.ifBlocks[i].elseExpressions[k].elementID = newExprID
 		}
 	}
 	// Prefix component placeholders in HTML only (don't mutate the binding IDs)
@@ -359,19 +377,9 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 			varRef = varName + "." + expr.fieldName
 		}
 		if expr.isHTML {
-			valueType := fieldTypes[expr.fieldName]
-			if valueType == "" {
-				valueType = "string"
-			}
-			jsConv := toJS(valueType, "v")
-			jsConvInit := toJS(valueType, varRef+".Get()")
-			fmt.Fprintf(sb, "%s%s := preveltekit.GetEl(\"%s\")\n", indent, fullID, fullID)
-			fmt.Fprintf(sb, "%s%s.OnChange(func(v %s) { if !%s.IsUndefined() && !%s.IsNull() { %s.Set(\"innerHTML\", %s) } })\n",
-				indent, varRef, valueType, fullID, fullID, fullID, jsConv)
-			fmt.Fprintf(sb, "%sif !%s.IsUndefined() && !%s.IsNull() { %s.Set(\"innerHTML\", %s) }\n",
-				indent, fullID, fullID, fullID, jsConvInit)
+			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", indent, fullID, varRef)
 		} else {
-			fmt.Fprintf(sb, "%spreveltekit.Bind(\"%s\", %s)\n", indent, fullID, varRef)
+			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", indent, fullID, varRef)
 		}
 	}
 
@@ -524,7 +532,7 @@ func generateEachBlocksWiring(sb *strings.Builder, eachBlocks []eachBinding, ctx
 		itemToJS := toJS(itemType, "item")
 		hasElse := each.elseHTML != ""
 
-		fmt.Fprintf(sb, "%s%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", indent, fullID, fullID)
+		fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s_anchor\")\n", indent, fullID, fullID)
 		if hasElse {
 			fmt.Fprintf(sb, "%s%s_else := document.Call(\"getElementById\", \"%s_else\")\n", indent, fullID, fullID)
 		}
@@ -588,7 +596,6 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 
 	for _, ifb := range ifBlocks {
 		fullID := ctx.prefixID(ifb.elementID)
-		fmt.Fprintf(sb, "%s%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", indent, fullID, fullID)
 		fmt.Fprintf(sb, "%s%s_current := js.Null()\n", indent, fullID)
 
 		// Find components in this if-block
@@ -685,7 +692,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 		}
 
 		// Insert HTML into DOM
-		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(%s_anchor, %s_current, html)\n", indent, fullID, fullID, fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s_anchor\", %s_current, html)\n", indent, fullID, fullID, fullID)
 
 		// Wire up child components
 		for _, compBinding := range compsInBlock {
@@ -728,7 +735,11 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				for _, expr := range branch.expressions {
 					fullExprID := ctx.prefixID(expr.elementID)
 					varRef := varName + "." + expr.fieldName
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.Bind(\"%s\", %s)\n", indent, fullExprID, varRef)
+					if expr.isHTML {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+					} else {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+					}
 				}
 				fmt.Fprintf(sb, "%s\t}\n", indent)
 			}
@@ -740,7 +751,11 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			for _, expr := range ifb.elseExpressions {
 				fullExprID := ctx.prefixID(expr.elementID)
 				varRef := varName + "." + expr.fieldName
-				fmt.Fprintf(sb, "%s\t\tpreveltekit.Bind(\"%s\", %s)\n", indent, fullExprID, varRef)
+				if expr.isHTML {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+				} else {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+				}
 			}
 			fmt.Fprintf(sb, "%s\t}\n", indent)
 		}
@@ -769,7 +784,7 @@ func generateEachBlockInline(sb *strings.Builder, each eachBinding, ctx *WiringC
 	// each.elementID is already prefixed
 	fullID := each.elementID
 
-	fmt.Fprintf(sb, "%s%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", indent, fullID, fullID)
+	fmt.Fprintf(sb, "%s%s_anchor := preveltekit.FindComment(\"%s_anchor\")\n", indent, fullID, fullID)
 	if hasElse {
 		fmt.Fprintf(sb, "%s%s_else := document.Call(\"getElementById\", \"%s_else\")\n", indent, fullID, fullID)
 	}
@@ -891,7 +906,11 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 		if !found {
 			varRef = compID + "." + expr.fieldName
 		}
-		fmt.Fprintf(sb, "%spreveltekit.Bind(\"%s\", %s)\n", innerIndent, fullID, varRef)
+		if expr.isHTML {
+			fmt.Fprintf(sb, "%spreveltekit.BindHTML(\"%s\", %s)\n", innerIndent, fullID, varRef)
+		} else {
+			fmt.Fprintf(sb, "%spreveltekit.BindText(\"%s\", %s)\n", innerIndent, fullID, varRef)
+		}
 	}
 
 	// Input bindings
@@ -1016,7 +1035,6 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 
 	for _, ifb := range ifBlocks {
 		fullID := compID + "_" + ifb.elementID
-		fmt.Fprintf(sb, "%s%s_anchor := document.Call(\"getElementById\", \"%s_anchor\")\n", indent, fullID, fullID)
 		fmt.Fprintf(sb, "%s%s_current := js.Null()\n", indent, fullID)
 
 		// Find components in this if block
@@ -1080,7 +1098,7 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 		}
 
 		// Insert HTML
-		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(%s_anchor, %s_current, html)\n", indent, fullID, fullID, fullID)
+		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s_anchor\", %s_current, html)\n", indent, fullID, fullID, fullID)
 
 		// Wire up components inside
 		for _, compBinding := range compsInBlock {
@@ -1112,7 +1130,11 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 				for _, expr := range branch.expressions {
 					fullExprID := ctx.prefixID(expr.elementID)
 					varRef := compID + "." + expr.fieldName
-					fmt.Fprintf(sb, "%s\t\tpreveltekit.Bind(\"%s\", %s)\n", indent, fullExprID, varRef)
+					if expr.isHTML {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+					} else {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+					}
 				}
 				fmt.Fprintf(sb, "%s\t}\n", indent)
 			}
@@ -1124,7 +1146,11 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 			for _, expr := range ifb.elseExpressions {
 				fullExprID := ctx.prefixID(expr.elementID)
 				varRef := compID + "." + expr.fieldName
-				fmt.Fprintf(sb, "%s\t\tpreveltekit.Bind(\"%s\", %s)\n", indent, fullExprID, varRef)
+				if expr.isHTML {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, fullExprID, varRef)
+				} else {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, fullExprID, varRef)
+				}
 			}
 			fmt.Fprintf(sb, "%s\t}\n", indent)
 		}
@@ -1148,15 +1174,13 @@ func prefixIDStr(prefix, id string) string {
 	return prefix + "_" + id
 }
 
-// prefixExprIDs prefixes expression IDs (expr_*, html_*) in HTML with the given prefix
+// prefixExprIDs prefixes expression comment markers (<!--t0-->) in HTML with the given prefix
 func prefixExprIDs(html, prefix string) string {
 	if prefix == "" {
 		return html
 	}
-	// Prefix expr_ IDs
-	result := regexp.MustCompile(`id="(expr_[^"]+)"`).ReplaceAllString(html, `id="`+prefix+`_$1"`)
-	// Prefix html_ IDs
-	result = regexp.MustCompile(`id="(html_[^"]+)"`).ReplaceAllString(result, `id="`+prefix+`_$1"`)
+	// Prefix <!--tN--> comment markers
+	result := regexp.MustCompile(`<!--(t\d+)-->`).ReplaceAllString(html, `<!--`+prefix+`_$1-->`)
 	return result
 }
 

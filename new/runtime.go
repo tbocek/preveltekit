@@ -81,11 +81,74 @@ func toString[T any](v T) string {
 	}
 }
 
-// Bind binds any store to an element's textContent.
+// Bind binds any store to an element's textContent (legacy, uses getElementById).
 func Bind[T any](id string, store Bindable[T]) {
 	el := GetEl(id)
 	store.OnChange(func(v T) { SetText(el, toString(v)) })
 	SetText(el, toString(store.Get()))
+}
+
+// FindComment finds a comment node with the given marker text using TreeWalker
+func FindComment(marker string) js.Value {
+	walker := Document.Call("createTreeWalker",
+		Document.Get("body"),
+		js.ValueOf(128), // NodeFilter.SHOW_COMMENT
+		js.Null(),
+	)
+	for {
+		node := walker.Call("nextNode")
+		if node.IsNull() {
+			return js.Null()
+		}
+		if node.Get("nodeValue").String() == marker {
+			return node
+		}
+	}
+}
+
+// BindText binds a store to a text node, using a comment marker for hydration.
+// Finds <!--marker-->, creates a text node after it, and updates on change.
+func BindText[T any](marker string, store Bindable[T]) {
+	comment := FindComment(marker)
+	if comment.IsNull() {
+		return
+	}
+	// Create text node and insert after comment
+	textNode := Document.Call("createTextNode", toString(store.Get()))
+	parent := comment.Get("parentNode")
+	nextSibling := comment.Get("nextSibling")
+	if nextSibling.IsNull() {
+		parent.Call("appendChild", textNode)
+	} else {
+		parent.Call("insertBefore", textNode, nextSibling)
+	}
+	// Update text node on change
+	store.OnChange(func(v T) {
+		textNode.Set("nodeValue", toString(v))
+	})
+}
+
+// BindHTML binds a store to innerHTML, using a comment marker for hydration.
+// Creates a span after the comment to hold the HTML content.
+func BindHTML[T any](marker string, store Bindable[T]) {
+	comment := FindComment(marker)
+	if comment.IsNull() {
+		return
+	}
+	// Create span to hold HTML and insert after comment
+	span := Document.Call("createElement", "span")
+	span.Set("innerHTML", toString(store.Get()))
+	parent := comment.Get("parentNode")
+	nextSibling := comment.Get("nextSibling")
+	if nextSibling.IsNull() {
+		parent.Call("appendChild", span)
+	} else {
+		parent.Call("insertBefore", span, nextSibling)
+	}
+	// Update span innerHTML on change
+	store.OnChange(func(v T) {
+		span.Set("innerHTML", toString(v))
+	})
 }
 
 // Settable extends Bindable with Set capability for two-way binding
@@ -148,8 +211,9 @@ func ToggleClass(el js.Value, class string, add bool) {
 	}
 }
 
-// ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor
-func ReplaceContent(anchor, current js.Value, html string) js.Value {
+// ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor comment
+func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value {
+	anchor := FindComment(anchorMarker)
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
 	if !current.IsNull() {

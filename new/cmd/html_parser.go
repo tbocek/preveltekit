@@ -64,9 +64,9 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 			if each != nil {
 				bindings.eachBlocks = append(bindings.eachBlocks, *each)
 				if each.elseHTML != "" {
-					result.WriteString(fmt.Sprintf(`<span id="%s_else">%s</span>`, each.elementID, each.elseHTML))
+					fmt.Fprintf(&result, `<span id="%s_else">%s</span>`, each.elementID, each.elseHTML)
 				}
-				result.WriteString(fmt.Sprintf(`<span id="%s_anchor"></span>`, each.elementID))
+				fmt.Fprintf(&result, `<!--%s_anchor-->`, each.elementID)
 				pos = endPos
 				continue
 			}
@@ -97,7 +97,7 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 					bindings.components = append(bindings.components, comps...)
 				}
 				bindings.ifBlocks = append(bindings.ifBlocks, *ifBlock)
-				result.WriteString(fmt.Sprintf(`<span id="%s_anchor"></span>`, ifBlock.elementID))
+				fmt.Fprintf(&result, `<!--%s_anchor-->`, ifBlock.elementID)
 				pos = endPos
 				continue
 			}
@@ -107,12 +107,12 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 		if strings.HasPrefix(tmpl[pos:], "{@html ") {
 			if endPos := strings.Index(tmpl[pos:], "}"); endPos != -1 {
 				fieldName := strings.TrimSpace(tmpl[pos+7 : pos+endPos])
-				elementID := fmt.Sprintf("html_%s_%d", fieldName, exprCount)
+				elementID := fmt.Sprintf("t%d", exprCount)
 				exprCount++
 				bindings.expressions = append(bindings.expressions, exprBinding{
 					fieldName: fieldName, elementID: elementID, isHTML: true,
 				})
-				result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+				fmt.Fprintf(&result, `<!--%s-->`, elementID)
 				pos = pos + endPos + 1
 				continue
 			}
@@ -125,12 +125,12 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 				if endPos := strings.Index(tmpl[pos:], "}"); endPos != -1 {
 					fieldName := strings.TrimSpace(tmpl[pos+1 : pos+endPos])
 					if isValidFieldName(fieldName) {
-						elementID := fmt.Sprintf("expr_%s_%d", fieldName, exprCount)
+						elementID := fmt.Sprintf("t%d", exprCount)
 						exprCount++
 						bindings.expressions = append(bindings.expressions, exprBinding{
 							fieldName: fieldName, elementID: elementID, isHTML: false,
 						})
-						result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+						fmt.Fprintf(&result, `<!--%s-->`, elementID)
 						pos = pos + endPos + 1
 						continue
 					}
@@ -144,7 +144,7 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 			if pos+1 < len(tmpl) && tmpl[pos+1] >= 'A' && tmpl[pos+1] <= 'Z' {
 				if compEnd, comp := parseComponentTag(tmpl, pos, &compCount); comp != nil {
 					bindings.components = append(bindings.components, *comp)
-					result.WriteString(fmt.Sprintf(`<!--%s-->`, comp.elementID))
+					fmt.Fprintf(&result, `<!--%s-->`, comp.elementID)
 					pos = compEnd
 					continue
 				}
@@ -481,7 +481,7 @@ func parseComponentsInHTML(html string, compCount *int) (string, []componentBind
 		if html[pos] == '<' && pos+1 < len(html) && html[pos+1] >= 'A' && html[pos+1] <= 'Z' {
 			if compEnd, comp := parseComponentTag(html, pos, compCount); comp != nil {
 				components = append(components, *comp)
-				result.WriteString(fmt.Sprintf(`<!--%s-->`, comp.elementID))
+				fmt.Fprintf(&result, `<!--%s-->`, comp.elementID)
 				pos = compEnd
 				continue
 			}
@@ -508,9 +508,9 @@ func parseEachBlocksInHTML(html string, eachCount *int) (string, []eachBinding) 
 			if each != nil {
 				eachBlocks = append(eachBlocks, *each)
 				if each.elseHTML != "" {
-					result.WriteString(fmt.Sprintf(`<span id="%s_else">%s</span>`, each.elementID, each.elseHTML))
+					fmt.Fprintf(&result, `<span id="%s_else">%s</span>`, each.elementID, each.elseHTML)
 				}
-				result.WriteString(fmt.Sprintf(`<span id="%s_anchor"></span>`, each.elementID))
+				fmt.Fprintf(&result, `<!--%s_anchor-->`, each.elementID)
 				pos = endPos
 				continue
 			}
@@ -588,7 +588,7 @@ func parseClassBindingsInHTML(html string, classCount *int) (string, []classBind
 }
 
 // parseExpressionsInHTML parses {Field} expressions in HTML content (used for if-block branches)
-// Returns the modified HTML with span elements and the list of expression bindings
+// Returns the modified HTML with comment markers and the list of expression bindings
 func parseExpressionsInHTML(html string, exprCount *int) (string, []exprBinding) {
 	var expressions []exprBinding
 	var result strings.Builder
@@ -599,12 +599,12 @@ func parseExpressionsInHTML(html string, exprCount *int) (string, []exprBinding)
 		if strings.HasPrefix(html[pos:], "{@html ") {
 			if endPos := strings.Index(html[pos:], "}"); endPos != -1 {
 				fieldName := strings.TrimSpace(html[pos+7 : pos+endPos])
-				elementID := fmt.Sprintf("html_%s_%d", fieldName, *exprCount)
+				elementID := fmt.Sprintf("t%d", *exprCount)
 				*exprCount++
 				expressions = append(expressions, exprBinding{
 					fieldName: fieldName, elementID: elementID, isHTML: true,
 				})
-				result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+				fmt.Fprintf(&result, `<!--%s-->`, elementID)
 				pos += endPos + 1
 				continue
 			}
@@ -617,12 +617,12 @@ func parseExpressionsInHTML(html string, exprCount *int) (string, []exprBinding)
 				if endPos := strings.Index(html[pos:], "}"); endPos != -1 {
 					fieldName := strings.TrimSpace(html[pos+1 : pos+endPos])
 					if isValidFieldName(fieldName) {
-						elementID := fmt.Sprintf("expr_%s_%d", fieldName, *exprCount)
+						elementID := fmt.Sprintf("t%d", *exprCount)
 						*exprCount++
 						expressions = append(expressions, exprBinding{
 							fieldName: fieldName, elementID: elementID, isHTML: false,
 						})
-						result.WriteString(fmt.Sprintf(`<span id="%s"></span>`, elementID))
+						fmt.Fprintf(&result, `<!--%s-->`, elementID)
 						pos += endPos + 1
 						continue
 					}
