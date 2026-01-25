@@ -55,7 +55,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 		}
 	}
 
-	// strings is needed for parent-level attr bindings (child ones use reactive.BindAttr)
+	// strings is needed for parent-level attr bindings (child ones use preveltekit.BindAttr)
 	needsStrings := len(bindings.attrBindings) > 0
 	// Also check for multi-field child attr bindings which generate inline strings.ReplaceAll
 	if !needsStrings {
@@ -93,7 +93,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 
 	// Write imports - now imports reactive package
 	sb.WriteString("//go:build js && wasm\n\npackage main\n\nimport (\n")
-	sb.WriteString("\t\"reactive\"\n")
+	sb.WriteString("\t\"preveltekit\"\n")
 	sb.WriteString("\t\"syscall/js\"\n")
 	if needsStrconv {
 		sb.WriteString("\t\"strconv\"\n")
@@ -104,7 +104,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	sb.WriteString(")\n\n")
 
 	// Aliases for cleaner generated code
-	sb.WriteString("var document = reactive.Document\n\n")
+	sb.WriteString("var document = preveltekit.Document\n\n")
 
 	// Generate CSS constants and HTML constants for components
 	cssGenerated := make(map[string]bool)
@@ -223,13 +223,13 @@ func generateExprBindings(sb *strings.Builder, expressions []exprBinding, fieldT
 		if expr.isHTML {
 			jsConv := toJS(valueType, "v")
 			jsConvInit := toJS(valueType, prefix+"."+expr.fieldName+".Get()")
-			fmt.Fprintf(sb, "\t%s := reactive.GetEl(\"%s\")\n", expr.elementID, expr.elementID)
+			fmt.Fprintf(sb, "\t%s := preveltekit.GetEl(\"%s\")\n", expr.elementID, expr.elementID)
 			fmt.Fprintf(sb, "\t%s.%s.OnChange(func(v %s) { if !%s.IsUndefined() && !%s.IsNull() { %s.Set(\"innerHTML\", %s) } })\n",
 				prefix, expr.fieldName, valueType, expr.elementID, expr.elementID, expr.elementID, jsConv)
 			fmt.Fprintf(sb, "\tif !%s.IsUndefined() && !%s.IsNull() { %s.Set(\"innerHTML\", %s) }\n",
 				expr.elementID, expr.elementID, expr.elementID, jsConvInit)
 		} else {
-			fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, prefix, expr.fieldName)
+			fmt.Fprintf(sb, "\tpreveltekit.Bind(\"%s\", %s.%s)\n", expr.elementID, prefix, expr.fieldName)
 		}
 	}
 }
@@ -536,8 +536,8 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 		fmt.Fprintf(sb, "\t\t\tidxEl.Set(\"textContent\", strconv.Itoa(index))\n\t\t\tidxEl.Get(\"classList\").Call(\"remove\", \"__index__\")\n\t\t}\n")
 		fmt.Fprintf(sb, "\t\treturn wrapper\n\t}\n")
 
-		fmt.Fprintf(sb, "\tcomponent.%s.OnEdit(func(edit reactive.Edit[%s]) {\n\t\tswitch edit.Op {\n", each.listName, itemType)
-		fmt.Fprintf(sb, "\t\tcase reactive.EditInsert:\n")
+		fmt.Fprintf(sb, "\tcomponent.%s.OnEdit(func(edit preveltekit.Edit[%s]) {\n\t\tswitch edit.Op {\n", each.listName, itemType)
+		fmt.Fprintf(sb, "\t\tcase preveltekit.EditInsert:\n")
 		fmt.Fprintf(sb, "\t\t\titems := component.%s.Get()\n", each.listName)
 		if hasElse {
 			fmt.Fprintf(sb, "\t\t\tif len(items) == 1 { %s_else.Get(\"style\").Set(\"display\", \"none\") }\n", each.elementID)
@@ -554,7 +554,7 @@ func generateEachBlocks(sb *strings.Builder, eachBlocks []eachBinding, fieldType
 		fmt.Fprintf(sb, "\t\t\t\tprev := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(edit.Index-1))\n", each.elementID)
 		fmt.Fprintf(sb, "\t\t\t\tif !prev.IsNull() { prev.Get(\"parentNode\").Call(\"insertBefore\", el, prev.Get(\"nextSibling\")) }\n")
 		fmt.Fprintf(sb, "\t\t\t\telse { %s_anchor.Get(\"parentNode\").Call(\"insertBefore\", el, %s_anchor) }\n\t\t\t}\n", each.elementID, each.elementID)
-		fmt.Fprintf(sb, "\t\tcase reactive.EditRemove:\n")
+		fmt.Fprintf(sb, "\t\tcase preveltekit.EditRemove:\n")
 		fmt.Fprintf(sb, "\t\t\tel := document.Call(\"getElementById\", \"%s_\" + strconv.Itoa(edit.Index))\n", each.elementID)
 		fmt.Fprintf(sb, "\t\t\tif !el.IsNull() { el.Call(\"remove\") }\n")
 		fmt.Fprintf(sb, "\t\t\tfor i := edit.Index; ; i++ {\n")
@@ -670,12 +670,12 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 	}
 
 	// Get component root element by ID
-	fmt.Fprintf(sb, "\t%s_el := reactive.GetEl(\"%s\")\n", compBinding.elementID, compBinding.elementID)
+	fmt.Fprintf(sb, "\t%s_el := preveltekit.GetEl(\"%s\")\n", compBinding.elementID, compBinding.elementID)
 	fmt.Fprintf(sb, "\tif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", compBinding.elementID, compBinding.elementID)
 
 	// Style injection
 	if childComp.style != "" {
-		fmt.Fprintf(sb, "\treactive.InjectStyle(\"%s\", %sCSS)\n", compBinding.name, strings.ToLower(compBinding.name))
+		fmt.Fprintf(sb, "\tpreveltekit.InjectStyle(\"%s\", %sCSS)\n", compBinding.name, strings.ToLower(compBinding.name))
 	}
 
 	// Props
@@ -701,12 +701,12 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 
 	// Child's own expressions
 	for _, expr := range childOwnExprs {
-		fmt.Fprintf(sb, "\treactive.Bind(\"%s\", %s.%s)\n", expr.elementID, compBinding.elementID, expr.fieldName)
+		fmt.Fprintf(sb, "\tpreveltekit.Bind(\"%s\", %s.%s)\n", expr.elementID, compBinding.elementID, expr.fieldName)
 	}
 
 	// Slot expressions (parent bindings)
 	for _, expr := range slotExprs {
-		fmt.Fprintf(sb, "\treactive.Bind(\"%s\", component.%s)\n", expr.elementID, expr.fieldName)
+		fmt.Fprintf(sb, "\tpreveltekit.Bind(\"%s\", component.%s)\n", expr.elementID, expr.fieldName)
 	}
 
 	// Child attribute bindings
@@ -754,7 +754,7 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 				callArgs = strings.ReplaceAll(callArgs, fieldName, compBinding.elementID+"."+fieldName+".Get()")
 			}
 		}
-		fmt.Fprintf(sb, "\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+		fmt.Fprintf(sb, "\tpreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
 			evt.elementID, evt.event, compBinding.elementID, evt.methodName, callArgs)
 	}
 
@@ -766,7 +766,7 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 				callArgs = strings.ReplaceAll(callArgs, fieldName, "component."+fieldName+".Get()")
 			}
 		}
-		fmt.Fprintf(sb, "\treactive.On(%s_el, \"%s\", func() { component.%s(%s) })\n",
+		fmt.Fprintf(sb, "\tpreveltekit.On(%s_el, \"%s\", func() { component.%s(%s) })\n",
 			compBinding.elementID, eventName, evt.method, callArgs)
 	}
 
@@ -843,7 +843,7 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 	_, childBindings := parseTemplate(childTmpl)
 
 	// Check if element exists (it was just inserted)
-	fmt.Fprintf(sb, "%s%s_el := reactive.GetEl(\"%s\")\n", indent, compID, compID)
+	fmt.Fprintf(sb, "%s%s_el := preveltekit.GetEl(\"%s\")\n", indent, compID, compID)
 	fmt.Fprintf(sb, "%sif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", indent, compID, compID)
 
 	// Create component instance if needed (skip if already created outside)
@@ -860,13 +860,13 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 
 	// Style injection
 	if childComp.style != "" {
-		fmt.Fprintf(sb, "%s\treactive.InjectStyle(\"%s\", %sCSS)\n", indent, compBinding.name, strings.ToLower(compBinding.name))
+		fmt.Fprintf(sb, "%s\tpreveltekit.InjectStyle(\"%s\", %sCSS)\n", indent, compBinding.name, strings.ToLower(compBinding.name))
 	}
 
 	// Child expression bindings (with prefixed IDs)
 	for _, expr := range childBindings.expressions {
 		prefixedID := compID + "_" + expr.elementID
-		fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
+		fmt.Fprintf(sb, "%s\tpreveltekit.Bind(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
 	}
 
 	// Child input bindings (two-way binding, with prefixed IDs)
@@ -949,7 +949,7 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 				callArgs = strings.ReplaceAll(callArgs, fieldName, compID+"."+fieldName+".Get()")
 			}
 		}
-		fmt.Fprintf(sb, "%s\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+		fmt.Fprintf(sb, "%s\tpreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
 			indent, prefixedID, evt.event, compID, evt.methodName, callArgs)
 	}
 
@@ -988,7 +988,7 @@ func generateNestedComponentInline(sb *strings.Builder, nestedBinding componentB
 	_, nestedBindings := parseTemplate(nestedTmpl)
 
 	// Check if element exists
-	fmt.Fprintf(sb, "%s%s_el := reactive.GetEl(\"%s\")\n", indent, nestedCompID, nestedCompID)
+	fmt.Fprintf(sb, "%s%s_el := preveltekit.GetEl(\"%s\")\n", indent, nestedCompID, nestedCompID)
 	fmt.Fprintf(sb, "%sif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", indent, nestedCompID, nestedCompID)
 
 	// Create component instance if it has fields
@@ -1001,7 +1001,7 @@ func generateNestedComponentInline(sb *strings.Builder, nestedBinding componentB
 
 	// Style injection
 	if nestedComp.style != "" {
-		fmt.Fprintf(sb, "%s\treactive.InjectStyle(\"%s\", %sCSS)\n", indent, nestedBinding.name, strings.ToLower(nestedBinding.name))
+		fmt.Fprintf(sb, "%s\tpreveltekit.InjectStyle(\"%s\", %sCSS)\n", indent, nestedBinding.name, strings.ToLower(nestedBinding.name))
 	}
 
 	// Set props from parent - handle both static and dynamic props
@@ -1022,19 +1022,19 @@ func generateNestedComponentInline(sb *strings.Builder, nestedBinding componentB
 	// Expression bindings (with prefixed IDs)
 	for _, expr := range nestedBindings.expressions {
 		prefixedID := nestedCompID + "_" + expr.elementID
-		fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, nestedCompID, expr.fieldName)
+		fmt.Fprintf(sb, "%s\tpreveltekit.Bind(\"%s\", %s.%s)\n", indent, prefixedID, nestedCompID, expr.fieldName)
 	}
 
 	// Events from parent (e.g., @click on the nested component)
 	for evtName, evt := range nestedBinding.events {
-		fmt.Fprintf(sb, "%s\treactive.On(%s_el, \"%s\", func() { %s.%s(%s) })\n",
+		fmt.Fprintf(sb, "%s\tpreveltekit.On(%s_el, \"%s\", func() { %s.%s(%s) })\n",
 			indent, nestedCompID, evtName, parentCompID, evt.method, evt.args)
 	}
 
 	// Internal events within the nested component
 	for _, evt := range nestedBindings.events {
 		prefixedID := nestedCompID + "_" + evt.elementID
-		fmt.Fprintf(sb, "%s\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+		fmt.Fprintf(sb, "%s\tpreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
 			indent, prefixedID, evt.event, nestedCompID, evt.methodName, evt.args)
 	}
 
@@ -1173,7 +1173,7 @@ func generateChildIfBlockInline(sb *strings.Builder, ifb ifBinding, fieldTypes m
 		fmt.Fprintf(sb, "%s\t%s_el := document.Call(\"getElementById\", \"%s\")\n", indent, expr.elementID, expr.elementID)
 		fmt.Fprintf(sb, "%s\tif !%s_el.IsNull() && !%s_el.IsUndefined() {\n", indent, expr.elementID, expr.elementID)
 		jsConv := toJS(valueType, compID+"."+expr.fieldName+".Get()")
-		fmt.Fprintf(sb, "%s\t\treactive.SetText(%s_el, %s)\n", indent, expr.elementID, jsConv)
+		fmt.Fprintf(sb, "%s\t\tpreveltekit.SetText(%s_el, %s)\n", indent, expr.elementID, jsConv)
 		fmt.Fprintf(sb, "%s\t}\n", indent)
 	}
 

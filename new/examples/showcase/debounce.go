@@ -1,14 +1,14 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type Debounce struct {
-	SearchInput   *reactive.Store[string]
-	SearchResult  *reactive.Store[string]
-	SearchCount   *reactive.Store[int]
-	ClickCount    *reactive.Store[int]
-	ThrottleCount *reactive.Store[int]
-	Status        *reactive.Store[string]
+	SearchInput   *preveltekit.Store[string]
+	SearchResult  *preveltekit.Store[string]
+	SearchCount   *preveltekit.Store[int]
+	ClickCount    *preveltekit.Store[int]
+	ThrottleCount *preveltekit.Store[int]
+	Status        *preveltekit.Store[string]
 
 	doSearch      func()
 	throttleClick func()
@@ -22,7 +22,7 @@ func (d *Debounce) OnMount() {
 	d.ThrottleCount.Set(0)
 	d.Status.Set("Type to search...")
 
-	d.doSearch = reactive.Debounce(300, func() {
+	d.doSearch = preveltekit.Debounce(300, func() {
 		query := d.SearchInput.Get()
 		if query == "" {
 			d.SearchResult.Set("")
@@ -40,7 +40,7 @@ func (d *Debounce) OnMount() {
 		d.doSearch()
 	})
 
-	d.throttleClick = reactive.Throttle(500, func() {
+	d.throttleClick = preveltekit.Throttle(500, func() {
 		d.ThrottleCount.Set(d.ThrottleCount.Get() + 1)
 	})
 }

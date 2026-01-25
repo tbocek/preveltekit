@@ -10,8 +10,8 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: reactivebuild <main-component.go> [child-component.go ...]")
-		fmt.Println("       reactivebuild --assemble <project-dir>")
+		fmt.Println("usage: preveltekit <main-component.go> [child-component.go ...]")
+		fmt.Println("       preveltekit --assemble <project-dir>")
 		os.Exit(1)
 	}
 
@@ -133,9 +133,9 @@ func main() {
 
 go 1.21
 
-require reactive v0.0.0
+require preveltekit v0.0.0
 
-replace reactive => %s
+replace preveltekit => %s
 `, scriptDir)
 	writeFile(filepath.Join(buildDir, "go.mod"), goMod)
 
@@ -154,7 +154,7 @@ replace reactive => %s
 			for name := range childComponents {
 				available = append(available, name)
 			}
-			fatal("template error: <%s /> references unknown component\n\n  Available components: %v\n\n  Hint: Pass the component file as an argument: reactivebuild app.go %s.go",
+			fatal("template error: <%s /> references unknown component\n\n  Available components: %v\n\n  Hint: Pass the component file as an argument: preveltekit app.go %s.go",
 				comp.name, available, strings.ToLower(comp.name))
 		}
 	}

@@ -1,6 +1,6 @@
 //go:build js && wasm
 
-package reactive
+package preveltekit
 
 import (
 	"strconv"

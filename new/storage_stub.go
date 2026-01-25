@@ -1,6 +1,6 @@
 //go:build !wasm
 
-package reactive
+package preveltekit
 
 // In-memory storage for pre-rendering
 var memStorage = make(map[string]string)

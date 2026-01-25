@@ -2,9 +2,9 @@
 set -e
 
 # =============================================================================
-# Reactive Framework Build Script
+# PrevelteKit Build Script
 # =============================================================================
-# Builds a Reactive Go/WASM application from source components.
+# Builds a PrevelteKit Go/WASM application from source components.
 #
 # Why code generation?
 # --------------------
@@ -41,7 +41,7 @@ RELEASE_MODE=false
 show_usage() {
     echo "Usage: $0 [OPTIONS] <main-component.go> [child-component.go ...]"
     echo ""
-    echo "Builds a Reactive application from Go component files."
+    echo "Builds a PrevelteKit application from Go component files."
     echo ""
     echo "Arguments:"
     echo "  <main-component.go>      The main/root component file"

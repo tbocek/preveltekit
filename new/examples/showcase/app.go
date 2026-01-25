@@ -1,13 +1,13 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type App struct {
-	CurrentPage *reactive.Store[string]
+	CurrentPage *preveltekit.Store[string]
 }
 
 func (a *App) OnMount() {
-	router := reactive.NewRouter()
+	router := preveltekit.NewRouter()
 
 	router.Handle("/", func(p map[string]string) {
 		a.CurrentPage.Set("basics")

@@ -1,11 +1,11 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 // Routing showcase - demonstrates navigation patterns
 type Routing struct {
-	CurrentTab  *reactive.Store[string]
-	CurrentStep *reactive.Store[int]
+	CurrentTab  *preveltekit.Store[string]
+	CurrentStep *preveltekit.Store[int]
 }
 
 func (r *Routing) OnMount() {

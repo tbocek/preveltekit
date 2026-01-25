@@ -1,14 +1,14 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 // Components showcase - demonstrates component features
 type Components struct {
-	Message      *reactive.Store[string]
-	ClickCount   *reactive.Store[int]
-	CardTitle    *reactive.Store[string]
-	AlertType    *reactive.Store[string]
-	AlertMessage *reactive.Store[string]
+	Message      *preveltekit.Store[string]
+	ClickCount   *preveltekit.Store[int]
+	CardTitle    *preveltekit.Store[string]
+	AlertType    *preveltekit.Store[string]
+	AlertMessage *preveltekit.Store[string]
 }
 
 func (c *Components) OnMount() {
@@ -110,7 +110,7 @@ func (c *Components) Style() string {
 
 // Badge - simple component with a label prop
 type Badge struct {
-	Label *reactive.Store[string]
+	Label *preveltekit.Store[string]
 }
 
 func (b *Badge) Template() string {
@@ -125,7 +125,7 @@ func (b *Badge) Style() string {
 
 // Card - component with title prop and slot for children
 type Card struct {
-	Title *reactive.Store[string]
+	Title *preveltekit.Store[string]
 }
 
 func (c *Card) Template() string {
@@ -145,7 +145,7 @@ func (c *Card) Style() string {
 
 // Button - component that emits click events
 type Button struct {
-	Label *reactive.Store[string]
+	Label *preveltekit.Store[string]
 }
 
 func (b *Button) Template() string {
@@ -161,8 +161,8 @@ func (b *Button) Style() string {
 
 // Alert - component with type-based styling
 type Alert struct {
-	Type    *reactive.Store[string]
-	Message *reactive.Store[string]
+	Type    *preveltekit.Store[string]
+	Message *preveltekit.Store[string]
 }
 
 func (a *Alert) Template() string {

@@ -1,6 +1,6 @@
 //go:build wasm
 
-package reactive
+package preveltekit
 
 // IsBuildTime is always false in WASM - we're running in the browser.
 const IsBuildTime = false

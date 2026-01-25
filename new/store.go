@@ -1,5 +1,5 @@
 // Package reactive provides generic reactive stores for Go WebAssembly applications.
-package reactive
+package preveltekit
 
 // Store is a generic reactive container that calls callbacks on mutation
 type Store[T any] struct {

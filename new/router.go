@@ -1,6 +1,6 @@
 //go:build wasm
 
-package reactive
+package preveltekit
 
 import (
 	"strings"

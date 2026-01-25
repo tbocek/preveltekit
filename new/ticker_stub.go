@@ -1,6 +1,6 @@
 //go:build !wasm
 
-package reactive
+package preveltekit
 
 // SetInterval stub for non-WASM builds - does nothing during pre-render.
 func SetInterval(ms int, callback func()) func() {

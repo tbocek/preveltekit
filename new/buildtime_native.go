@@ -1,6 +1,6 @@
 //go:build !wasm
 
-package reactive
+package preveltekit
 
 // IsBuildTime is true when running native (pre-rendering).
 const IsBuildTime = true

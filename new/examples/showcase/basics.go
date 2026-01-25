@@ -1,14 +1,14 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type Basics struct {
-	Count    *reactive.Store[int]
-	Name     *reactive.Store[string]
-	Message  *reactive.Store[string]
-	DarkMode *reactive.Store[bool]
-	Agreed   *reactive.Store[bool]
-	Score    *reactive.Store[int]
+	Count    *preveltekit.Store[int]
+	Name     *preveltekit.Store[string]
+	Message  *preveltekit.Store[string]
+	DarkMode *preveltekit.Store[bool]
+	Agreed   *preveltekit.Store[bool]
+	Score    *preveltekit.Store[int]
 }
 
 func (b *Basics) OnMount() {

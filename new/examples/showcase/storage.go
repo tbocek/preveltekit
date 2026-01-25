@@ -1,11 +1,11 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type Storage struct {
-	Theme  *reactive.LocalStore    // auto-persisted to localStorage
-	Notes  *reactive.Store[string] // manual save
-	Status *reactive.Store[string]
+	Theme  *preveltekit.LocalStore    // auto-persisted to localStorage
+	Notes  *preveltekit.Store[string] // manual save
+	Status *preveltekit.Store[string]
 }
 
 func (s *Storage) OnMount() {
@@ -16,7 +16,7 @@ func (s *Storage) OnMount() {
 	}
 
 	// Load saved notes (manual persistence example)
-	if saved := reactive.GetStorage("notes"); saved != "" {
+	if saved := preveltekit.GetStorage("notes"); saved != "" {
 		s.Notes.Set(saved)
 	}
 
@@ -34,18 +34,18 @@ func (s *Storage) SetDark() {
 }
 
 func (s *Storage) SaveNotes() {
-	reactive.SetStorage("notes", s.Notes.Get())
+	preveltekit.SetStorage("notes", s.Notes.Get())
 	s.Status.Set("Notes saved!")
 }
 
 func (s *Storage) ClearNotes() {
 	s.Notes.Set("")
-	reactive.RemoveStorage("notes")
+	preveltekit.RemoveStorage("notes")
 	s.Status.Set("Notes cleared")
 }
 
 func (s *Storage) ClearAll() {
-	reactive.ClearStorage()
+	preveltekit.ClearStorage()
 	s.Theme.Set("light")
 	s.Notes.Set("")
 	s.Status.Set("All storage cleared")

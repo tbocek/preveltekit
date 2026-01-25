@@ -17,18 +17,18 @@ func findScriptDir() string {
 	dir := filepath.Dir(filepath.Dir(exe))
 
 	// Check if we're running from go build cache (go run)
-	// In that case, find the reactive package via go list
+	// In that case, find the preveltekit package via go list
 	if strings.Contains(dir, "go-build") || strings.Contains(dir, "cache") {
-		cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "reactive")
+		cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "preveltekit")
 		if out, err := cmd.Output(); err == nil {
 			return strings.TrimSpace(string(out))
 		}
-		// Fallback: look for go.mod with "module reactive" in current directory hierarchy
+		// Fallback: look for go.mod with "module preveltekit" in current directory hierarchy
 		wd, _ := os.Getwd()
 		for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
 			modFile := filepath.Join(d, "go.mod")
 			if data, err := os.ReadFile(modFile); err == nil {
-				if strings.Contains(string(data), "module reactive") {
+				if strings.Contains(string(data), "module preveltekit") {
 					return d
 				}
 			}
@@ -179,7 +179,7 @@ func validateBindings(comp *component, bindings templateBindings) error {
 			for name := range fieldNames {
 				available = append(available, name)
 			}
-			return fmt.Errorf("template error: {%s} references unknown state\n\n  Available state: %v\n\n  Hint: Add '%s *reactive.Store[T]' to your component struct",
+			return fmt.Errorf("template error: {%s} references unknown state\n\n  Available state: %v\n\n  Hint: Add '%s *preveltekit.Store[T]' to your component struct",
 				expr.fieldName, available, expr.fieldName)
 		}
 	}
@@ -460,13 +460,13 @@ func generateFieldInit(sb *strings.Builder, fields []storeField, indent string) 
 	for _, field := range fields {
 		switch field.storeType {
 		case "Store":
-			fmt.Fprintf(sb, "%s%s: reactive.New[%s](%s),\n", indent, field.name, field.valueType, zeroValue(field.valueType))
+			fmt.Fprintf(sb, "%s%s: preveltekit.New[%s](%s),\n", indent, field.name, field.valueType, zeroValue(field.valueType))
 		case "LocalStore":
-			fmt.Fprintf(sb, "%s%s: reactive.NewLocalStore(\"%s\", %s),\n", indent, field.name, field.name, zeroValue(field.valueType))
+			fmt.Fprintf(sb, "%s%s: preveltekit.NewLocalStore(\"%s\", %s),\n", indent, field.name, field.name, zeroValue(field.valueType))
 		case "List":
-			fmt.Fprintf(sb, "%s%s: reactive.NewList[%s](),\n", indent, field.name, field.valueType)
+			fmt.Fprintf(sb, "%s%s: preveltekit.NewList[%s](),\n", indent, field.name, field.valueType)
 		case "Map":
-			fmt.Fprintf(sb, "%s%s: reactive.NewMap[%s, %s](),\n", indent, field.name, field.keyType, field.valueType)
+			fmt.Fprintf(sb, "%s%s: preveltekit.NewMap[%s, %s](),\n", indent, field.name, field.keyType, field.valueType)
 		}
 	}
 }

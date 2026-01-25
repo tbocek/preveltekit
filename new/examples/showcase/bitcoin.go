@@ -1,6 +1,6 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type PriceResponse struct {
 	RAW struct {
@@ -12,11 +12,11 @@ type PriceResponse struct {
 }
 
 type Bitcoin struct {
-	Price       *reactive.Store[string]
-	Symbol      *reactive.Store[string]
-	UpdateTime  *reactive.Store[string]
-	Loading     *reactive.Store[bool]
-	Error       *reactive.Store[string]
+	Price       *preveltekit.Store[string]
+	Symbol      *preveltekit.Store[string]
+	UpdateTime  *preveltekit.Store[string]
+	Loading     *preveltekit.Store[bool]
+	Error       *preveltekit.Store[string]
 	stopRefresh func()
 }
 
@@ -29,7 +29,7 @@ func (b *Bitcoin) OnMount() {
 
 	b.FetchPrice()
 
-	b.stopRefresh = reactive.SetInterval(60000, func() {
+	b.stopRefresh = preveltekit.SetInterval(60000, func() {
 		b.FetchPrice()
 	})
 }
@@ -45,7 +45,7 @@ func (b *Bitcoin) FetchPrice() {
 	b.Error.Set("")
 
 	go func() {
-		resp, err := reactive.Get[PriceResponse]("https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase")
+		resp, err := preveltekit.Get[PriceResponse]("https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase")
 		if err != nil {
 			b.Error.Set("Failed to fetch: " + err.Error())
 			b.Loading.Set(false)

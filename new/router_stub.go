@@ -1,6 +1,6 @@
 //go:build !wasm
 
-package reactive
+package preveltekit
 
 // Route defines a single route with path pattern and handler
 type Route struct {

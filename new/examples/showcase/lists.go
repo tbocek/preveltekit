@@ -1,11 +1,11 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type Lists struct {
-	Items     *reactive.List[string]
-	NewItem   *reactive.Store[string]
-	ItemCount *reactive.Store[int]
+	Items     *preveltekit.List[string]
+	NewItem   *preveltekit.Store[string]
+	ItemCount *preveltekit.Store[int]
 }
 
 func (l *Lists) OnMount() {

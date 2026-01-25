@@ -23,7 +23,7 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 	sb.WriteString("//go:build !wasm\n\npackage main\n\nimport (\n")
 	sb.WriteString("\t\"fmt\"\n")
 	sb.WriteString("\t\"os\"\n")
-	sb.WriteString("\t\"reactive\"\n")
+	sb.WriteString("\t\"preveltekit\"\n")
 	if needsStrings {
 		sb.WriteString("\t\"strings\"\n")
 	}

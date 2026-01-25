@@ -1,6 +1,6 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 type Todo struct {
 	ID        int    `js:"id"`
@@ -15,12 +15,12 @@ type User struct {
 }
 
 type Fetch struct {
-	Status  *reactive.Store[string]
-	RawData *reactive.Store[string]
+	Status  *preveltekit.Store[string]
+	RawData *preveltekit.Store[string]
 }
 
 func (f *Fetch) OnMount() {
-	if reactive.IsBuildTime {
+	if preveltekit.IsBuildTime {
 		f.Status.Set("ready")
 		f.RawData.Set("")
 		return
@@ -35,7 +35,7 @@ func (f *Fetch) FetchTodo() {
 	f.RawData.Set("")
 
 	go func() {
-		todo, err := reactive.Get[Todo]("https://jsonplaceholder.typicode.com/todos/1")
+		todo, err := preveltekit.Get[Todo]("https://jsonplaceholder.typicode.com/todos/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -54,7 +54,7 @@ func (f *Fetch) FetchUser() {
 	f.RawData.Set("")
 
 	go func() {
-		user, err := reactive.Get[User]("https://jsonplaceholder.typicode.com/users/1")
+		user, err := preveltekit.Get[User]("https://jsonplaceholder.typicode.com/users/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -76,7 +76,7 @@ func (f *Fetch) FetchPost() {
 			Title  string `js:"title"`
 			Body   string `js:"body"`
 		}
-		post, err := reactive.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
+		post, err := preveltekit.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -124,7 +124,7 @@ func (f *Fetch) Template() string {
     Name string ` + "`js:\"name\"`" + `
 }
 
-user, err := reactive.Get[User](url)</pre>
+user, err := preveltekit.Get[User](url)</pre>
 	</section>
 </div>`
 }

@@ -1,10 +1,10 @@
 package main
 
-import "reactive"
+import "preveltekit"
 
 // Links showcase - demonstrates link handling
 type Links struct {
-	LastNavigation *reactive.Store[string]
+	LastNavigation *preveltekit.Store[string]
 }
 
 func (l *Links) OnMount() {

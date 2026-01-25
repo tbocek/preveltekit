@@ -1,6 +1,6 @@
 //go:build !js || !wasm
 
-package reactive
+package preveltekit
 
 // Stub implementations for non-WASM builds (SSR/pre-rendering)
 // These are no-ops since DOM manipulation only happens in the browser
