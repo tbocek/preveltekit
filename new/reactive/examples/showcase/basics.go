@@ -3,19 +3,12 @@ package main
 import "reactive"
 
 type Basics struct {
-	// Numbers
-	Count *reactive.Store[int]
-
-	// Text
-	Name    *reactive.Store[string]
-	Message *reactive.Store[string]
-
-	// Boolean
+	Count    *reactive.Store[int]
+	Name     *reactive.Store[string]
+	Message  *reactive.Store[string]
 	DarkMode *reactive.Store[bool]
 	Agreed   *reactive.Store[bool]
-
-	// For conditional demo
-	Score *reactive.Store[int]
+	Score    *reactive.Store[int]
 }
 
 func (b *Basics) OnMount() {
@@ -27,7 +20,6 @@ func (b *Basics) OnMount() {
 	b.Score.Set(75)
 }
 
-// Count operations
 func (b *Basics) Increment() {
 	b.Count.Update(func(v int) int { return v + 1 })
 }
@@ -44,12 +36,10 @@ func (b *Basics) Reset() {
 	b.Count.Set(0)
 }
 
-// Score operations for conditional demo
 func (b *Basics) SetScore(n int) {
 	b.Score.Set(n)
 }
 
-// Form submission
 func (b *Basics) Submit() {
 	name := b.Name.Get()
 	if name == "" {
@@ -62,8 +52,8 @@ func (b *Basics) Submit() {
 }
 
 func (b *Basics) Template() string {
-	return `<div class="app">
-	<h1>Basics Demo</h1>
+	return `<div class="demo">
+	<h1>Basics</h1>
 
 	<section>
 		<h2>Counter</h2>
@@ -100,33 +90,23 @@ func (b *Basics) Template() string {
 
 	<section>
 		<h2>Two-Way Binding</h2>
-		<div>
-			<label>Your name: <input type="text" bind:value="Name" placeholder="Enter name"></label>
-		</div>
+		<label>Your name: <input type="text" bind:value="Name" placeholder="Enter name"></label>
 		<p>Hello, {Name}!</p>
 	</section>
 
 	<section>
 		<h2>Checkbox Binding</h2>
-		<label>
-			<input type="checkbox" bind:checked="DarkMode"> Dark Mode
-		</label>
+		<label><input type="checkbox" bind:checked="DarkMode"> Dark Mode</label>
 		<div class:dark={DarkMode}>
 			This box uses dark mode styling when checked.
 		</div>
 	</section>
 
 	<section>
-		<h2>Form with Event Modifier</h2>
+		<h2>Form</h2>
 		<form @submit.preventDefault="Submit()">
-			<div>
-				<label>Name: <input type="text" bind:value="Name" placeholder="Your name"></label>
-			</div>
-			<div>
-				<label>
-					<input type="checkbox" bind:checked="Agreed"> I agree to the terms
-				</label>
-			</div>
+			<label>Name: <input type="text" bind:value="Name" placeholder="Your name"></label>
+			<label><input type="checkbox" bind:checked="Agreed"> I agree to the terms</label>
 			<button type="submit">Submit</button>
 		</form>
 		<p class="message">{Message}</p>
@@ -136,12 +116,14 @@ func (b *Basics) Template() string {
 
 func (b *Basics) Style() string {
 	return `
-.app { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
-h1 { color: #333; }
-h2 { margin-top: 0; color: #666; font-size: 1.1em; }
-button { padding: 8px 16px; margin: 4px; cursor: pointer; }
-input[type="text"] { padding: 8px; margin: 4px; }
+.demo { max-width: 600px; }
+.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
+.demo section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+.demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
+.demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
+.demo button:hover { background: #e5e5e5; }
+.demo input[type="text"] { padding: 8px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; }
+.demo label { display: block; margin: 8px 0; }
 .grade { padding: 10px; border-radius: 4px; font-weight: bold; }
 .grade.a { background: #d4edda; color: #155724; }
 .grade.b { background: #cce5ff; color: #004085; }
@@ -150,7 +132,5 @@ input[type="text"] { padding: 8px; margin: 4px; }
 .grade.f { background: #f8d7da; color: #721c24; }
 .dark { background: #333; color: #fff; padding: 10px; border-radius: 4px; margin-top: 10px; }
 .message { padding: 10px; background: #e7f3ff; border-radius: 4px; }
-.hint { color: #666; font-style: italic; }
-.buttons button { min-width: 40px; }
 `
 }

@@ -40,7 +40,7 @@ func parseComponent(file string) (*component, error) {
 			}
 			comp.name = typeSpec.Name.Name
 
-			// Parse struct fields for *Store[T], *List[T], *Map[K,V]
+			// Parse struct fields for *Store[T], *List[T], *Map[K,V], *LocalStore
 			for _, field := range structType.Fields.List {
 				if len(field.Names) == 0 {
 					continue
@@ -54,7 +54,14 @@ func parseComponent(file string) (*component, error) {
 
 				var storeType, valueType, keyType string
 
-				if indexExpr, ok := starExpr.X.(*ast.IndexExpr); ok {
+				// Check for *LocalStore (non-generic, always string)
+				if ident, ok := starExpr.X.(*ast.Ident); ok && ident.Name == "LocalStore" {
+					storeType = "LocalStore"
+					valueType = "string"
+				} else if sel, ok := starExpr.X.(*ast.SelectorExpr); ok && sel.Sel.Name == "LocalStore" {
+					storeType = "LocalStore"
+					valueType = "string"
+				} else if indexExpr, ok := starExpr.X.(*ast.IndexExpr); ok {
 					switch x := indexExpr.X.(type) {
 					case *ast.Ident:
 						storeType = x.Name

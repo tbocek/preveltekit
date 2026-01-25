@@ -64,15 +64,27 @@ func OnEvent(el js.Value, event string, handler func(e js.Value)) {
 	}
 }
 
-// Bind binds a string store to an element's textContent
-func Bind(id string, store *Store[string]) {
+// Bindable is implemented by types that can be bound to DOM elements.
+type Bindable interface {
+	Get() string
+	OnChange(func(string))
+}
+
+// BindableInt is implemented by int stores.
+type BindableInt interface {
+	Get() int
+	OnChange(func(int))
+}
+
+// Bind binds a string store to an element's textContent.
+func Bind(id string, store Bindable) {
 	el := GetEl(id)
 	store.OnChange(func(v string) { SetText(el, v) })
 	SetText(el, store.Get())
 }
 
-// BindInt binds an int store to an element's textContent
-func BindInt(id string, store *Store[int]) {
+// BindInt binds an int store to an element's textContent.
+func BindInt(id string, store BindableInt) {
 	el := GetEl(id)
 	store.OnChange(func(v int) { SetText(el, strconv.Itoa(v)) })
 	SetText(el, strconv.Itoa(store.Get()))

@@ -14,7 +14,28 @@ func findScriptDir() string {
 	if err != nil {
 		fatal("find executable: %v", err)
 	}
-	return filepath.Dir(filepath.Dir(exe))
+	dir := filepath.Dir(filepath.Dir(exe))
+
+	// Check if we're running from go build cache (go run)
+	// In that case, find the reactive package via go list
+	if strings.Contains(dir, "go-build") || strings.Contains(dir, "cache") {
+		cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "reactive")
+		if out, err := cmd.Output(); err == nil {
+			return strings.TrimSpace(string(out))
+		}
+		// Fallback: look for go.mod with "module reactive" in current directory hierarchy
+		wd, _ := os.Getwd()
+		for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
+			modFile := filepath.Join(d, "go.mod")
+			if data, err := os.ReadFile(modFile); err == nil {
+				if strings.Contains(string(data), "module reactive") {
+					return d
+				}
+			}
+		}
+	}
+
+	return dir
 }
 
 func copyFile(src, dst, oldPkg, newPkg string) {
@@ -364,6 +385,39 @@ func prefixBindingIDs(prefix string, html string, exprs []exprBinding, events []
 	return html
 }
 
+// prefixInputBindingIDs prefixes input binding IDs (bind:value, bind:checked) in HTML.
+func prefixInputBindingIDs(prefix string, html string, bindings []inputBinding) string {
+	for i := range bindings {
+		oldID := bindings[i].elementID
+		newID := prefix + "_" + oldID
+		html = strings.ReplaceAll(html, `id="`+oldID+`"`, `id="`+newID+`"`)
+		bindings[i].elementID = newID
+	}
+	return html
+}
+
+// prefixEachBindingIDs prefixes each-block anchor IDs in HTML.
+func prefixEachBindingIDs(prefix string, html string, bindings []eachBinding) string {
+	for i := range bindings {
+		oldID := bindings[i].elementID
+		newID := prefix + "_" + oldID
+		html = strings.ReplaceAll(html, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
+		bindings[i].elementID = newID
+	}
+	return html
+}
+
+// prefixClassBindingIDs prefixes class binding IDs in HTML.
+func prefixClassBindingIDs(prefix string, html string, bindings []classBinding) string {
+	for i := range bindings {
+		oldID := bindings[i].elementID
+		newID := prefix + "_" + oldID
+		html = strings.ReplaceAll(html, `id="`+oldID+`"`, `id="`+newID+`"`)
+		bindings[i].elementID = newID
+	}
+	return html
+}
+
 // generateFieldInit generates the initialization code for component fields
 // indent is the base indentation (e.g., "\t" or "\t\t")
 func generateFieldInit(sb *strings.Builder, fields []storeField, indent string) {
@@ -371,6 +425,8 @@ func generateFieldInit(sb *strings.Builder, fields []storeField, indent string) 
 		switch field.storeType {
 		case "Store":
 			fmt.Fprintf(sb, "%s%s: reactive.New[%s](%s),\n", indent, field.name, field.valueType, zeroValue(field.valueType))
+		case "LocalStore":
+			fmt.Fprintf(sb, "%s%s: reactive.NewLocalStore(\"%s\", %s),\n", indent, field.name, field.name, zeroValue(field.valueType))
 		case "List":
 			fmt.Fprintf(sb, "%s%s: reactive.NewList[%s](),\n", indent, field.name, field.valueType)
 		case "Map":

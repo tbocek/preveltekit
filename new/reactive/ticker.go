@@ -1,66 +1,10 @@
-//go:build js && wasm
+//go:build wasm
 
 package reactive
 
 import (
 	"syscall/js"
 )
-
-// Ticker holds a JavaScript interval that fires at regular intervals.
-// Similar to time.Ticker but works with JavaScript's event loop.
-//
-// Example:
-//
-//	ticker := reactive.NewTicker(60000) // 60 seconds
-//	go func() {
-//	    for range ticker.C {
-//	        // do something every 60 seconds
-//	    }
-//	}()
-//	// Later, to stop:
-//	ticker.Stop()
-type Ticker struct {
-	C          chan struct{}
-	intervalID js.Value
-	callback   js.Func
-	stopped    bool
-}
-
-// NewTicker creates a new Ticker that sends to its channel every ms milliseconds.
-// The ticker must be stopped with Stop() when no longer needed to prevent leaks.
-func NewTicker(ms int) *Ticker {
-	t := &Ticker{
-		C: make(chan struct{}, 1), // buffered to prevent blocking JS
-	}
-
-	t.callback = js.FuncOf(func(this js.Value, args []js.Value) any {
-		if !t.stopped {
-			select {
-			case t.C <- struct{}{}:
-			default:
-				// channel full, skip this tick
-			}
-		}
-		return nil
-	})
-
-	t.intervalID = js.Global().Call("setInterval", t.callback, ms)
-	return t
-}
-
-// Stop stops the ticker and releases resources.
-// After Stop, no more values will be sent on the channel.
-func (t *Ticker) Stop() {
-	if t.stopped {
-		return
-	}
-	t.stopped = true
-	if !t.intervalID.IsUndefined() && !t.intervalID.IsNull() {
-		js.Global().Call("clearInterval", t.intervalID)
-	}
-	t.callback.Release()
-	close(t.C)
-}
 
 // SetInterval creates a JavaScript interval that calls the callback every ms milliseconds.
 // Returns a function to clear the interval.
@@ -109,5 +53,62 @@ func SetTimeout(ms int, callback func()) func() {
 	return func() {
 		js.Global().Call("clearTimeout", timeoutID)
 		fn.Release()
+	}
+}
+
+// Debounce returns a debounced version of the callback that delays execution
+// until ms milliseconds have passed without another call.
+//
+// Example:
+//
+//	search := reactive.Debounce(300, func() {
+//	    // This runs 300ms after the last keystroke
+//	    performSearch(input.Get())
+//	})
+//	input.OnChange(func(_ string) { search() })
+func Debounce(ms int, callback func()) func() {
+	var timeoutID js.Value
+	var fn js.Func
+
+	fn = js.FuncOf(func(this js.Value, args []js.Value) any {
+		callback()
+		return nil
+	})
+
+	return func() {
+		if !timeoutID.IsUndefined() && !timeoutID.IsNull() {
+			js.Global().Call("clearTimeout", timeoutID)
+		}
+		timeoutID = js.Global().Call("setTimeout", fn, ms)
+	}
+}
+
+// Throttle returns a throttled version of the callback that executes at most
+// once per ms milliseconds.
+//
+// Example:
+//
+//	onScroll := reactive.Throttle(100, func() {
+//	    // This runs at most every 100ms during scrolling
+//	    updateScrollPosition()
+//	})
+func Throttle(ms int, callback func()) func() {
+	var lastRun float64
+	var scheduled bool
+
+	return func() {
+		now := js.Global().Get("Date").Call("now").Float()
+		if now-lastRun >= float64(ms) {
+			lastRun = now
+			callback()
+		} else if !scheduled {
+			scheduled = true
+			remaining := int(float64(ms) - (now - lastRun))
+			SetTimeout(remaining, func() {
+				scheduled = false
+				lastRun = js.Global().Get("Date").Call("now").Float()
+				callback()
+			})
+		}
 	}
 }

@@ -111,6 +111,9 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 		// Prefix all IDs with component ID to avoid conflicts
 		childTmplProcessed = prefixBindingIDs(compBinding.elementID, childTmplProcessed,
 			childBindings.expressions, childBindings.events, childBindings.attrBindings, childBindings.ifBlocks)
+		childTmplProcessed = prefixInputBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.bindings)
+		childTmplProcessed = prefixEachBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.eachBlocks)
+		childTmplProcessed = prefixClassBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.classBindings)
 
 		childTmplProcessed = injectIDIntoFirstTag(childTmplProcessed, compBinding.elementID)
 		fmt.Fprintf(&sb, "const %sHTML = %s\n", compBinding.elementID, escapeForGoString(childTmplProcessed))
@@ -457,6 +460,9 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 		childOwnExprs, childBindings.events, childBindings.attrBindings, childBindings.ifBlocks)
 	childTmplProcessed = prefixBindingIDs(compBinding.elementID, childTmplProcessed,
 		slotExprs, nil, nil, nil)
+	childTmplProcessed = prefixInputBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.bindings)
+	childTmplProcessed = prefixEachBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.eachBlocks)
+	childTmplProcessed = prefixClassBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.classBindings)
 
 	// Inject component ID into child's root element
 	childTmplProcessed = injectIDIntoFirstTag(childTmplProcessed, compBinding.elementID)
@@ -573,8 +579,14 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 
 	// Child internal events
 	for _, evt := range childBindings.events {
-		fmt.Fprintf(sb, "\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s() })\n",
-			evt.elementID, evt.event, compBinding.elementID, evt.methodName)
+		callArgs := evt.args
+		for fieldName := range childFieldTypes {
+			if strings.Contains(callArgs, fieldName) {
+				callArgs = strings.ReplaceAll(callArgs, fieldName, compBinding.elementID+"."+fieldName+".Get()")
+			}
+		}
+		fmt.Fprintf(sb, "\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+			evt.elementID, evt.event, compBinding.elementID, evt.methodName, callArgs)
 	}
 
 	// Parent events on child (attach to component's root element)
@@ -637,11 +649,68 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 		fmt.Fprintf(sb, "%s\treactive.InjectStyle(\"%s\", %sCSS)\n", indent, compBinding.name, strings.ToLower(compBinding.name))
 	}
 
+	// Child expression bindings (with prefixed IDs)
+	for _, expr := range childBindings.expressions {
+		prefixedID := compID + "_" + expr.elementID
+		valueType := childFieldTypes[expr.fieldName]
+		if valueType == "int" {
+			fmt.Fprintf(sb, "%s\treactive.BindInt(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
+		} else {
+			fmt.Fprintf(sb, "%s\treactive.Bind(\"%s\", %s.%s)\n", indent, prefixedID, compID, expr.fieldName)
+		}
+	}
+
+	// Child input bindings (two-way binding, with prefixed IDs)
+	for _, bind := range childBindings.bindings {
+		prefixedID := compID + "_" + bind.elementID
+		valueType := childFieldTypes[bind.fieldName]
+		if bind.bindType == "checked" {
+			fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Call(\"addEventListener\", \"change\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", indent, prefixedID)
+			fmt.Fprintf(sb, "%s\t\t%s.%s.Set(this.Get(\"checked\").Bool())\n%s\t\treturn nil\n%s\t}))\n", indent, compID, bind.fieldName, indent, indent)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v bool) { %s.Set(\"checked\", v) })\n", indent, compID, bind.fieldName, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Set(\"checked\", %s.%s.Get())\n", indent, prefixedID, compID, bind.fieldName)
+		} else {
+			fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
+			fmt.Fprintf(sb, "%s\t%s.Call(\"addEventListener\", \"input\", js.FuncOf(func(this js.Value, args []js.Value) any {\n", indent, prefixedID)
+			fmt.Fprintf(sb, "%s\t\tval := this.Get(\"value\").String()\n", indent)
+			switch valueType {
+			case "int":
+				fmt.Fprintf(sb, "%s\t\tif v, err := strconv.Atoi(val); err == nil { %s.%s.Set(v) }\n", indent, compID, bind.fieldName)
+			case "float64":
+				fmt.Fprintf(sb, "%s\t\tif v, err := strconv.ParseFloat(val, 64); err == nil { %s.%s.Set(v) }\n", indent, compID, bind.fieldName)
+			default:
+				fmt.Fprintf(sb, "%s\t\t%s.%s.Set(val)\n", indent, compID, bind.fieldName)
+			}
+			fmt.Fprintf(sb, "%s\t\treturn nil\n%s\t}))\n", indent, indent)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v %s) { %s.Set(\"value\", %s) })\n",
+				indent, compID, bind.fieldName, valueType, prefixedID, toJS(valueType, "v"))
+		}
+	}
+
+	// Child class bindings (with prefixed IDs)
+	for _, cb := range childBindings.classBindings {
+		prefixedID := compID + "_" + cb.elementID
+		fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
+		fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v bool) {\n", indent, compID, cb.condition)
+		fmt.Fprintf(sb, "%s\t\tif v { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
+			indent, prefixedID, cb.className, prefixedID, cb.className)
+		fmt.Fprintf(sb, "%s\t})\n", indent)
+		// Initial state
+		fmt.Fprintf(sb, "%s\tif %s.%s.Get() { %s.Get(\"classList\").Call(\"add\", \"%s\") }\n", indent, compID, cb.condition, prefixedID, cb.className)
+	}
+
 	// Child internal events (with prefixed IDs)
 	for _, evt := range childBindings.events {
 		prefixedID := compID + "_" + evt.elementID
-		fmt.Fprintf(sb, "%s\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s() })\n",
-			indent, prefixedID, evt.event, compID, evt.methodName)
+		callArgs := evt.args
+		for fieldName := range childFieldTypes {
+			if strings.Contains(callArgs, fieldName) {
+				callArgs = strings.ReplaceAll(callArgs, fieldName, compID+"."+fieldName+".Get()")
+			}
+		}
+		fmt.Fprintf(sb, "%s\treactive.On(reactive.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
+			indent, prefixedID, evt.event, compID, evt.methodName, callArgs)
 	}
 
 	// Child internal if-blocks
@@ -869,6 +938,21 @@ func generateNestedComponentConstants(sb *strings.Builder, nestedComponents []co
 		}
 		for _, ifb := range nestedBindings.ifBlocks {
 			oldID := ifb.elementID
+			newID := prefixedID + "_" + oldID
+			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
+		}
+		for _, bind := range nestedBindings.bindings {
+			oldID := bind.elementID
+			newID := prefixedID + "_" + oldID
+			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `id="`+oldID+`"`, `id="`+newID+`"`)
+		}
+		for _, cb := range nestedBindings.classBindings {
+			oldID := cb.elementID
+			newID := prefixedID + "_" + oldID
+			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `id="`+oldID+`"`, `id="`+newID+`"`)
+		}
+		for _, each := range nestedBindings.eachBlocks {
+			oldID := each.elementID
 			newID := prefixedID + "_" + oldID
 			nestedTmplProcessed = strings.ReplaceAll(nestedTmplProcessed, `id="`+oldID+`_anchor"`, `id="`+newID+`_anchor"`)
 		}

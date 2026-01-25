@@ -1,27 +1,23 @@
-//go:build !js || !wasm
+//go:build !wasm
 
 package reactive
 
-// Ticker holds a JavaScript interval that fires at regular intervals.
-// This is a stub for non-WASM builds.
-type Ticker struct {
-	C chan struct{}
-}
-
-// NewTicker creates a new Ticker (stub for non-WASM builds).
-func NewTicker(ms int) *Ticker {
-	return &Ticker{C: make(chan struct{})}
-}
-
-// Stop stops the ticker (stub for non-WASM builds).
-func (t *Ticker) Stop() {}
-
-// SetInterval creates a JavaScript interval (stub for non-WASM builds).
+// SetInterval stub for non-WASM builds - does nothing during pre-render.
 func SetInterval(ms int, callback func()) func() {
 	return func() {}
 }
 
-// SetTimeout calls the callback after ms milliseconds (stub for non-WASM builds).
+// SetTimeout stub for non-WASM builds - does nothing during pre-render.
 func SetTimeout(ms int, callback func()) func() {
 	return func() {}
+}
+
+// Debounce stub for non-WASM builds - executes callback immediately.
+func Debounce(ms int, callback func()) func() {
+	return callback
+}
+
+// Throttle stub for non-WASM builds - executes callback immediately.
+func Throttle(ms int, callback func()) func() {
+	return callback
 }

@@ -1,4 +1,4 @@
-//go:build js && wasm
+//go:build wasm
 
 package reactive
 
@@ -61,15 +61,6 @@ func (r *Router) Start() {
 	js.Global().Call("addEventListener", "popstate", js.FuncOf(func(this js.Value, args []js.Value) any {
 		path := js.Global().Get("location").Get("pathname").String()
 		r.handleRoute(path)
-		return nil
-	}))
-
-	// Listen for custom navigate events
-	js.Global().Call("addEventListener", "navigate", js.FuncOf(func(this js.Value, args []js.Value) any {
-		if len(args) > 0 {
-			path := args[0].Get("detail").Get("path").String()
-			r.handleRoute(path)
-		}
 		return nil
 	}))
 
@@ -278,60 +269,6 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 	}
 
 	return params, specificity, true
-}
-
-// Navigate is a standalone function for simple navigation
-func Navigate(path string) {
-	js.Global().Get("history").Call("pushState", nil, "", path)
-	js.Global().Call("dispatchEvent", js.Global().Get("CustomEvent").New("navigate", map[string]any{
-		"detail": map[string]any{"path": path},
-	}))
-}
-
-// Link sets up an anchor element for SPA navigation
-// Usage: reactive.Link(el, router) or reactive.Link(el, nil) for global Navigate
-func Link(el js.Value, router *Router) {
-	if el.IsUndefined() || el.IsNull() {
-		return
-	}
-
-	OnEvent(el, "click", func(e js.Value) {
-		// Only handle left-click without modifiers
-		if e.Get("button").Int() != 0 {
-			return
-		}
-		if e.Get("ctrlKey").Bool() || e.Get("metaKey").Bool() ||
-			e.Get("altKey").Bool() || e.Get("shiftKey").Bool() {
-			return
-		}
-
-		href := el.Call("getAttribute", "href").String()
-		if href == "" {
-			return
-		}
-
-		// Skip external links
-		if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") ||
-			strings.HasPrefix(href, "//") {
-			return
-		}
-
-		// Check for external attribute
-		if !el.Call("getAttribute", "external").IsNull() {
-			return
-		}
-
-		e.Call("preventDefault")
-
-		// Resolve relative paths
-		path := resolvePath(href)
-
-		if router != nil {
-			router.Navigate(path)
-		} else {
-			Navigate(path)
-		}
-	})
 }
 
 // resolvePath resolves a relative or absolute href to an absolute path

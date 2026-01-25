@@ -7,12 +7,19 @@ type Store[T any] struct {
 	callbacks []func(T)
 }
 
+// LocalStore is a Store[string] that automatically syncs with localStorage.
+// Use it for persisting string values across page reloads.
+//
+//	type App struct {
+//	    Theme *LocalStore  // auto-persisted to localStorage with key "Theme"
+//	}
+type LocalStore struct {
+	*Store[string]
+}
+
 // New creates a reactive store with an initial value
 func New[T any](initial T) *Store[T] {
-	return &Store[T]{
-		value:     initial,
-		callbacks: make([]func(T), 0),
-	}
+	return &Store[T]{value: initial}
 }
 
 // Get returns the current value
@@ -104,11 +111,9 @@ func (l *List[T]) Set(items []T) {
 
 // Append adds items to the end
 func (l *List[T]) Append(items ...T) {
-	for i, item := range items {
-		var zero T
-		edit := Edit[T]{Op: EditInsert, Index: len(l.items) + i, Value: item}
-		l.items = append(l.items, zero) // grow first
-		l.items[len(l.items)-1] = item
+	for _, item := range items {
+		edit := Edit[T]{Op: EditInsert, Index: len(l.items), Value: item}
+		l.items = append(l.items, item)
 		for _, cb := range l.onEdit {
 			cb(edit)
 		}
@@ -329,10 +334,7 @@ type Map[K comparable, V any] struct {
 
 // NewMap creates a reactive map
 func NewMap[K comparable, V any]() *Map[K, V] {
-	return &Map[K, V]{
-		items:     make(map[K]V),
-		callbacks: make([]func(map[K]V), 0),
-	}
+	return &Map[K, V]{items: make(map[K]V)}
 }
 
 // Get returns value for key

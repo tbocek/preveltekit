@@ -1,4 +1,4 @@
-//go:build js && wasm
+//go:build wasm
 
 package reactive
 
@@ -243,18 +243,4 @@ func encodeMap(rv reflect.Value) js.Value {
 		}
 	}
 	return obj
-}
-
-// Get fetches JSON from a URL and decodes it into a typed struct.
-// Must be called from a goroutine.
-func Get[T any](url string) (T, error) {
-	var result T
-	jsVal, err := FetchSync(url)
-	if err != nil {
-		return result, err
-	}
-	if err := Decode(jsVal, &result); err != nil {
-		return result, err
-	}
-	return result, nil
 }

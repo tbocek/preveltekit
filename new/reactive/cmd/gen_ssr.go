@@ -20,7 +20,7 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 	}
 
 	// Write header - now imports reactive package
-	sb.WriteString("//go:build !js || !wasm\n\npackage main\n\nimport (\n")
+	sb.WriteString("//go:build !wasm\n\npackage main\n\nimport (\n")
 	sb.WriteString("\t\"fmt\"\n")
 	sb.WriteString("\t\"os\"\n")
 	sb.WriteString("\t\"reactive\"\n")
@@ -189,9 +189,12 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 
 		// Make IDs unique - prefix all bindings
 		childTmplProcessed = prefixBindingIDs(compBinding.elementID, childTmplProcessed,
-			childOwnExprs, childBindings.events, childBindings.attrBindings, nil)
+			childOwnExprs, childBindings.events, childBindings.attrBindings, childBindings.ifBlocks)
 		childTmplProcessed = prefixBindingIDs(compBinding.elementID, childTmplProcessed,
 			slotExprs, nil, nil, nil)
+		childTmplProcessed = prefixInputBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.bindings)
+		childTmplProcessed = prefixEachBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.eachBlocks)
+		childTmplProcessed = prefixClassBindingIDs(compBinding.elementID, childTmplProcessed, childBindings.classBindings)
 
 		// Inject component ID into child's root element
 		childTmplProcessed = injectIDIntoFirstTag(childTmplProcessed, compBinding.elementID)
