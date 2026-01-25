@@ -13,6 +13,12 @@ var Document = js.Global().Get("document")
 // injectedStyles tracks which component styles have been injected
 var injectedStyles = make(map[string]bool)
 
+// textNodeRefs stores the current text node reference for each marker (updated on rebind)
+var textNodeRefs = make(map[string]js.Value)
+
+// boundMarkers tracks which markers have had OnChange registered
+var boundMarkers = make(map[string]bool)
+
 // InjectStyle injects a component's CSS once (deduplicated by name)
 func InjectStyle(name, css string) {
 	if injectedStyles[name] || css == "" {
@@ -107,48 +113,72 @@ func FindComment(marker string) js.Value {
 }
 
 // BindText binds a store to a text node, using a comment marker for hydration.
-// Finds <!--marker-->, creates a text node after it, and updates on change.
+// SSR outputs "value<!--marker-->", so we find the text node before the comment and reuse it.
 func BindText[T any](marker string, store Bindable[T]) {
 	comment := FindComment(marker)
 	if comment.IsNull() {
 		return
 	}
-	// Create text node and insert after comment
-	textNode := Document.Call("createTextNode", toString(store.Get()))
-	parent := comment.Get("parentNode")
-	nextSibling := comment.Get("nextSibling")
-	if nextSibling.IsNull() {
-		parent.Call("appendChild", textNode)
+	// Find or create text node before the comment (SSR puts value before marker)
+	var textNode js.Value
+	prevSibling := comment.Get("previousSibling")
+	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == 3 {
+		// Reuse existing text node from SSR
+		textNode = prevSibling
 	} else {
-		parent.Call("insertBefore", textNode, nextSibling)
+		// No SSR text node, create one before the marker
+		textNode = Document.Call("createTextNode", toString(store.Get()))
+		comment.Get("parentNode").Call("insertBefore", textNode, comment)
 	}
-	// Update text node on change
-	store.OnChange(func(v T) {
-		textNode.Set("nodeValue", toString(v))
-	})
+	// Always update the text node reference (in case DOM was replaced)
+	textNodeRefs[marker] = textNode
+	// Also update the text node with current value (in case it changed since creation)
+	textNode.Set("nodeValue", toString(store.Get()))
+	// Only register OnChange once per marker
+	if !boundMarkers[marker] {
+		boundMarkers[marker] = true
+		store.OnChange(func(v T) {
+			// Use map lookup to get current text node (may have been updated by rebind)
+			if node, ok := textNodeRefs[marker]; ok {
+				node.Set("nodeValue", toString(v))
+			}
+		})
+	}
 }
 
 // BindHTML binds a store to innerHTML, using a comment marker for hydration.
-// Creates a span after the comment to hold the HTML content.
+// SSR outputs "htmlvalue<!--marker-->", so we find the previous sibling element and reuse it.
 func BindHTML[T any](marker string, store Bindable[T]) {
 	comment := FindComment(marker)
 	if comment.IsNull() {
 		return
 	}
-	// Create span to hold HTML and insert after comment
-	span := Document.Call("createElement", "span")
-	span.Set("innerHTML", toString(store.Get()))
-	parent := comment.Get("parentNode")
-	nextSibling := comment.Get("nextSibling")
-	if nextSibling.IsNull() {
-		parent.Call("appendChild", span)
+	// Find or create element before the comment
+	var container js.Value
+	prevSibling := comment.Get("previousSibling")
+	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == 1 {
+		// Reuse existing element from SSR
+		container = prevSibling
 	} else {
-		parent.Call("insertBefore", span, nextSibling)
+		// No SSR element, create a span before the marker
+		container = Document.Call("createElement", "span")
+		container.Set("innerHTML", toString(store.Get()))
+		comment.Get("parentNode").Call("insertBefore", container, comment)
 	}
-	// Update span innerHTML on change
-	store.OnChange(func(v T) {
-		span.Set("innerHTML", toString(v))
-	})
+	// Always update the container reference (in case DOM was replaced)
+	textNodeRefs[marker] = container
+	// Also update the container with current value (in case it changed since creation)
+	container.Set("innerHTML", toString(store.Get()))
+	// Only register OnChange once per marker
+	if !boundMarkers[marker] {
+		boundMarkers[marker] = true
+		store.OnChange(func(v T) {
+			// Use map lookup to get current container (may have been updated by rebind)
+			if node, ok := textNodeRefs[marker]; ok {
+				node.Set("innerHTML", toString(v))
+			}
+		})
+	}
 }
 
 // Settable extends Bindable with Set capability for two-way binding
@@ -216,7 +246,7 @@ func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value
 	anchor := FindComment(anchorMarker)
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
-	if !current.IsNull() {
+	if !current.IsNull() && !current.IsUndefined() && current.Truthy() {
 		current.Call("remove")
 	}
 	if !anchor.IsNull() {

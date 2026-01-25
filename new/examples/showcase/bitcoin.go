@@ -20,18 +20,17 @@ type Bitcoin struct {
 	stopRefresh func()
 }
 
-func (b *Bitcoin) OnMount() {
-	b.Loading.Set(true)
-	b.Error.Set("")
-	b.Price.Set("")
-	b.Symbol.Set("")
-	b.UpdateTime.Set("")
-
+func (b *Bitcoin) OnCreate() {
+	// Called once - start the refresh timer
 	b.FetchPrice()
 
 	b.stopRefresh = preveltekit.SetInterval(60000, func() {
 		b.FetchPrice()
 	})
+}
+
+func (b *Bitcoin) OnMount() {
+	// Called every navigation - nothing needed here since we cache data
 }
 
 func (b *Bitcoin) OnDestroy() {

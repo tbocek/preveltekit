@@ -121,6 +121,10 @@ func parseComponents(file string) ([]*component, error) {
 			comp.style = extractStringReturn(funcDecl)
 		case "OnMount":
 			comp.hasOnMount = true
+		case "OnCreate":
+			comp.hasOnCreate = true
+		case "OnUnmount":
+			comp.hasOnUnmount = true
 		}
 	}
 

@@ -178,6 +178,12 @@ func parseReflectOutput(output string) ([]*component, []staticRoute, error) {
 				if value == "OnMount" {
 					current.hasOnMount = true
 				}
+				if value == "OnCreate" {
+					current.hasOnCreate = true
+				}
+				if value == "OnUnmount" {
+					current.hasOnUnmount = true
+				}
 			}
 
 		case "ROUTES":

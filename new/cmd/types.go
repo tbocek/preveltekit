@@ -3,14 +3,16 @@ package main
 import "regexp"
 
 type component struct {
-	name       string
-	template   string
-	style      string
-	source     string
-	fields     []storeField
-	methods    []string
-	hasOnMount bool
-	fieldTypes map[string]string // cached field name -> type mapping
+	name         string
+	template     string
+	style        string
+	source       string
+	fields       []storeField
+	methods      []string
+	hasOnMount   bool
+	hasOnCreate  bool
+	hasOnUnmount bool
+	fieldTypes   map[string]string // cached field name -> type mapping
 }
 
 type storeField struct {

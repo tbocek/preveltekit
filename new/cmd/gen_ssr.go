@@ -70,8 +70,12 @@ func generateRender(comp *component, tmpl string, bindings templateBindings, chi
 	generateFieldInit(&sb, comp.fields, "\t\t")
 	sb.WriteString("\t}\n")
 
+	if comp.hasOnCreate {
+		sb.WriteString("\n\tcomponent.OnCreate()\n")
+	}
+
 	if comp.hasOnMount {
-		sb.WriteString("\n\tcomponent.OnMount()\n")
+		sb.WriteString("\tcomponent.OnMount()\n")
 	}
 
 	// Create root context
@@ -129,7 +133,7 @@ func generateSSRComponentInstances(sb *strings.Builder, components []componentBi
 		}
 
 		childID := ctx.prefixID(compBinding.elementID)
-		needsVar := len(childDef.fields) > 0 || len(compBinding.props) > 0 || childDef.hasOnMount
+		needsVar := len(childDef.fields) > 0 || len(compBinding.props) > 0 || childDef.hasOnMount || childDef.hasOnCreate || childDef.hasOnUnmount
 
 		if needsVar {
 			fmt.Fprintf(sb, "\n\t%s := &%s{\n", childID, compBinding.name)
@@ -163,6 +167,9 @@ func generateSSRComponentInstances(sb *strings.Builder, components []componentBi
 			}
 		}
 
+		if childDef.hasOnCreate {
+			fmt.Fprintf(sb, "\t%s.OnCreate()\n", childID)
+		}
 		if childDef.hasOnMount {
 			fmt.Fprintf(sb, "\t%s.OnMount()\n", childID)
 		}

@@ -120,7 +120,9 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	}
 	sb.WriteString(")\n\n")
 
-	sb.WriteString("var document = preveltekit.Document\n\n")
+	sb.WriteString("var document = preveltekit.Document\n")
+	sb.WriteString("var initialized = make(map[string]bool)\n")
+	sb.WriteString("var ifCurrent = make(map[string]js.Value)\n\n")
 
 	// Generate CSS and HTML constants
 	tracker := NewHTMLConstantTracker()
@@ -129,7 +131,13 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	// Main function
 	sb.WriteString("\nfunc main() {\n\tcomponent := &" + comp.name + "{\n")
 	generateFieldInit(&sb, comp.fields, "\t\t")
-	sb.WriteString("\t}\n\n")
+	sb.WriteString("\t}\n")
+
+	// OnCreate - called once at initialization
+	if comp.hasOnCreate {
+		sb.WriteString("\tcomponent.OnCreate()\n")
+	}
+	sb.WriteString("\n")
 
 	// Create root context
 	rootScope := &Scope{
@@ -652,7 +660,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			childTmpl := strings.ReplaceAll(childDef.template, "<slot/>", compBinding.children)
 			_, childBindings := parseTemplate(childTmpl)
 			needsVar := len(childDef.fields) > 0 || len(compBinding.props) > 0 ||
-				len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childDef.hasOnMount
+				len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childDef.hasOnMount || childDef.hasOnCreate || childDef.hasOnUnmount
 			if needsVar {
 				prefixedCompID := ctx.prefixID(compBinding.elementID)
 				fmt.Fprintf(sb, "%s%s := &%s{\n", indent, prefixedCompID, compBinding.name)
@@ -660,6 +668,9 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				fmt.Fprintf(sb, "%s}\n", indent)
 			}
 		}
+
+		// Track last branch for OnUnmount calls
+		fmt.Fprintf(sb, "%s%s_lastBranch := -2\n", indent, fullID) // -2 means never set
 
 		// Update function
 		fmt.Fprintf(sb, "%supdate%s := func() {\n", indent, fullID)
@@ -714,6 +725,39 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortNestedMarker, prefixedNestedID)
 			}
 		}
+
+		// Call OnUnmount on components from previous branch before switching
+		fmt.Fprintf(sb, "%s\tif %s_lastBranch != branchIdx {\n", indent, fullID)
+		for i, branch := range ifb.branches {
+			branchCompIDs := findCompPlaceholders(branch.html)
+			for _, compID := range branchCompIDs {
+				for _, compBinding := range compsInBlock {
+					if compBinding.elementID == compID {
+						childDef := ctx.AllComponents[compBinding.name]
+						if childDef != nil && childDef.hasOnUnmount {
+							prefixedCompID := ctx.prefixID(compBinding.elementID)
+							fmt.Fprintf(sb, "%s\t\tif %s_lastBranch == %d { %s.OnUnmount() }\n", indent, fullID, i, prefixedCompID)
+						}
+					}
+				}
+			}
+		}
+		// Also handle else branch (-1)
+		if ifb.elseHTML != "" {
+			elseCompIDs := findCompPlaceholders(ifb.elseHTML)
+			for _, compID := range elseCompIDs {
+				for _, compBinding := range compsInBlock {
+					if compBinding.elementID == compID {
+						childDef := ctx.AllComponents[compBinding.name]
+						if childDef != nil && childDef.hasOnUnmount {
+							prefixedCompID := ctx.prefixID(compBinding.elementID)
+							fmt.Fprintf(sb, "%s\t\tif %s_lastBranch == -1 { %s.OnUnmount() }\n", indent, fullID, prefixedCompID)
+						}
+					}
+				}
+			}
+		}
+		fmt.Fprintf(sb, "%s\t}\n", indent)
 
 		// Insert HTML into DOM
 		shortMarker := toShortMarker(fullID)
@@ -786,7 +830,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			}
 			fmt.Fprintf(sb, "%s\t}\n", indent)
 		}
-		fmt.Fprintf(sb, "%s\t_ = branchIdx\n", indent)
+		fmt.Fprintf(sb, "%s\t%s_lastBranch = branchIdx\n", indent, fullID)
 		fmt.Fprintf(sb, "%s}\n", indent)
 
 		// Subscribe to dependencies
@@ -872,7 +916,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 
 	// Create instance if needed
 	if !ctx.SkipCreate {
-		needsVar := len(compDef.fields) > 0 || len(compBinding.props) > 0 || compDef.hasOnMount
+		needsVar := len(compDef.fields) > 0 || len(compBinding.props) > 0 || compDef.hasOnMount || compDef.hasOnCreate || compDef.hasOnUnmount
 		if needsVar {
 			fmt.Fprintf(sb, "%s%s := &%s{\n", innerIndent, compID, compBinding.name)
 			generateFieldInit(sb, compDef.fields, innerIndent+"\t")
@@ -1048,7 +1092,15 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 		}
 	}
 
-	// OnMount
+	// OnCreate - called once on first initialization
+	if compDef.hasOnCreate {
+		fmt.Fprintf(sb, "%sif !initialized[\"%s_created\"] {\n", innerIndent, compID)
+		fmt.Fprintf(sb, "%s\tinitialized[\"%s_created\"] = true\n", innerIndent, compID)
+		fmt.Fprintf(sb, "%s\t%s.OnCreate()\n", innerIndent, compID)
+		fmt.Fprintf(sb, "%s}\n", innerIndent)
+	}
+
+	// OnMount - called every time component is mounted/shown
 	if compDef.hasOnMount {
 		fmt.Fprintf(sb, "%s%s.OnMount()\n", innerIndent, compID)
 	}
@@ -1064,7 +1116,7 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 
 	for _, ifb := range ifBlocks {
 		fullID := compID + "_" + ifb.elementID
-		fmt.Fprintf(sb, "%s%s_current := js.Null()\n", indent, fullID)
+		// Use map for persistence across route changes (don't re-init to null)
 
 		// Find components in this if block
 		allHTML := ifb.elseHTML
@@ -1089,7 +1141,7 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 			childTmpl := strings.ReplaceAll(childDef.template, "<slot/>", compBinding.children)
 			_, childBindings := parseTemplate(childTmpl)
 			needsVar := len(childDef.fields) > 0 || len(compBinding.props) > 0 ||
-				len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childDef.hasOnMount
+				len(childBindings.events) > 0 || len(childBindings.ifBlocks) > 0 || childDef.hasOnMount || childDef.hasOnCreate || childDef.hasOnUnmount
 			if needsVar {
 				nestedID := compID + "_" + compBinding.elementID
 				fmt.Fprintf(sb, "%s%s := &%s{\n", indent, nestedID, compBinding.name)
@@ -1127,9 +1179,9 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortCompMarker, nestedID)
 		}
 
-		// Insert HTML
+		// Insert HTML (use map for persistence across route changes)
 		shortMarker := toShortMarker(fullID)
-		fmt.Fprintf(sb, "%s\t%s_current = preveltekit.ReplaceContent(\"%s\", %s_current, html)\n", indent, fullID, shortMarker, fullID)
+		fmt.Fprintf(sb, "%s\tifCurrent[\"%s\"] = preveltekit.ReplaceContent(\"%s\", ifCurrent[\"%s\"], html)\n", indent, fullID, shortMarker, fullID)
 
 		// Wire up components inside
 		for _, compBinding := range compsInBlock {
@@ -1190,10 +1242,13 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 		fmt.Fprintf(sb, "%s\t_ = branchIdx\n", indent)
 		fmt.Fprintf(sb, "%s}\n", indent)
 
-		// Subscribe
+		// Subscribe (only once)
+		fmt.Fprintf(sb, "%sif !initialized[\"%s\"] {\n", indent, fullID)
+		fmt.Fprintf(sb, "%s\tinitialized[\"%s\"] = true\n", indent, fullID)
 		for _, dep := range ifb.deps {
-			fmt.Fprintf(sb, "%s%s.%s.OnChange(func(_ %s) { update%s() })\n", indent, compID, dep, fieldTypes[dep], fullID)
+			fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(_ %s) { update%s() })\n", indent, compID, dep, fieldTypes[dep], fullID)
 		}
+		fmt.Fprintf(sb, "%s}\n", indent)
 		fmt.Fprintf(sb, "%supdate%s()\n", indent, fullID)
 	}
 }

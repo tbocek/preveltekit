@@ -308,6 +308,7 @@ func generateHTML(prerenderedContent string, style string) string {
 <head>
 	<meta charset="utf-8">
 	<title>App</title>
+	<link rel="icon" href="data:,">
 	<style>` + style + `</style>
 	<script src="wasm_exec.js"></script>
 	<script>
