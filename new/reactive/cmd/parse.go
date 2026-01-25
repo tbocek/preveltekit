@@ -9,7 +9,9 @@ import (
 	"strconv"
 )
 
-func parseComponent(file string) (*component, error) {
+// parseComponents parses all components from a Go file.
+// A component is a struct with a Template() method.
+func parseComponents(file string) ([]*component, error) {
 	src, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -21,9 +23,8 @@ func parseComponent(file string) (*component, error) {
 		return nil, err
 	}
 
-	comp := &component{source: string(src)}
-
-	// Find struct and its fields
+	// First pass: collect all structs and their fields
+	structs := make(map[string]*component)
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.TYPE {
@@ -38,7 +39,11 @@ func parseComponent(file string) (*component, error) {
 			if !ok {
 				continue
 			}
-			comp.name = typeSpec.Name.Name
+
+			comp := &component{
+				name:   typeSpec.Name.Name,
+				source: string(src),
+			}
 
 			// Parse struct fields for *Store[T], *List[T], *Map[K,V], *LocalStore
 			for _, field := range structType.Fields.List {
@@ -114,13 +119,37 @@ func parseComponent(file string) (*component, error) {
 					keyType:   keyType,
 				})
 			}
+
+			structs[comp.name] = comp
 		}
 	}
 
-	// Find methods
+	// Second pass: collect methods and associate with structs
 	for _, decl := range f.Decls {
 		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok || funcDecl.Recv == nil {
+			continue
+		}
+
+		// Get receiver type name
+		var recvTypeName string
+		for _, recv := range funcDecl.Recv.List {
+			switch t := recv.Type.(type) {
+			case *ast.StarExpr:
+				if ident, ok := t.X.(*ast.Ident); ok {
+					recvTypeName = ident.Name
+				}
+			case *ast.Ident:
+				recvTypeName = t.Name
+			}
+		}
+
+		if recvTypeName == "" {
+			continue
+		}
+
+		comp, exists := structs[recvTypeName]
+		if !exists {
 			continue
 		}
 
@@ -137,11 +166,28 @@ func parseComponent(file string) (*component, error) {
 		}
 	}
 
-	if comp.name == "" {
-		return nil, fmt.Errorf("no struct found")
+	// Filter to only include structs that have a Template() method (i.e., are components)
+	var components []*component
+	for _, comp := range structs {
+		if comp.template != "" {
+			components = append(components, comp)
+		}
 	}
 
-	return comp, nil
+	return components, nil
+}
+
+// parseComponent parses a single component from a Go file (first one found).
+// Kept for backward compatibility.
+func parseComponent(file string) (*component, error) {
+	components, err := parseComponents(file)
+	if err != nil {
+		return nil, err
+	}
+	if len(components) == 0 {
+		return nil, fmt.Errorf("no component found (struct with Template() method)")
+	}
+	return components[0], nil
 }
 
 func extractStringReturn(fn *ast.FuncDecl) string {

@@ -42,12 +42,14 @@ func main() {
 	childSourceFiles := make(map[string][]string) // component name -> list of source files
 	for i := 2; i < len(os.Args); i++ {
 		childFile := os.Args[i]
-		childComp, err := parseComponent(childFile)
+		comps, err := parseComponents(childFile)
 		if err != nil {
 			fatal("parse child component %s: %v", childFile, err)
 		}
-		childComponents[childComp.name] = childComp
-		childSourceFiles[childComp.name] = append(childSourceFiles[childComp.name], childFile)
+		for _, comp := range comps {
+			childComponents[comp.name] = comp
+			childSourceFiles[comp.name] = append(childSourceFiles[comp.name], childFile)
+		}
 	}
 
 	// Parse main component
@@ -55,6 +57,10 @@ func main() {
 	if err != nil {
 		fatal("parse error: %v", err)
 	}
+
+	// Track which files have been parsed (to avoid re-parsing)
+	parsedFiles := make(map[string]bool)
+	parsedFiles[mainComponentFile] = true
 
 	// Auto-discover components referenced in templates (including child templates)
 	// Use a queue to recursively discover nested component references
@@ -85,25 +91,38 @@ func main() {
 		}
 		for _, f := range possibleFiles {
 			if _, err := os.Stat(f); err == nil {
-				childComp, err := parseComponent(f)
+				// Skip if already parsed
+				if parsedFiles[f] {
+					continue
+				}
+				parsedFiles[f] = true
+
+				// Parse all components from this file
+				comps, err := parseComponents(f)
 				if err != nil {
 					fatal("auto-discovered component %s: %v", f, err)
 				}
-				if childComp.name == compName {
-					childComponents[compName] = childComp
-					childSourceFiles[compName] = append(childSourceFiles[compName], f)
 
-					// Also look for _stub.go variant (build-tag variants)
-					stubFile := filepath.Join(dir, strings.ToLower(compName)+"_stub.go")
-					if _, err := os.Stat(stubFile); err == nil {
-						childSourceFiles[compName] = append(childSourceFiles[compName], stubFile)
+				// Add all components found in this file
+				for _, comp := range comps {
+					if _, exists := childComponents[comp.name]; !exists {
+						childComponents[comp.name] = comp
+						childSourceFiles[comp.name] = append(childSourceFiles[comp.name], f)
+
+						// Also check this component's template for nested references
+						nestedRefs := findReferencedComponents(comp.template)
+						queue = append(queue, nestedRefs...)
 					}
-
-					// Also check this component's template for nested references
-					nestedRefs := findReferencedComponents(childComp.template)
-					queue = append(queue, nestedRefs...)
-					break
 				}
+
+				// Also look for _stub.go variant (build-tag variants)
+				stubFile := filepath.Join(dir, strings.ToLower(compName)+"_stub.go")
+				if _, err := os.Stat(stubFile); err == nil && !parsedFiles[stubFile] {
+					parsedFiles[stubFile] = true
+					childSourceFiles[compName] = append(childSourceFiles[compName], stubFile)
+				}
+
+				break
 			}
 		}
 	}
@@ -148,21 +167,18 @@ replace reactive => %s
 	componentSrc := stripTemplateAndStyle(mainComp.source)
 	writeFile(filepath.Join(buildDir, "component.go"), componentSrc)
 
-	for name := range childComponents {
-		sourceFiles := childSourceFiles[name]
-		if len(sourceFiles) == 1 {
-			// Single file - strip template/style and write
-			src, _ := os.ReadFile(sourceFiles[0])
-			childSrc := stripTemplateAndStyle(string(src))
-			writeFile(filepath.Join(buildDir, strings.ToLower(name)+".go"), childSrc)
-		} else {
-			// Multiple files (build-tag variants) - write each with original basename
-			for _, srcFile := range sourceFiles {
-				src, _ := os.ReadFile(srcFile)
-				childSrc := stripTemplateAndStyle(string(src))
-				baseName := filepath.Base(srcFile)
-				writeFile(filepath.Join(buildDir, baseName), childSrc)
+	// Collect unique source files (a file may contain multiple components)
+	writtenFiles := make(map[string]bool)
+	for _, sourceFiles := range childSourceFiles {
+		for _, srcFile := range sourceFiles {
+			if writtenFiles[srcFile] {
+				continue
 			}
+			writtenFiles[srcFile] = true
+			src, _ := os.ReadFile(srcFile)
+			childSrc := stripTemplateAndStyle(string(src))
+			baseName := filepath.Base(srcFile)
+			writeFile(filepath.Join(buildDir, baseName), childSrc)
 		}
 	}
 

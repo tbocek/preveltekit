@@ -34,13 +34,28 @@ func (a *App) ShowBitcoin() {
 	a.CurrentPage.Set("bitcoin")
 }
 
+func (a *App) ShowComponents() {
+	a.CurrentPage.Set("components")
+}
+
+func (a *App) ShowRouting() {
+	a.CurrentPage.Set("routing")
+}
+
+func (a *App) ShowLinks() {
+	a.CurrentPage.Set("links")
+}
+
 func (a *App) Template() string {
 	return `<div class="showcase">
 	<nav class="sidebar">
 		<h2>Reactive</h2>
 		<ul>
 			<li><button @click="ShowBasics()">Basics</button></li>
+			<li><button @click="ShowComponents()">Components</button></li>
 			<li><button @click="ShowLists()">Lists</button></li>
+			<li><button @click="ShowRouting()">Routing</button></li>
+			<li><button @click="ShowLinks()">Links</button></li>
 			<li><button @click="ShowFetch()">Fetch</button></li>
 			<li><button @click="ShowStorage()">Storage</button></li>
 			<li><button @click="ShowDebounce()">Debounce</button></li>
@@ -50,8 +65,14 @@ func (a *App) Template() string {
 	<main class="content">
 		{#if CurrentPage == "basics"}
 			<Basics />
+		{:else if CurrentPage == "components"}
+			<Components />
 		{:else if CurrentPage == "lists"}
 			<Lists />
+		{:else if CurrentPage == "routing"}
+			<Routing />
+		{:else if CurrentPage == "links"}
+			<Links />
 		{:else if CurrentPage == "fetch"}
 			<Fetch />
 		{:else if CurrentPage == "storage"}

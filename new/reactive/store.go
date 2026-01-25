@@ -69,6 +69,7 @@ type List[T comparable] struct {
 	items    []T
 	onEdit   []func(Edit[T])
 	onRender []func([]T) // for initial render only
+	onChange []func([]T) // called on any change
 }
 
 // NewList creates a reactive list
@@ -107,6 +108,10 @@ func (l *List[T]) Set(items []T) {
 			cb(edit)
 		}
 	}
+	// Notify onChange listeners
+	for _, cb := range l.onChange {
+		cb(l.items)
+	}
 }
 
 // Append adds items to the end
@@ -118,6 +123,10 @@ func (l *List[T]) Append(items ...T) {
 			cb(edit)
 		}
 	}
+	// Notify onChange listeners
+	for _, cb := range l.onChange {
+		cb(l.items)
+	}
 }
 
 // RemoveAt removes item at index
@@ -127,6 +136,10 @@ func (l *List[T]) RemoveAt(i int) {
 	l.items = append(l.items[:i], l.items[i+1:]...)
 	for _, cb := range l.onEdit {
 		cb(edit)
+	}
+	// Notify onChange listeners
+	for _, cb := range l.onChange {
+		cb(l.items)
 	}
 }
 
@@ -140,6 +153,10 @@ func (l *List[T]) Clear() {
 		}
 	}
 	l.items = l.items[:0]
+	// Notify onChange listeners
+	for _, cb := range l.onChange {
+		cb(l.items)
+	}
 }
 
 // OnEdit adds a callback for edit operations (Insert, Remove)
@@ -150,6 +167,11 @@ func (l *List[T]) OnEdit(cb func(Edit[T])) {
 // OnRender adds a callback for initial render
 func (l *List[T]) OnRender(cb func([]T)) {
 	l.onRender = append(l.onRender, cb)
+}
+
+// OnChange adds a callback for any change to the list
+func (l *List[T]) OnChange(cb func([]T)) {
+	l.onChange = append(l.onChange, cb)
 }
 
 // Render triggers initial render callbacks

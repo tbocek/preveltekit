@@ -458,11 +458,44 @@ func transformCondition(cond string, fieldTypes map[string]string, prefix string
 		}
 	}
 
-	// Not a simple field reference - do standard replacement
-	for fieldName := range fieldTypes {
-		if strings.Contains(cond, fieldName) {
-			cond = strings.ReplaceAll(cond, fieldName, prefix+"."+fieldName+".Get()")
+	// Not a simple field reference - do word-boundary replacement
+	// Sort field names by length (longest first) to avoid partial matches
+	fieldNames := make([]string, 0, len(fieldTypes))
+	for name := range fieldTypes {
+		fieldNames = append(fieldNames, name)
+	}
+	// Sort by length descending
+	for i := 0; i < len(fieldNames)-1; i++ {
+		for j := i + 1; j < len(fieldNames); j++ {
+			if len(fieldNames[j]) > len(fieldNames[i]) {
+				fieldNames[i], fieldNames[j] = fieldNames[j], fieldNames[i]
+			}
 		}
+	}
+
+	for _, fieldName := range fieldNames {
+		// Use word boundary matching - field must not be preceded or followed by alphanumeric
+		result := ""
+		i := 0
+		for i < len(cond) {
+			idx := strings.Index(cond[i:], fieldName)
+			if idx == -1 {
+				result += cond[i:]
+				break
+			}
+			pos := i + idx
+			// Check word boundaries
+			beforeOk := pos == 0 || !isAlphanumeric(cond[pos-1])
+			afterOk := pos+len(fieldName) >= len(cond) || !isAlphanumeric(cond[pos+len(fieldName)])
+			if beforeOk && afterOk {
+				result += cond[i:pos] + prefix + "." + fieldName + ".Get()"
+				i = pos + len(fieldName)
+			} else {
+				result += cond[i : pos+len(fieldName)]
+				i = pos + len(fieldName)
+			}
+		}
+		cond = result
 	}
 	return cond
 }

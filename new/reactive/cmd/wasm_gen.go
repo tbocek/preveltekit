@@ -193,7 +193,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	generateInputBindings(&sb, bindings.bindings, fieldTypes)
 
 	// Class bindings
-	generateClassBindings(&sb, bindings.classBindings)
+	generateClassBindings(&sb, bindings.classBindings, fieldTypes)
 
 	// Attribute bindings
 	generateAttrBindings(&sb, bindings.attrBindings, fieldTypes)
@@ -346,6 +346,17 @@ func generateIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, fieldTypes map[
 				sb.WriteString("\t\t}\n")
 			}
 		}
+
+		// Wire up class bindings inside if branches AFTER inserting HTML into DOM
+		for i, branch := range ifb.branches {
+			if len(branch.classBindings) > 0 {
+				fmt.Fprintf(sb, "\t\tif branchIdx == %d {\n", i)
+				for _, cb := range branch.classBindings {
+					generateClassBindingInline(sb, cb, fieldTypes, "component", "\t\t\t")
+				}
+				sb.WriteString("\t\t}\n")
+			}
+		}
 		sb.WriteString("\t\t_ = branchIdx\n") // Avoid unused variable error
 
 		sb.WriteString("\t}\n")
@@ -385,13 +396,68 @@ func generateInputBindings(sb *strings.Builder, bindings []inputBinding, fieldTy
 	}
 }
 
-func generateClassBindings(sb *strings.Builder, classBindings []classBinding) {
+func generateClassBindings(sb *strings.Builder, classBindings []classBinding, fieldTypes map[string]string) {
+	// Group class bindings by element ID
+	byElement := make(map[string][]classBinding)
+	elementOrder := []string{}
 	for _, cb := range classBindings {
-		fmt.Fprintf(sb, "\t%s := document.Call(\"getElementById\", \"%s\")\n", cb.elementID, cb.elementID)
-		fmt.Fprintf(sb, "\tcomponent.%s.OnChange(func(v bool) {\n", cb.condition)
-		fmt.Fprintf(sb, "\t\tif v { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
-			cb.elementID, cb.className, cb.elementID, cb.className)
-		sb.WriteString("\t})\n\n")
+		if _, exists := byElement[cb.elementID]; !exists {
+			elementOrder = append(elementOrder, cb.elementID)
+		}
+		byElement[cb.elementID] = append(byElement[cb.elementID], cb)
+	}
+
+	for _, elementID := range elementOrder {
+		bindings := byElement[elementID]
+		fmt.Fprintf(sb, "\t%s := document.Call(\"getElementById\", \"%s\")\n", elementID, elementID)
+
+		// Collect all dependencies across all class bindings for this element
+		allDeps := make(map[string]bool)
+		for _, cb := range bindings {
+			deps := extractPascalCaseWords(cb.condition)
+			for _, dep := range deps {
+				allDeps[dep] = true
+			}
+		}
+
+		// Create a single update function for all class bindings on this element
+		fmt.Fprintf(sb, "\tupdate%s := func() {\n", elementID)
+		for _, cb := range bindings {
+			cond := transformCondition(cb.condition, fieldTypes, "component")
+			fmt.Fprintf(sb, "\t\tif %s { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
+				cond, elementID, cb.className, elementID, cb.className)
+		}
+		sb.WriteString("\t}\n")
+
+		// Register OnChange for each unique dependency
+		for dep := range allDeps {
+			if fieldType, ok := fieldTypes[dep]; ok {
+				fmt.Fprintf(sb, "\tcomponent.%s.OnChange(func(_ %s) { update%s() })\n", dep, fieldType, elementID)
+			}
+		}
+		// Initial call
+		fmt.Fprintf(sb, "\tupdate%s()\n\n", elementID)
+	}
+}
+
+// generateClassBindingInline generates code for a class binding inside an if block
+func generateClassBindingInline(sb *strings.Builder, cb classBinding, fieldTypes map[string]string, compPrefix string, indent string) {
+	fmt.Fprintf(sb, "%s%s := document.Call(\"getElementById\", \"%s\")\n", indent, cb.elementID, cb.elementID)
+
+	// Extract field dependencies from the condition
+	deps := extractPascalCaseWords(cb.condition)
+
+	// Check if it's a simple field reference or an expression
+	if len(deps) == 1 && deps[0] == cb.condition && fieldTypes[cb.condition] == "bool" {
+		// Simple boolean field: class:active={IsActive}
+		// For inline (inside if-block), just set initial state since DOM is recreated on each update
+		fmt.Fprintf(sb, "%sif %s.%s.Get() { %s.Get(\"classList\").Call(\"add\", \"%s\") }\n",
+			indent, compPrefix, cb.condition, cb.elementID, cb.className)
+	} else {
+		// Expression: class:active={CurrentStep == 1}
+		cond := transformCondition(cb.condition, fieldTypes, compPrefix)
+		fmt.Fprintf(sb, "%sif %s { %s.Get(\"classList\").Call(\"add\", \"%s\") }\n",
+			indent, cond, cb.elementID, cb.className)
 	}
 }
 
@@ -665,6 +731,48 @@ func generateChildComponent(sb *strings.Builder, compBinding componentBinding, c
 			compBinding.elementID, eventName, evt.method, callArgs)
 	}
 
+	// Child class bindings - group by element ID to handle multiple class bindings per element
+	childClassByElement := make(map[string][]classBinding)
+	childClassOrder := []string{}
+	for _, cb := range childBindings.classBindings {
+		if _, exists := childClassByElement[cb.elementID]; !exists {
+			childClassOrder = append(childClassOrder, cb.elementID)
+		}
+		childClassByElement[cb.elementID] = append(childClassByElement[cb.elementID], cb)
+	}
+
+	for _, elementID := range childClassOrder {
+		bindings := childClassByElement[elementID]
+		fmt.Fprintf(sb, "\t%s := document.Call(\"getElementById\", \"%s\")\n", elementID, elementID)
+
+		// Collect all dependencies
+		allDeps := make(map[string]bool)
+		for _, cb := range bindings {
+			deps := extractPascalCaseWords(cb.condition)
+			for _, dep := range deps {
+				allDeps[dep] = true
+			}
+		}
+
+		// Create a single update function for all class bindings on this element
+		fmt.Fprintf(sb, "\tupdate%s := func() {\n", elementID)
+		for _, cb := range bindings {
+			cond := transformCondition(cb.condition, childFieldTypes, compBinding.elementID)
+			fmt.Fprintf(sb, "\t\tif %s { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
+				cond, elementID, cb.className, elementID, cb.className)
+		}
+		sb.WriteString("\t}\n")
+
+		// Register OnChange for each unique dependency
+		for dep := range allDeps {
+			if fieldType, ok := childFieldTypes[dep]; ok {
+				fmt.Fprintf(sb, "\t%s.%s.OnChange(func(_ %s) { update%s() })\n", compBinding.elementID, dep, fieldType, elementID)
+			}
+		}
+		// Initial call
+		fmt.Fprintf(sb, "\tupdate%s()\n", elementID)
+	}
+
 	// Child internal if-blocks
 	generateChildIfBlocks(sb, childBindings.ifBlocks, childFieldTypes, compBinding.elementID)
 
@@ -747,16 +855,47 @@ func generateComponentInline(sb *strings.Builder, compBinding componentBinding, 
 		}
 	}
 
-	// Child class bindings (with prefixed IDs)
+	// Child class bindings (with prefixed IDs) - group by element ID
+	inlineClassByElement := make(map[string][]classBinding)
+	inlineClassOrder := []string{}
 	for _, cb := range childBindings.classBindings {
-		prefixedID := compID + "_" + cb.elementID
+		if _, exists := inlineClassByElement[cb.elementID]; !exists {
+			inlineClassOrder = append(inlineClassOrder, cb.elementID)
+		}
+		inlineClassByElement[cb.elementID] = append(inlineClassByElement[cb.elementID], cb)
+	}
+
+	for _, elementID := range inlineClassOrder {
+		bindings := inlineClassByElement[elementID]
+		prefixedID := compID + "_" + elementID
 		fmt.Fprintf(sb, "%s\t%s := document.Call(\"getElementById\", \"%s\")\n", indent, prefixedID, prefixedID)
-		fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(v bool) {\n", indent, compID, cb.condition)
-		fmt.Fprintf(sb, "%s\t\tif v { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
-			indent, prefixedID, cb.className, prefixedID, cb.className)
-		fmt.Fprintf(sb, "%s\t})\n", indent)
-		// Initial state
-		fmt.Fprintf(sb, "%s\tif %s.%s.Get() { %s.Get(\"classList\").Call(\"add\", \"%s\") }\n", indent, compID, cb.condition, prefixedID, cb.className)
+
+		// Collect all dependencies
+		allDeps := make(map[string]bool)
+		for _, cb := range bindings {
+			deps := extractPascalCaseWords(cb.condition)
+			for _, dep := range deps {
+				allDeps[dep] = true
+			}
+		}
+
+		// Create a single update function for all class bindings on this element
+		fmt.Fprintf(sb, "%s\tupdate%s := func() {\n", indent, prefixedID)
+		for _, cb := range bindings {
+			cond := transformCondition(cb.condition, childFieldTypes, compID)
+			fmt.Fprintf(sb, "%s\t\tif %s { %s.Get(\"classList\").Call(\"add\", \"%s\") } else { %s.Get(\"classList\").Call(\"remove\", \"%s\") }\n",
+				indent, cond, prefixedID, cb.className, prefixedID, cb.className)
+		}
+		fmt.Fprintf(sb, "%s\t}\n", indent)
+
+		// Register OnChange for each unique dependency
+		for dep := range allDeps {
+			if fieldType, ok := childFieldTypes[dep]; ok {
+				fmt.Fprintf(sb, "%s\t%s.%s.OnChange(func(_ %s) { update%s() })\n", indent, compID, dep, fieldType, prefixedID)
+			}
+		}
+		// Initial call
+		fmt.Fprintf(sb, "%s\tupdate%s()\n", indent, prefixedID)
 	}
 
 	// Child internal events (with prefixed IDs)

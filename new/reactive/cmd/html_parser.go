@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -75,16 +76,19 @@ func parseTemplate(tmpl string) (string, templateBindings) {
 		if strings.HasPrefix(tmpl[pos:], "{#if ") {
 			endPos, ifBlock := parseIfBlock(tmpl, pos, &ifCount)
 			if ifBlock != nil {
-				// Parse components and each blocks inside each branch
+				// Parse components, each blocks, and class bindings inside each branch
 				for i := range ifBlock.branches {
 					parsedHTML, comps := parseComponentsInHTML(ifBlock.branches[i].html, &compCount)
 					parsedHTML, eachBlocksInBranch := parseEachBlocksInHTML(parsedHTML, &eachCount)
+					parsedHTML, classBindingsInBranch := parseClassBindingsInHTML(parsedHTML, &classCount)
 					ifBlock.branches[i].html = parsedHTML
 					ifBlock.branches[i].eachBlocks = eachBlocksInBranch
+					ifBlock.branches[i].classBindings = classBindingsInBranch
 					bindings.components = append(bindings.components, comps...)
 				}
 				if ifBlock.elseHTML != "" {
 					parsedHTML, comps := parseComponentsInHTML(ifBlock.elseHTML, &compCount)
+					parsedHTML, _ = parseClassBindingsInHTML(parsedHTML, &classCount)
 					ifBlock.elseHTML = parsedHTML
 					bindings.components = append(bindings.components, comps...)
 				}
@@ -515,6 +519,70 @@ func parseEachBlocksInHTML(html string, eachCount *int) (string, []eachBinding) 
 	return result.String(), eachBlocks
 }
 
+// parseClassBindingsInHTML parses class:name={condition} bindings in HTML content (used for if-block branches)
+// Returns the modified HTML with IDs and the list of class bindings
+// Handles multiple class bindings on the same element by sharing the same ID
+func parseClassBindingsInHTML(html string, classCount *int) (string, []classBinding) {
+	var classBindings []classBinding
+	var result strings.Builder
+	pos := 0
+
+	for pos < len(html) {
+		// Look for opening tags
+		if html[pos] == '<' && pos+1 < len(html) && html[pos+1] != '/' && html[pos+1] != '!' {
+			// Find end of tag
+			tagEnd := pos + 1
+			for tagEnd < len(html) && html[tagEnd] != '>' {
+				tagEnd++
+			}
+			if tagEnd >= len(html) {
+				result.WriteByte(html[pos])
+				pos++
+				continue
+			}
+
+			tag := html[pos : tagEnd+1]
+
+			// Check if this tag has any class bindings
+			matches := classBindRegex.FindAllStringSubmatch(tag, -1)
+			if len(matches) > 0 {
+				elementID := fmt.Sprintf("class%d", *classCount)
+				*classCount++
+
+				// Collect all class bindings for this element
+				for _, parts := range matches {
+					classBindings = append(classBindings, classBinding{
+						className: parts[1],
+						condition: parts[2],
+						elementID: elementID,
+					})
+				}
+
+				// Remove all class:name={...} from the tag and add a single id
+				processedTag := classBindRegex.ReplaceAllString(tag, "")
+				// Insert id before the closing >
+				if strings.HasSuffix(processedTag, "/>") {
+					processedTag = processedTag[:len(processedTag)-2] + fmt.Sprintf(` id="%s" />`, elementID)
+				} else {
+					processedTag = processedTag[:len(processedTag)-1] + fmt.Sprintf(` id="%s">`, elementID)
+				}
+				result.WriteString(processedTag)
+				pos = tagEnd + 1
+				continue
+			}
+
+			result.WriteString(tag)
+			pos = tagEnd + 1
+			continue
+		}
+
+		result.WriteByte(html[pos])
+		pos++
+	}
+
+	return result.String(), classBindings
+}
+
 // parseComponentTag parses a PascalCase component tag
 func parseComponentTag(tmpl string, pos int, count *int) (endPos int, binding *componentBinding) {
 	// Match component name
@@ -587,14 +655,24 @@ func parseComponentTag(tmpl string, pos int, count *int) (endPos int, binding *c
 }
 
 // parseHTMLTag extracts a complete HTML tag
+// Handles > characters inside {...} braces (e.g., class:active={CurrentStep > 1})
 func parseHTMLTag(tmpl string, pos int) (endPos int, tagContent string) {
 	if tmpl[pos] != '<' {
 		return pos, ""
 	}
 
-	// Find the end of the tag
+	// Find the end of the tag, but skip > inside {...}
 	end := pos + 1
-	for end < len(tmpl) && tmpl[end] != '>' {
+	braceDepth := 0
+	for end < len(tmpl) {
+		ch := tmpl[end]
+		if ch == '{' {
+			braceDepth++
+		} else if ch == '}' {
+			braceDepth--
+		} else if ch == '>' && braceDepth == 0 {
+			break
+		}
 		end++
 	}
 	if end >= len(tmpl) {
@@ -608,12 +686,38 @@ func parseHTMLTag(tmpl string, pos int) (endPos int, tagContent string) {
 func processTagAttributes(tag string, bindings *templateBindings, evtCount, bindCount, classCount, attrCount *int) string {
 	result := tag
 
-	// Process @event="Method()"
-	result = eventRegex.ReplaceAllStringFunc(result, func(match string) string {
-		parts := eventRegex.FindStringSubmatch(match)
+	// Check what bindings exist on this tag
+	eventMatches := eventRegex.FindAllStringSubmatch(result, -1)
+	bindMatches := bindRegex.FindAllStringSubmatch(result, -1)
+	classMatches := classBindRegex.FindAllStringSubmatch(result, -1)
+
+	// Determine if we need an ID and what it should be
+	var elementID string
+	needsID := len(eventMatches) > 0 || len(bindMatches) > 0 || len(classMatches) > 0
+
+	if needsID {
+		// Check if tag already has an id attribute
+		idRegex := regexp.MustCompile(`\bid="([^"]+)"`)
+		if match := idRegex.FindStringSubmatch(result); match != nil {
+			elementID = match[1]
+		} else {
+			// Generate a new ID based on the first binding type found
+			if len(eventMatches) > 0 {
+				elementID = fmt.Sprintf("evt_%s_%d", eventMatches[0][1], *evtCount)
+				*evtCount++
+			} else if len(bindMatches) > 0 {
+				elementID = fmt.Sprintf("bind%d", *bindCount)
+				*bindCount++
+			} else if len(classMatches) > 0 {
+				elementID = fmt.Sprintf("class%d", *classCount)
+				*classCount++
+			}
+		}
+	}
+
+	// Process @event="Method()" - remove from tag, add to bindings
+	for _, parts := range eventMatches {
 		event, modifiersStr, methodName, args := parts[1], parts[2], parts[3], parts[4]
-		elementID := fmt.Sprintf("evt_%s_%d", event, *evtCount)
-		*evtCount++
 
 		var modifiers []string
 		for _, mod := range strings.Split(modifiersStr, ".") {
@@ -626,32 +730,34 @@ func processTagAttributes(tag string, bindings *templateBindings, evtCount, bind
 			event: event, modifiers: modifiers, methodName: methodName,
 			args: args, elementID: elementID,
 		})
-		return fmt.Sprintf(`id="%s"`, elementID)
-	})
+	}
+	result = eventRegex.ReplaceAllString(result, "")
 
 	// Process bind:value="Field" and bind:checked="Field"
-	result = bindRegex.ReplaceAllStringFunc(result, func(match string) string {
-		parts := bindRegex.FindStringSubmatch(match)
-		elementID := fmt.Sprintf("bind%d", *bindCount)
-		*bindCount++
-
+	for _, parts := range bindMatches {
 		bindings.bindings = append(bindings.bindings, inputBinding{
 			fieldName: parts[2], bindType: parts[1], elementID: elementID,
 		})
-		return fmt.Sprintf(`id="%s"`, elementID)
-	})
+	}
+	result = bindRegex.ReplaceAllString(result, "")
 
-	// Process class:name="Condition"
-	result = classBindRegex.ReplaceAllStringFunc(result, func(match string) string {
-		parts := classBindRegex.FindStringSubmatch(match)
-		elementID := fmt.Sprintf("class%d", *classCount)
-		*classCount++
-
+	// Process class:name={Condition}
+	for _, parts := range classMatches {
 		bindings.classBindings = append(bindings.classBindings, classBinding{
 			className: parts[1], condition: parts[2], elementID: elementID,
 		})
-		return fmt.Sprintf(`id="%s"`, elementID)
-	})
+	}
+	result = classBindRegex.ReplaceAllString(result, "")
+
+	// Add the ID to the tag if needed and not already present
+	if needsID && !strings.Contains(tag, `id="`) {
+		// Insert id before the closing >
+		if strings.HasSuffix(result, "/>") {
+			result = result[:len(result)-2] + fmt.Sprintf(` id="%s" />`, elementID)
+		} else if strings.HasSuffix(result, ">") {
+			result = result[:len(result)-1] + fmt.Sprintf(` id="%s">`, elementID)
+		}
+	}
 
 	// Process attribute bindings like href="{Field}" or src="{Base}/{Path}"
 	result = attrWithExprRegex.ReplaceAllStringFunc(result, func(match string) string {

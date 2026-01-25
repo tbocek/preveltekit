@@ -77,9 +77,10 @@ type ifBinding struct {
 }
 
 type ifBranch struct {
-	condition  string        // "Score >= 90"
-	html       string        // content if true
-	eachBlocks []eachBinding // each blocks inside this branch
+	condition     string         // "Score >= 90"
+	html          string         // content if true
+	eachBlocks    []eachBinding  // each blocks inside this branch
+	classBindings []classBinding // class bindings inside this branch
 }
 
 type inputBinding struct {
@@ -106,7 +107,7 @@ var (
 	// Tag attribute patterns (used in html_parser.go)
 	eventRegex        = regexp.MustCompile(`@(\w+)((?:\.\w+)*)="(\w+)\(([^)]*)\)"`)
 	bindRegex         = regexp.MustCompile(`bind:(\w+)="(\w+)"`)
-	classBindRegex    = regexp.MustCompile(`class:(\w+)=\{(\w+)\}`)
+	classBindRegex    = regexp.MustCompile(`class:(\w+)=\{([^}]+)\}`)
 	attrWithExprRegex = regexp.MustCompile(`(\w+)="([^"]*\{[^}]+\}[^"]*)"`)
 	propRegex         = regexp.MustCompile(`(\w+)="([^"]*)"`)
 )
