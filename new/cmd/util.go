@@ -245,7 +245,9 @@ func fatal(format string, args ...any) {
 
 // escapeForGoString escapes a string for use in a Go raw string literal (backtick string)
 // Since backticks cannot be escaped inside raw strings, we use string concatenation
+// Also minifies HTML content first to reduce output size
 func escapeForGoString(s string) string {
+	s = minifyHTML(s)
 	if !strings.Contains(s, "`") {
 		return "`" + s + "`"
 	}

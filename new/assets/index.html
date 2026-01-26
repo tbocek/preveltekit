@@ -5,13 +5,7 @@
         <title>App</title>
         <link rel="icon" href="data:," />
         <script src="wasm_exec.js"></script>
-        <script>
-            const go = new Go();
-            WebAssembly.instantiateStreaming(
-                fetch("app.wasm"),
-                go.importObject,
-            ).then((r) => go.run(r.instance));
-        </script>
+        <script>const go=new Go();WebAssembly.instantiateStreaming(fetch("app.wasm"),go.importObject).then(r=>go.run(r.instance))</script>
     </head>
     <body>
         <div id="app"></div>
