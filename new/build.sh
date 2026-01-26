@@ -202,7 +202,7 @@ if [ "$SKIP_COMPRESS" = false ]; then
     echo "Compressing output files..."
     for f in "$PROJECT_DIR/dist"/*.html "$PROJECT_DIR/dist"/*.wasm "$PROJECT_DIR/dist"/*.js; do
         [ -f "$f" ] || continue
-        zopfli --i50 "$f"
+        zopfli --i10 "$f"
         brotli -q 11 -k -f "$f"
     done
 fi
