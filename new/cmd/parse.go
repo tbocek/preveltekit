@@ -7,6 +7,82 @@ import (
 	"os"
 )
 
+// detectCodecTypes finds type names used in preveltekit.Get[T], Post[T], Fetch[T], etc.
+// Returns a unique list of type names that need FromJS/ToJS codegen.
+func detectCodecTypes(files []string) []string {
+	seen := make(map[string]bool)
+	var types []string
+
+	for _, file := range files {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, file, src, 0)
+		if err != nil {
+			continue
+		}
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			// Look for call expressions like preveltekit.Get[Todo](...)
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			// Check if it's an indexed expression (generic call)
+			indexExpr, ok := call.Fun.(*ast.IndexExpr)
+			if !ok {
+				return true
+			}
+
+			// Check if it's a selector (preveltekit.Get)
+			sel, ok := indexExpr.X.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+
+			// Check if selector is on "preveltekit" package
+			ident, ok := sel.X.(*ast.Ident)
+			if !ok || ident.Name != "preveltekit" {
+				return true
+			}
+
+			// Check if method is one of the fetch functions
+			method := sel.Sel.Name
+			if method != "Get" && method != "Post" && method != "Put" &&
+				method != "Patch" && method != "Delete" && method != "Fetch" {
+				return true
+			}
+
+			// Extract the type parameter
+			typeName := extractTypeName(indexExpr.Index)
+			if typeName != "" && !seen[typeName] {
+				seen[typeName] = true
+				types = append(types, typeName)
+			}
+
+			return true
+		})
+	}
+
+	return types
+}
+
+// extractTypeName extracts a type name from an AST expression.
+// Handles simple identifiers and pointer types.
+func extractTypeName(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.StarExpr:
+		return extractTypeName(e.X)
+	}
+	return ""
+}
+
 // parseComponentNames extracts struct names from a Go file.
 // These are candidates for components - we'll use reflection to determine
 // which ones have Template() methods and extract their full metadata.

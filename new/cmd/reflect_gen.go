@@ -8,7 +8,7 @@ import (
 
 // generateReflect generates a self-contained Go program that extracts component
 // metadata via reflection. The entire reflection logic is inlined.
-func generateReflect(mainCompName string, childCompNames []string) string {
+func generateReflect(mainCompName string, childCompNames []string, codecTypes []string) string {
 	var sb strings.Builder
 
 	sb.WriteString(`//go:build !wasm
@@ -31,6 +31,11 @@ func main() {
 	// Child components
 	for _, name := range childCompNames {
 		fmt.Fprintf(&sb, "\textract(&%s{}, false)\n", name)
+	}
+
+	// Codec types
+	for _, name := range codecTypes {
+		fmt.Fprintf(&sb, "\textractCodec(&%s{})\n", name)
 	}
 
 	sb.WriteString(`}
@@ -111,16 +116,123 @@ func parseType(t string) (store, val, key string) {
 	}
 	return "", "", ""
 }
+
+func extractCodec(v interface{}) {
+	rt := reflect.TypeOf(v).Elem()
+	fmt.Printf("CODEC:%s\n", rt.Name())
+	extractCodecFields(rt, "")
+	fmt.Println("CODEC_END")
+}
+
+func extractCodecFields(rt reflect.Type, prefix string) {
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		jsTag := f.Tag.Get("js")
+		if jsTag == "-" {
+			continue
+		}
+		if jsTag == "" {
+			jsTag = f.Name
+		}
+		// Handle omitempty
+		omit := false
+		if idx := strings.Index(jsTag, ","); idx != -1 {
+			if strings.Contains(jsTag[idx:], "omitempty") {
+				omit = true
+			}
+			jsTag = jsTag[:idx]
+		}
+
+		fieldPath := f.Name
+		if prefix != "" {
+			fieldPath = prefix + "." + f.Name
+		}
+
+		ft := f.Type
+		// Dereference pointer
+		isPtr := false
+		if ft.Kind() == reflect.Ptr {
+			isPtr = true
+			ft = ft.Elem()
+		}
+
+		kind := ft.Kind().String()
+		typeName := ft.String()
+
+		// Handle anonymous/embedded structs
+		if ft.Kind() == reflect.Struct && f.Anonymous {
+			extractCodecFields(ft, fieldPath)
+			continue
+		}
+
+		// Handle named nested structs
+		if ft.Kind() == reflect.Struct {
+			fmt.Printf("CODEC_FIELD:%s:%s:%s:struct:%v:%v\n", fieldPath, jsTag, typeName, isPtr, omit)
+			extractCodecFields(ft, fieldPath)
+			continue
+		}
+
+		// Handle slices
+		if ft.Kind() == reflect.Slice {
+			elemType := ft.Elem()
+			elemKind := elemType.Kind().String()
+			if elemType.Kind() == reflect.Struct {
+				fmt.Printf("CODEC_FIELD:%s:%s:%s:slice_struct:%v:%v\n", fieldPath, jsTag, elemType.String(), isPtr, omit)
+				extractCodecFields(elemType, fieldPath+"[]")
+			} else {
+				fmt.Printf("CODEC_FIELD:%s:%s:%s:slice_%s:%v:%v\n", fieldPath, jsTag, elemType.String(), elemKind, isPtr, omit)
+			}
+			continue
+		}
+
+		// Handle maps
+		if ft.Kind() == reflect.Map {
+			keyType := ft.Key().String()
+			valType := ft.Elem()
+			valKind := valType.Kind().String()
+			if valType.Kind() == reflect.Struct {
+				fmt.Printf("CODEC_FIELD:%s:%s:%s:map_%s_struct:%v:%v\n", fieldPath, jsTag, keyType, valKind, isPtr, omit)
+				extractCodecFields(valType, fieldPath+"[]")
+			} else {
+				fmt.Printf("CODEC_FIELD:%s:%s:%s:map_%s_%s:%v:%v\n", fieldPath, jsTag, keyType, valKind, valType.String(), isPtr, omit)
+			}
+			continue
+		}
+
+		fmt.Printf("CODEC_FIELD:%s:%s:%s:%s:%v:%v\n", fieldPath, jsTag, typeName, kind, isPtr, omit)
+	}
+}
 `)
 
 	return sb.String()
 }
 
+// codecType represents a type that needs FromJS/ToJS codegen
+type codecType struct {
+	name   string
+	fields []codecField
+}
+
+// codecField represents a field in a codec type
+type codecField struct {
+	path     string // e.g., "RAW.PRICE" for nested
+	jsName   string // from js tag or field name
+	typeName string // Go type string
+	kind     string // "string", "int", "struct", "slice_struct", etc.
+	isPtr    bool
+	omit     bool // omitempty
+}
+
 // parseReflectOutput parses the output from reflect.go into component structs
-func parseReflectOutput(output string) ([]*component, []staticRoute, error) {
+func parseReflectOutput(output string) ([]*component, []staticRoute, []*codecType, error) {
 	var components []*component
 	var routes []staticRoute
+	var codecTypes []*codecType
 	var current *component
+	var currentCodec *codecType
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -155,6 +267,29 @@ func parseReflectOutput(output string) ([]*component, []staticRoute, error) {
 					current.style = string(decoded)
 				}
 			}
+
+		case "CODEC":
+			currentCodec = &codecType{name: value}
+			codecTypes = append(codecTypes, currentCodec)
+
+		case "CODEC_FIELD":
+			if currentCodec != nil {
+				// Format: path:jsName:typeName:kind:isPtr:omit
+				fieldParts := strings.Split(value, ":")
+				if len(fieldParts) >= 6 {
+					currentCodec.fields = append(currentCodec.fields, codecField{
+						path:     fieldParts[0],
+						jsName:   fieldParts[1],
+						typeName: fieldParts[2],
+						kind:     fieldParts[3],
+						isPtr:    fieldParts[4] == "true",
+						omit:     fieldParts[5] == "true",
+					})
+				}
+			}
+
+		case "CODEC_END":
+			currentCodec = nil
 
 		case "FIELD":
 			if current != nil {
@@ -197,7 +332,7 @@ func parseReflectOutput(output string) ([]*component, []staticRoute, error) {
 		}
 	}
 
-	return components, routes, nil
+	return components, routes, codecTypes, nil
 }
 
 // staticRoute represents a route for static HTML generation

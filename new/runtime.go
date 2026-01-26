@@ -67,20 +67,6 @@ func (c *Cleanup) Release() {
 	c.funcs = nil
 }
 
-// On adds an event listener to an element and returns the js.Func for cleanup.
-// The returned js.Func should be released when the component unmounts.
-func On(el js.Value, event string, handler func()) js.Func {
-	if !ok(el) {
-		return js.Func{}
-	}
-	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-		handler()
-		return nil
-	})
-	el.Call("addEventListener", event, fn)
-	return fn
-}
-
 // Bindable is implemented by types that can be bound to DOM elements.
 type Bindable[T any] interface {
 	Get() T
@@ -295,7 +281,16 @@ type Evt struct {
 // Pass a Cleanup to collect js.Func references for later release.
 func BindEvents(c *Cleanup, events []Evt) {
 	for _, e := range events {
-		c.Add(On(GetEl(e.ID), e.Event, e.Fn))
+		el := GetEl(e.ID)
+		if !ok(el) {
+			continue
+		}
+		fn := js.FuncOf(func(this js.Value, args []js.Value) any {
+			e.Fn()
+			return nil
+		})
+		el.Call("addEventListener", e.Event, fn)
+		c.Add(fn)
 	}
 }
 

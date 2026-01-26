@@ -86,6 +86,28 @@ func (f *Fetch) FetchPost() {
 	}()
 }
 
+func (f *Fetch) CreatePost() {
+	f.Status.Set("creating...")
+	f.RawData.Set("")
+
+	go func() {
+		// Send a new post via POST request with JSON body
+		newPost := Post{
+			UserID: 1,
+			Title:  "Hello from Go WASM",
+			Body:   "This post was created using preveltekit.Post[T]",
+		}
+
+		created, err := preveltekit.Post[Post]("https://jsonplaceholder.typicode.com/posts", newPost)
+		if err != nil {
+			f.Status.Set("error: " + err.Error())
+			return
+		}
+		f.RawData.Set("Created Post!\nID: " + itoa(created.ID) + "\nTitle: " + created.Title + "\nBody: " + created.Body)
+		f.Status.Set("done")
+	}()
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -110,6 +132,7 @@ func (f *Fetch) Template() string {
 			<button @click="FetchTodo()">Fetch Todo</button>
 			<button @click="FetchUser()">Fetch User</button>
 			<button @click="FetchPost()">Fetch Post</button>
+			<button @click="CreatePost()">Create Post (POST)</button>
 		</div>
 
 		{#if RawData != ""}

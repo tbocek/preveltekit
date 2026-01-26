@@ -110,8 +110,11 @@ replace preveltekit => %s
 	os.Remove(filepath.Join(buildDir, "main.go"))
 	os.Remove(filepath.Join(buildDir, "render.go"))
 
+	// Detect types used in preveltekit.Get[T], Post[T], etc. for codec codegen
+	codecTypes := detectCodecTypes(sourceFiles)
+
 	// Generate reflect.go directly in build/ (same package main as source files)
-	reflectGo := generateReflect(mainCompName, childCompNames)
+	reflectGo := generateReflect(mainCompName, childCompNames, codecTypes)
 	writeFile(filepath.Join(buildDir, "reflect.go"), reflectGo)
 
 	// Run reflect.go to get component metadata
@@ -128,7 +131,7 @@ replace preveltekit => %s
 	os.Remove(filepath.Join(buildDir, "reflect.go"))
 
 	// Parse reflection output
-	components, routes, err := parseReflectOutput(stdout.String())
+	components, routes, codecTypeInfos, err := parseReflectOutput(stdout.String())
 	if err != nil {
 		fatal("parse reflect output: %v", err)
 	}
@@ -180,7 +183,7 @@ replace preveltekit => %s
 	}
 
 	// Generate main.go (WASM) and render.go (SSR)
-	mainGo := generateMain(mainComp, tmpl, bindings, childComponents)
+	mainGo := generateMain(mainComp, tmpl, bindings, childComponents, codecTypeInfos)
 	renderGo := generateRender(mainComp, tmpl, bindings, childComponents)
 
 	writeFile(filepath.Join(buildDir, "main.go"), mainGo)

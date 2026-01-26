@@ -100,7 +100,7 @@ func NewHTMLConstantTracker() *HTMLConstantTracker {
 }
 
 // generateMain generates the main WASM entry point.
-func generateMain(comp *component, tmpl string, bindings templateBindings, childComponents map[string]*component) string {
+func generateMain(comp *component, tmpl string, bindings templateBindings, childComponents map[string]*component, codecTypes []*codecType) string {
 	var sb strings.Builder
 	fieldTypes := buildFieldTypes(comp)
 
@@ -205,7 +205,161 @@ func replaceAll(s, old, new string) string {
 	}
 
 	sb.WriteString("\tselect {}\n}\n")
+
+	// Generate FromJS/ToJS methods for codec types
+	for _, ct := range codecTypes {
+		generateFromJS(&sb, ct)
+		generateToJS(&sb, ct)
+	}
+
 	return sb.String()
+}
+
+// buildJSAccessor builds the JS Get chain for a field path
+// e.g., "RAW.PRICE" with codec having RAW field with jsName "RAW" returns v.Get("RAW").Get("PRICE")
+func buildJSAccessor(varName, path string, ct *codecType) string {
+	parts := strings.Split(path, ".")
+	result := varName
+
+	// Build accessor chain using jsName for each part
+	for i, part := range parts {
+		// Find the jsName for this path segment
+		jsName := part // default to field name
+		searchPath := strings.Join(parts[:i+1], ".")
+		for _, f := range ct.fields {
+			if f.path == searchPath {
+				jsName = f.jsName
+				break
+			}
+		}
+		result = fmt.Sprintf("%s.Get(\"%s\")", result, jsName)
+	}
+	return result
+}
+
+// generateFromJS generates a FromJS method for a codec type
+func generateFromJS(sb *strings.Builder, ct *codecType) {
+	fmt.Fprintf(sb, "\nfunc (t *%s) FromJS(v js.Value) {\n", ct.name)
+	sb.WriteString("\tif v.IsUndefined() || v.IsNull() {\n\t\treturn\n\t}\n")
+
+	for _, f := range ct.fields {
+		if f.omit {
+			continue
+		}
+		// Build JS accessor chain from path (e.g., "RAW.PRICE" -> v.Get("RAW").Get("PRICE"))
+		jsGet := buildJSAccessor("v", f.path, ct)
+
+		switch f.kind {
+		case "string":
+			fmt.Fprintf(sb, "\tt.%s = %s.String()\n", f.path, jsGet)
+		case "int":
+			fmt.Fprintf(sb, "\tt.%s = %s.Int()\n", f.path, jsGet)
+		case "float64":
+			fmt.Fprintf(sb, "\tt.%s = %s.Float()\n", f.path, jsGet)
+		case "bool":
+			fmt.Fprintf(sb, "\tt.%s = %s.Bool()\n", f.path, jsGet)
+		case "struct":
+			if f.isPtr {
+				fmt.Fprintf(sb, "\tif fv := %s; !fv.IsUndefined() && !fv.IsNull() {\n", jsGet)
+				fmt.Fprintf(sb, "\t\tt.%s = &%s{}\n", f.path, f.typeName)
+				fmt.Fprintf(sb, "\t\tt.%s.FromJS(fv)\n", f.path)
+				fmt.Fprintf(sb, "\t}\n")
+			} else {
+				fmt.Fprintf(sb, "\tt.%s.FromJS(%s)\n", f.path, jsGet)
+			}
+		case "slice_string":
+			fmt.Fprintf(sb, "\tif arr := %s; !arr.IsUndefined() && !arr.IsNull() {\n", jsGet)
+			fmt.Fprintf(sb, "\t\tt.%s = make([]string, arr.Length())\n", f.path)
+			fmt.Fprintf(sb, "\t\tfor i := 0; i < arr.Length(); i++ {\n")
+			fmt.Fprintf(sb, "\t\t\tt.%s[i] = arr.Index(i).String()\n", f.path)
+			fmt.Fprintf(sb, "\t\t}\n\t}\n")
+		case "slice_int":
+			fmt.Fprintf(sb, "\tif arr := %s; !arr.IsUndefined() && !arr.IsNull() {\n", jsGet)
+			fmt.Fprintf(sb, "\t\tt.%s = make([]int, arr.Length())\n", f.path)
+			fmt.Fprintf(sb, "\t\tfor i := 0; i < arr.Length(); i++ {\n")
+			fmt.Fprintf(sb, "\t\t\tt.%s[i] = arr.Index(i).Int()\n", f.path)
+			fmt.Fprintf(sb, "\t\t}\n\t}\n")
+		case "slice_struct":
+			fmt.Fprintf(sb, "\tif arr := %s; !arr.IsUndefined() && !arr.IsNull() {\n", jsGet)
+			fmt.Fprintf(sb, "\t\tt.%s = make([]%s, arr.Length())\n", f.path, f.typeName)
+			fmt.Fprintf(sb, "\t\tfor i := 0; i < arr.Length(); i++ {\n")
+			fmt.Fprintf(sb, "\t\t\tt.%s[i].FromJS(arr.Index(i))\n", f.path)
+			fmt.Fprintf(sb, "\t\t}\n\t}\n")
+		}
+	}
+	sb.WriteString("}\n")
+}
+
+// generateToJS generates a ToJS method for a codec type
+// Uses value receiver so both T and *T satisfy JSEncoder interface
+func generateToJS(sb *strings.Builder, ct *codecType) {
+	fmt.Fprintf(sb, "\nfunc (t %s) ToJS() js.Value {\n", ct.name)
+	sb.WriteString("\tobj := js.Global().Get(\"Object\").New()\n")
+
+	// Track nested objects we need to create
+	nestedObjs := make(map[string]bool)
+	for _, f := range ct.fields {
+		parts := strings.Split(f.path, ".")
+		if len(parts) > 1 {
+			// Need nested object for parent path
+			nestedObjs[parts[0]] = true
+		}
+	}
+
+	// Create nested objects
+	for nested := range nestedObjs {
+		// Find the jsName for this nested struct
+		jsName := nested
+		for _, f := range ct.fields {
+			if f.path == nested && f.kind == "struct" {
+				jsName = f.jsName
+				break
+			}
+		}
+		fmt.Fprintf(sb, "\t%sObj := js.Global().Get(\"Object\").New()\n", strings.ToLower(nested))
+		fmt.Fprintf(sb, "\tobj.Set(\"%s\", %sObj)\n", jsName, strings.ToLower(nested))
+	}
+
+	for _, f := range ct.fields {
+		if f.omit {
+			continue
+		}
+		if f.kind == "struct" {
+			// Skip - we created the nested object above
+			continue
+		}
+		fieldRef := "t." + f.path
+
+		// Determine target object
+		parts := strings.Split(f.path, ".")
+		targetObj := "obj"
+		if len(parts) > 1 {
+			targetObj = strings.ToLower(parts[0]) + "Obj"
+		}
+
+		switch f.kind {
+		case "string", "int", "float64", "bool":
+			fmt.Fprintf(sb, "\t%s.Set(\"%s\", %s)\n", targetObj, f.jsName, fieldRef)
+		case "slice_string", "slice_int", "slice_float64":
+			fmt.Fprintf(sb, "\tif %s != nil {\n", fieldRef)
+			fmt.Fprintf(sb, "\t\tarr := js.Global().Get(\"Array\").New(len(%s))\n", fieldRef)
+			fmt.Fprintf(sb, "\t\tfor i, v := range %s {\n", fieldRef)
+			fmt.Fprintf(sb, "\t\t\tarr.SetIndex(i, v)\n")
+			fmt.Fprintf(sb, "\t\t}\n")
+			fmt.Fprintf(sb, "\t\t%s.Set(\"%s\", arr)\n", targetObj, f.jsName)
+			fmt.Fprintf(sb, "\t}\n")
+		case "slice_struct":
+			fmt.Fprintf(sb, "\tif %s != nil {\n", fieldRef)
+			fmt.Fprintf(sb, "\t\tarr := js.Global().Get(\"Array\").New(len(%s))\n", fieldRef)
+			fmt.Fprintf(sb, "\t\tfor i, v := range %s {\n", fieldRef)
+			fmt.Fprintf(sb, "\t\t\tarr.SetIndex(i, v.ToJS())\n")
+			fmt.Fprintf(sb, "\t\t}\n")
+			fmt.Fprintf(sb, "\t\t%s.Set(\"%s\", arr)\n", targetObj, f.jsName)
+			fmt.Fprintf(sb, "\t}\n")
+		}
+	}
+
+	sb.WriteString("\treturn obj\n}\n")
 }
 
 // generateConstants generates all CSS and HTML constants needed for the component tree.
@@ -443,29 +597,41 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 	}
 
 	// Event bindings - collect simple events for batch, handle complex ones individually
-	var simpleEvents []eventBinding
-	var complexEvents []eventBinding
+	// Separate events that need special handling (modifiers) from batchable ones
+	var batchableEvents []eventBinding
+	var modifierEvents []eventBinding
 	for _, evt := range bindings.events {
-		if len(evt.modifiers) == 0 && evt.args == "" {
-			simpleEvents = append(simpleEvents, evt)
+		hasModifiers := false
+		for _, mod := range evt.modifiers {
+			if mod == "preventDefault" || mod == "stopPropagation" || mod == "once" {
+				hasModifiers = true
+				break
+			}
+		}
+		if hasModifiers {
+			modifierEvents = append(modifierEvents, evt)
 		} else {
-			complexEvents = append(complexEvents, evt)
+			batchableEvents = append(batchableEvents, evt)
 		}
 	}
 
-	// Generate batch call for simple events
-	if len(simpleEvents) > 0 {
+	// Generate batch call for all events without modifiers
+	if len(batchableEvents) > 0 {
 		fmt.Fprintf(sb, "%spreveltekit.BindEvents(cleanup, []preveltekit.Evt{\n", indent)
-		for _, evt := range simpleEvents {
+		for _, evt := range batchableEvents {
 			fullID := ctx.prefixID(evt.elementID)
-			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",
-				indent, fullID, evt.event, varName, evt.methodName)
+			callArgs := ""
+			if evt.args != "" {
+				callArgs = transformEventArgs(evt.args, ctx.Scope)
+			}
+			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s(%s) }},\n",
+				indent, fullID, evt.event, varName, evt.methodName, callArgs)
 		}
 		fmt.Fprintf(sb, "%s})\n", indent)
 	}
 
-	// Handle complex events individually
-	for _, evt := range complexEvents {
+	// Handle events with modifiers individually (need special JS setup)
+	for _, evt := range modifierEvents {
 		fullID := ctx.prefixID(evt.elementID)
 		callArgs := transformEventArgs(evt.args, ctx.Scope)
 
@@ -482,19 +648,13 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 			}
 		}
 
-		if modifierCode != "" || hasOnce {
-			onceOpt := ""
-			if hasOnce {
-				onceOpt = ", map[string]interface{}{\"once\": true}"
-			}
-			fmt.Fprintf(sb, "%sdocument.Call(\"getElementById\", \"%s\").Call(\"addEventListener\", \"%s\",\n", indent, fullID, evt.event)
-			fmt.Fprintf(sb, "%s\tjs.FuncOf(func(this js.Value, args []js.Value) any {\n%s%s\t\t%s.%s(%s)\n%s\t\treturn nil\n%s\t})%s)\n\n",
-				indent, modifierCode, indent, varName, evt.methodName, callArgs, indent, indent, onceOpt)
-		} else {
-			// Has args but no modifiers - generate individual call
-			fmt.Fprintf(sb, "%spreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
-				indent, fullID, evt.event, varName, evt.methodName, callArgs)
+		onceOpt := ""
+		if hasOnce {
+			onceOpt = ", map[string]interface{}{\"once\": true}"
 		}
+		fmt.Fprintf(sb, "%sdocument.Call(\"getElementById\", \"%s\").Call(\"addEventListener\", \"%s\",\n", indent, fullID, evt.event)
+		fmt.Fprintf(sb, "%s\tjs.FuncOf(func(this js.Value, args []js.Value) any {\n%s%s\t\t%s.%s(%s)\n%s\t\treturn nil\n%s\t})%s)\n\n",
+			indent, modifierCode, indent, varName, evt.methodName, callArgs, indent, indent, onceOpt)
 	}
 
 	// If blocks
@@ -773,36 +933,96 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			fmt.Fprintf(sb, "%s\t} else {\n%s\t\tbranchIdx = -1\n%s\t}\n", indent, indent, indent)
 		}
 
-		// Replace component placeholders
-		seen := make(map[string]bool)
-		for _, compID := range compIDs {
-			if seen[compID] {
-				continue
+		// Build map of which components/nested are in which branches
+		// so we only replace placeholders for components in the active branch
+		branchComponents := make(map[int][]string) // branchIdx -> component IDs
+		branchNested := make(map[int][]string)     // branchIdx -> nested component IDs
+
+		for i, branch := range ifb.branches {
+			branchCompIDs := findCompPlaceholders(branch.html)
+			branchComponents[i] = branchCompIDs
+
+			// Find nested components for this branch
+			for _, compID := range branchCompIDs {
+				for _, compBinding := range compsInBlock {
+					if compBinding.elementID == compID {
+						childDef := ctx.AllComponents[compBinding.name]
+						if childDef != nil {
+							childTmpl := strings.ReplaceAll(childDef.template, "<slot/>", compBinding.children)
+							_, childBindings := parseTemplate(childTmpl)
+							for _, nestedComp := range childBindings.components {
+								nestedID := compBinding.elementID + "_" + nestedComp.elementID
+								branchNested[i] = append(branchNested[i], nestedID)
+							}
+						}
+					}
+				}
 			}
-			seen[compID] = true
-			prefixedCompID := ctx.prefixID(compID)
-			shortCompMarker := toShortMarker(compID)
-			fmt.Fprintf(sb, "%s\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortCompMarker, prefixedCompID)
 		}
 
-		// Replace nested component placeholders
-		for _, compBinding := range compsInBlock {
-			childDef := ctx.AllComponents[compBinding.name]
-			if childDef == nil {
-				continue
+		// Handle else branch (-1)
+		if ifb.elseHTML != "" {
+			elseCompIDs := findCompPlaceholders(ifb.elseHTML)
+			branchComponents[-1] = elseCompIDs
+			for _, compID := range elseCompIDs {
+				for _, compBinding := range compsInBlock {
+					if compBinding.elementID == compID {
+						childDef := ctx.AllComponents[compBinding.name]
+						if childDef != nil {
+							childTmpl := strings.ReplaceAll(childDef.template, "<slot/>", compBinding.children)
+							_, childBindings := parseTemplate(childTmpl)
+							for _, nestedComp := range childBindings.components {
+								nestedID := compBinding.elementID + "_" + nestedComp.elementID
+								branchNested[-1] = append(branchNested[-1], nestedID)
+							}
+						}
+					}
+				}
 			}
-			childTmpl := strings.ReplaceAll(childDef.template, "<slot/>", compBinding.children)
-			_, childBindings := parseTemplate(childTmpl)
-			for _, nestedComp := range childBindings.components {
-				nestedID := compBinding.elementID + "_" + nestedComp.elementID
-				if seen[nestedID] {
+		}
+
+		// Generate conditional replacement code - only replace what's needed per branch
+		// Collect all unique branch indices
+		allBranches := make([]int, 0, len(ifb.branches)+1)
+		for i := range ifb.branches {
+			allBranches = append(allBranches, i)
+		}
+		if ifb.elseHTML != "" {
+			allBranches = append(allBranches, -1)
+		}
+
+		// Generate switch on branchIdx to replace only relevant components
+		hasAnyComponents := len(compIDs) > 0
+		if hasAnyComponents {
+			fmt.Fprintf(sb, "%s\tswitch branchIdx {\n", indent)
+			for _, bi := range allBranches {
+				comps := branchComponents[bi]
+				nested := branchNested[bi]
+				if len(comps) == 0 && len(nested) == 0 {
 					continue
 				}
-				seen[nestedID] = true
-				prefixedNestedID := ctx.prefixID(nestedID)
-				shortNestedMarker := toShortMarker(nestedID)
-				fmt.Fprintf(sb, "%s\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortNestedMarker, prefixedNestedID)
+				fmt.Fprintf(sb, "%s\tcase %d:\n", indent, bi)
+				seen := make(map[string]bool)
+				for _, compID := range comps {
+					if seen[compID] {
+						continue
+					}
+					seen[compID] = true
+					prefixedCompID := ctx.prefixID(compID)
+					shortCompMarker := toShortMarker(compID)
+					fmt.Fprintf(sb, "%s\t\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortCompMarker, prefixedCompID)
+				}
+				for _, nestedID := range nested {
+					if seen[nestedID] {
+						continue
+					}
+					seen[nestedID] = true
+					prefixedNestedID := ctx.prefixID(nestedID)
+					shortNestedMarker := toShortMarker(nestedID)
+					fmt.Fprintf(sb, "%s\t\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortNestedMarker, prefixedNestedID)
+				}
 			}
+			fmt.Fprintf(sb, "%s\t}\n", indent)
 		}
 
 		// Call OnUnmount on components from previous branch before switching
@@ -1257,42 +1477,51 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 	}
 
 	// Internal events - collect simple ones for batch
-	var simpleChildEvents []eventBinding
-	var complexChildEvents []eventBinding
+	// Collect all batchable child events (no modifiers)
+	var batchableChildEvents []eventBinding
 	for _, evt := range childBindings.events {
-		if len(evt.modifiers) == 0 && evt.args == "" {
-			simpleChildEvents = append(simpleChildEvents, evt)
-		} else {
-			complexChildEvents = append(complexChildEvents, evt)
+		hasModifiers := false
+		for _, mod := range evt.modifiers {
+			if mod == "preventDefault" || mod == "stopPropagation" || mod == "once" {
+				hasModifiers = true
+				break
+			}
+		}
+		if !hasModifiers {
+			batchableChildEvents = append(batchableChildEvents, evt)
 		}
 	}
 
-	// Generate batch call for simple child events
-	if len(simpleChildEvents) > 0 {
+	// Also collect parent events on component root for batching
+	type parentEvent struct {
+		eventName string
+		evt       componentEvent
+	}
+	var parentEvents []parentEvent
+	for eventName, evt := range compBinding.events {
+		parentEvents = append(parentEvents, parentEvent{eventName, evt})
+	}
+
+	// Generate single batch call for all child + parent events
+	totalEvents := len(batchableChildEvents) + len(parentEvents)
+	if totalEvents > 0 {
 		fmt.Fprintf(sb, "%spreveltekit.BindEvents(cleanup, []preveltekit.Evt{\n", innerIndent)
-		for _, evt := range simpleChildEvents {
+		for _, evt := range batchableChildEvents {
 			fullID := compID + "_" + evt.elementID
-			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",
-				innerIndent, fullID, evt.event, compID, evt.methodName)
+			callArgs := ""
+			if evt.args != "" {
+				callArgs = transformEventArgs(evt.args, childScope)
+			}
+			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s(%s) }},\n",
+				innerIndent, fullID, evt.event, compID, evt.methodName, callArgs)
+		}
+		for _, pe := range parentEvents {
+			parentScope := ctx.Parent.Scope
+			callArgs := transformEventArgs(pe.evt.args, parentScope)
+			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s(%s) }},\n",
+				innerIndent, compID, pe.eventName, parentScope.VarName, pe.evt.method, callArgs)
 		}
 		fmt.Fprintf(sb, "%s})\n", innerIndent)
-	}
-
-	// Handle complex child events individually
-	for _, evt := range complexChildEvents {
-		fullID := compID + "_" + evt.elementID
-		callArgs := transformEventArgs(evt.args, childScope)
-		fmt.Fprintf(sb, "%spreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
-			innerIndent, fullID, evt.event, compID, evt.methodName, callArgs)
-	}
-
-	// Parent events on component root - these call the PARENT's methods
-	for eventName, evt := range compBinding.events {
-		// Use parent's scope for event args and method calls
-		parentScope := ctx.Parent.Scope
-		callArgs := transformEventArgs(evt.args, parentScope)
-		fmt.Fprintf(sb, "%spreveltekit.On(%s_el, \"%s\", func() { %s.%s(%s) })\n",
-			innerIndent, compID, eventName, parentScope.VarName, evt.method, callArgs)
 	}
 
 	// If blocks
