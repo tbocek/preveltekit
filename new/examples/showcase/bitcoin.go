@@ -130,18 +130,14 @@ func (b *Bitcoin) Template() string {
 
 func (b *Bitcoin) Style() string {
 	return `
-.demo { max-width: 500px; }
-.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
-.bitcoin-card { background: #fff; padding: 2rem; border-radius: 8px; border: 1px solid #ddd; text-align: center; }
-.price-info { display: flex; justify-content: space-between; margin-bottom: 1rem; color: #666; }
-.symbol { font-weight: 600; color: #f7931a; }
-.update-time { font-size: 0.875rem; }
-.price { font-size: 2.5rem; font-weight: bold; margin: 1rem 0; color: #1a1a2e; }
-.disclaimer { display: block; color: #888; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e9ecef; font-size: 0.8rem; }
-.loading { color: #666; font-size: 1.1rem; }
-.error { color: #e53e3e; margin-bottom: 1rem; }
-.demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
-.demo button:hover { background: #e5e5e5; }
-.hint { text-align: center; color: #888; font-size: 0.85rem; margin-top: 1rem; font-style: italic; }
+.demo{max-width:500px}
+.bitcoin-card{background:#fff;padding:2rem;border-radius:8px;border:1px solid #ddd;text-align:center}
+.price-info{display:flex;justify-content:space-between;margin-bottom:1rem;color:#666}
+.symbol{font-weight:600;color:#f7931a}
+.update-time{font-size:.875rem}
+.price{font-size:2.5rem;font-weight:700;margin:1rem 0;color:#1a1a2e}
+.disclaimer{display:block;color:#888;margin-top:1rem;padding-top:1rem;border-top:1px solid #e9ecef;font-size:.8rem}
+.loading{color:#666;font-size:1.1rem}
+.error{color:#e53e3e;margin-bottom:1rem}
 `
 }

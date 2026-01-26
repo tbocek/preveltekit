@@ -87,17 +87,9 @@ func (s *Storage) Template() string {
 
 func (s *Storage) Style() string {
 	return `
-.demo { max-width: 600px; }
-.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
-.demo section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-.demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
-.demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
-.demo button:hover { background: #e5e5e5; }
-.demo button.danger { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
-.demo button.danger:hover { background: #ffcdd2; }
-.demo textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; }
-.demo .status { padding: 10px; background: #e8f5e9; border-radius: 4px; color: #2e7d32; }
-.demo .hint { font-size: 0.9em; color: #666; font-style: italic; }
-.buttons { display: flex; gap: 10px; margin: 10px 0; }
+.demo textarea{height:100px}
+.demo button.danger{background:#ffebee;border-color:#ef9a9a;color:#c62828}
+.demo button.danger:hover{background:#ffcdd2}
+.demo .status{padding:10px;background:#e8f5e9;border-radius:4px;color:#2e7d32}
 `
 }

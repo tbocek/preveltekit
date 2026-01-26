@@ -116,21 +116,14 @@ func (b *Basics) Template() string {
 
 func (b *Basics) Style() string {
 	return `
-.demo { max-width: 600px; }
-.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
-.demo section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-.demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
-.demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
-.demo button:hover { background: #e5e5e5; }
-.demo input[type="text"] { padding: 8px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; }
-.demo label { display: block; margin: 8px 0; }
-.grade { padding: 10px; border-radius: 4px; font-weight: bold; }
-.grade.a { background: #d4edda; color: #155724; }
-.grade.b { background: #cce5ff; color: #004085; }
-.grade.c { background: #fff3cd; color: #856404; }
-.grade.d { background: #ffe5d0; color: #854027; }
-.grade.f { background: #f8d7da; color: #721c24; }
-.dark { background: #333; color: #fff; padding: 10px; border-radius: 4px; margin-top: 10px; }
-.message { padding: 10px; background: #e7f3ff; border-radius: 4px; }
+.demo label{display:block;margin:8px 0}
+.grade{padding:10px;border-radius:4px;font-weight:700}
+.grade.a{background:#d4edda;color:#155724}
+.grade.b{background:#cce5ff;color:#004085}
+.grade.c{background:#fff3cd;color:#856404}
+.grade.d{background:#ffe5d0;color:#854027}
+.grade.f{background:#f8d7da;color:#721c24}
+.dark{background:#333;color:#fff;padding:10px;border-radius:4px;margin-top:10px}
+.message{padding:10px;background:#e7f3ff;border-radius:4px}
 `
 }

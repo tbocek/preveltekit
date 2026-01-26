@@ -168,36 +168,26 @@ func (r *Routing) Template() string {
 
 func (r *Routing) Style() string {
 	return `
-.demo { max-width: 700px; }
-.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
-.demo section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-.demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
-.demo button { padding: 8px 16px; margin: 4px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; }
-.demo button:hover { background: #e5e5e5; }
-.demo button.disabled { opacity: 0.5; cursor: not-allowed; }
-
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #ddd; padding-bottom: 0; }
-.tabs button { border: none; border-radius: 4px 4px 0 0; background: #f0f0f0; padding: 10px 20px; margin: 0; }
-.tabs button:hover { background: #e0e0e0; }
-.tabs button.active { background: #007bff; color: white; }
-
-.tab-content { min-height: 100px; }
-.tab-panel { padding: 20px; background: #f9f9f9; border-radius: 0 0 4px 4px; }
-.tab-panel h3 { margin-top: 0; color: #333; }
-
-.stepper { display: flex; align-items: center; justify-content: center; margin: 20px 0; }
-.step { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.step button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ccc; background: white; font-weight: bold; cursor: pointer; }
-.step.active button { border-color: #007bff; background: #007bff; color: white; }
-.step.completed button { border-color: #28a745; background: #28a745; color: white; }
-.step span { font-size: 12px; color: #666; }
-.step-line { width: 60px; height: 2px; background: #ccc; margin: 0 8px; margin-bottom: 24px; }
-.step-line.completed { background: #28a745; }
-
-.step-content { min-height: 80px; }
-.step-panel { padding: 20px; background: #f0f7ff; border-radius: 4px; text-align: center; }
-.step-panel h3 { margin-top: 0; color: #004085; }
-
-.step-buttons { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
+.demo{max-width:700px}
+.demo button.disabled{opacity:.5;cursor:not-allowed}
+.tabs{display:flex;gap:4px;border-bottom:2px solid #ddd}
+.tabs button{border:none;border-radius:4px 4px 0 0;background:#f0f0f0;padding:10px 20px;margin:0}
+.tabs button:hover{background:#e0e0e0}
+.tabs button.active{background:#007bff;color:#fff}
+.tab-content{min-height:100px}
+.tab-panel{padding:20px;background:#f9f9f9;border-radius:0 0 4px 4px}
+.tab-panel h3{margin-top:0;color:#333}
+.stepper{display:flex;align-items:center;justify-content:center;margin:20px 0}
+.step{display:flex;flex-direction:column;align-items:center;gap:8px}
+.step button{width:40px;height:40px;border-radius:50%;border:2px solid #ccc;background:#fff;font-weight:700;cursor:pointer}
+.step.active button{border-color:#007bff;background:#007bff;color:#fff}
+.step.completed button{border-color:#28a745;background:#28a745;color:#fff}
+.step span{font-size:12px;color:#666}
+.step-line{width:60px;height:2px;background:#ccc;margin:0 8px 24px}
+.step-line.completed{background:#28a745}
+.step-content{min-height:80px}
+.step-panel{padding:20px;background:#f0f7ff;border-radius:4px;text-align:center}
+.step-panel h3{margin-top:0;color:#004085}
+.step-buttons{display:flex;justify-content:space-between;align-items:center;margin-top:15px;padding-top:15px;border-top:1px solid #eee}
 `
 }

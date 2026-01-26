@@ -97,14 +97,8 @@ func (c *Components) Template() string {
 
 func (c *Components) Style() string {
 	return `
-.demo { max-width: 700px; }
-.demo h1 { color: #1a1a2e; margin-bottom: 20px; }
-.demo section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-.demo h2 { margin-top: 0; color: #666; font-size: 1.1em; }
-.demo input[type="text"] { padding: 8px; width: 250px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
-.alert-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
-.alert-buttons button { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #f5f5f5; }
-.alert-buttons button:hover { background: #e5e5e5; }
+.demo{max-width:700px}
+.alert-buttons{display:flex;gap:8px;margin-bottom:10px}
 `
 }
 
@@ -118,9 +112,7 @@ func (b *Badge) Template() string {
 }
 
 func (b *Badge) Style() string {
-	return `
-.badge { display: inline-block; padding: 4px 8px; margin: 2px; background: #007bff; color: white; border-radius: 12px; font-size: 12px; font-weight: 500; }
-`
+	return `.badge{display:inline-block;padding:4px 8px;margin:2px;background:#007bff;color:#fff;border-radius:12px;font-size:12px;font-weight:500}`
 }
 
 // Card - component with title prop and slot for children
@@ -136,11 +128,7 @@ func (c *Card) Template() string {
 }
 
 func (c *Card) Style() string {
-	return `
-.card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin: 10px 0; }
-.card-header { padding: 12px 16px; background: #f8f9fa; border-bottom: 1px solid #ddd; font-weight: 600; }
-.card-body { padding: 16px; }
-`
+	return `.card{border:1px solid #ddd;border-radius:8px;overflow:hidden;margin:10px 0}.card-header{padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #ddd;font-weight:600}.card-body{padding:16px}`
 }
 
 // Button - component that emits click events
@@ -153,10 +141,7 @@ func (b *Button) Template() string {
 }
 
 func (b *Button) Style() string {
-	return `
-.btn { padding: 10px 20px; margin: 4px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn:hover { background: #0056b3; }
-`
+	return `.btn{padding:10px 20px;margin:4px;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer}.btn:hover{background:#0056b3}`
 }
 
 // Alert - component with type-based styling
@@ -173,13 +158,5 @@ func (a *Alert) Template() string {
 }
 
 func (a *Alert) Style() string {
-	return `
-.alert { padding: 12px 16px; border-radius: 4px; margin: 10px 0; display: flex; align-items: center; gap: 10px; }
-.alert-title { text-transform: uppercase; font-size: 12px; }
-.alert-message { flex: 1; }
-.alert[data-type="info"] { background: #e7f3ff; border: 1px solid #b3d7ff; color: #004085; }
-.alert[data-type="success"] { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-.alert[data-type="warning"] { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
-.alert[data-type="error"] { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-`
+	return `.alert{padding:12px 16px;border-radius:4px;margin:10px 0;display:flex;align-items:center;gap:10px}.alert-title{text-transform:uppercase;font-size:12px}.alert-message{flex:1}.alert[data-type=info]{background:#e7f3ff;border:1px solid #b3d7ff;color:#004085}.alert[data-type=success]{background:#d4edda;border:1px solid #c3e6cb;color:#155724}.alert[data-type=warning]{background:#fff3cd;border:1px solid #ffeeba;color:#856404}.alert[data-type=error]{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24}`
 }
