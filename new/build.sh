@@ -177,7 +177,9 @@ fi
     tinygo build -o ../dist/app.wasm $TINYGO_FLAGS .
 )
 
-wasm-strip "$PROJECT_DIR/dist/app.wasm"
+if [ "$RELEASE_MODE" = true ]; then
+    wasm-strip "$PROJECT_DIR/dist/app.wasm"
+fi
 
 # -----------------------------------------------------------------------------
 # Optimize JavaScript Runtime

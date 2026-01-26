@@ -3,7 +3,6 @@
 package preveltekit
 
 import (
-	"strings"
 	"syscall/js"
 )
 
@@ -125,9 +124,9 @@ func (r *Router) SetupLinks() {
 		hrefStr := href.String()
 
 		// Skip external links
-		if strings.HasPrefix(hrefStr, "http://") || strings.HasPrefix(hrefStr, "https://") ||
-			strings.HasPrefix(hrefStr, "//") || strings.HasPrefix(hrefStr, "mailto:") ||
-			strings.HasPrefix(hrefStr, "tel:") {
+		if hasPrefix(hrefStr, "http://") || hasPrefix(hrefStr, "https://") ||
+			hasPrefix(hrefStr, "//") || hasPrefix(hrefStr, "mailto:") ||
+			hasPrefix(hrefStr, "tel:") {
 			return nil
 		}
 
@@ -142,7 +141,7 @@ func (r *Router) SetupLinks() {
 		}
 
 		// Skip hash-only links
-		if hrefStr == "#" || (strings.HasPrefix(hrefStr, "#") && len(hrefStr) > 1) {
+		if hrefStr == "#" || (hasPrefix(hrefStr, "#") && len(hrefStr) > 1) {
 			return nil
 		}
 
@@ -186,7 +185,7 @@ func (r *Router) handleRoute(path string) {
 	if path == "" {
 		path = "/"
 	}
-	if path != "/" && strings.HasSuffix(path, "/") {
+	if path != "/" && hasSuffix(path, "/") {
 		path = path[:len(path)-1]
 	}
 
@@ -233,13 +232,13 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 	}
 
 	// Handle wildcard prefix patterns like */suffix
-	if strings.HasPrefix(pattern, "*/") {
+	if hasPrefix(pattern, "*/") {
 		suffix := pattern[2:]
 		if path == "/"+suffix {
 			return params, 2, true
 		}
 		// Match /{segment}/{suffix}
-		pathSegs := strings.Split(strings.Trim(path, "/"), "/")
+		pathSegs := splitPath(path)
 		if len(pathSegs) >= 2 && pathSegs[len(pathSegs)-1] == suffix {
 			return params, 2, true
 		}
@@ -247,8 +246,8 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 	}
 
 	// Standard segment-based matching
-	patternSegs := strings.Split(strings.Trim(pattern, "/"), "/")
-	pathSegs := strings.Split(strings.Trim(path, "/"), "/")
+	patternSegs := splitPath(pattern)
+	pathSegs := splitPath(path)
 
 	if len(patternSegs) != len(pathSegs) {
 		return nil, 0, false
@@ -256,7 +255,7 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 
 	specificity := 0
 	for i, seg := range patternSegs {
-		if strings.HasPrefix(seg, ":") {
+		if len(seg) > 0 && seg[0] == ':' {
 			// Parameter segment
 			paramName := seg[1:]
 			params[paramName] = pathSegs[i]
@@ -274,7 +273,7 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 
 // resolvePath resolves a relative or absolute href to an absolute path
 func resolvePath(href string) string {
-	if strings.HasPrefix(href, "/") {
+	if len(href) > 0 && href[0] == '/' {
 		return href
 	}
 
@@ -284,9 +283,9 @@ func resolvePath(href string) string {
 
 	// Get current path
 	current := js.Global().Get("location").Get("pathname").String()
-	if !strings.HasSuffix(current, "/") {
+	if !hasSuffix(current, "/") {
 		// Remove last segment for relative resolution
-		if idx := strings.LastIndex(current, "/"); idx >= 0 {
+		if idx := lastIndexByte(current, '/'); idx >= 0 {
 			current = current[:idx+1]
 		}
 	}
@@ -294,8 +293,8 @@ func resolvePath(href string) string {
 	path := current + href
 
 	// Clean up ../ segments
-	if strings.Contains(path, "../") {
-		segments := strings.Split(path, "/")
+	if containsDotDot(path) {
+		segments := splitPathAll(path)
 		var clean []string
 		for _, seg := range segments {
 			if seg == ".." {
@@ -306,13 +305,138 @@ func resolvePath(href string) string {
 				clean = append(clean, seg)
 			}
 		}
-		path = "/" + strings.Join(clean, "/")
+		path = "/" + joinPath(clean)
 	}
 
 	// Clean double slashes
-	for strings.Contains(path, "//") {
-		path = strings.ReplaceAll(path, "//", "/")
-	}
+	path = cleanDoubleSlash(path)
 
 	return path
+}
+
+// --- Inline string helpers (avoid strings package) ---
+
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func hasSuffix(s, suffix string) bool {
+	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
+}
+
+func trimSlashes(s string) string {
+	start, end := 0, len(s)
+	for start < end && s[start] == '/' {
+		start++
+	}
+	for end > start && s[end-1] == '/' {
+		end--
+	}
+	return s[start:end]
+}
+
+func splitPath(s string) []string {
+	s = trimSlashes(s)
+	if s == "" {
+		return nil
+	}
+	n := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			n++
+		}
+	}
+	parts := make([]string, 0, n)
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == '/' {
+			if start < i {
+				parts = append(parts, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return parts
+}
+
+func splitPathAll(s string) []string {
+	if s == "" {
+		return nil
+	}
+	n := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			n++
+		}
+	}
+	parts := make([]string, 0, n)
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == '/' {
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	return parts
+}
+
+func joinPath(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	n := len(parts) - 1
+	for _, p := range parts {
+		n += len(p)
+	}
+	b := make([]byte, 0, n)
+	for i, p := range parts {
+		b = append(b, p...)
+		if i < len(parts)-1 {
+			b = append(b, '/')
+		}
+	}
+	return string(b)
+}
+
+func lastIndexByte(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func containsDotDot(s string) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == '.' && s[i+1] == '.' {
+			if i+2 >= len(s) || s[i+2] == '/' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cleanDoubleSlash(s string) string {
+	hasDouble := false
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == '/' && s[i+1] == '/' {
+			hasDouble = true
+			break
+		}
+	}
+	if !hasDouble {
+		return s
+	}
+	b := make([]byte, 0, len(s))
+	prev := byte(0)
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' && prev == '/' {
+			continue
+		}
+		b = append(b, s[i])
+		prev = s[i]
+	}
+	return string(b)
 }

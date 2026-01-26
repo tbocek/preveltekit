@@ -106,7 +106,7 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 
 	// Check what imports we need
 	needsStrconv := needsStrconvImport(bindings, childComponents, fieldTypes)
-	needsStrings := needsStringsImport(bindings, childComponents)
+	needsReplaceHelpers := needsReplaceHelpers(bindings, childComponents)
 
 	// Write imports
 	sb.WriteString("//go:build js && wasm\n\npackage main\n\nimport (\n")
@@ -115,10 +115,38 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	if needsStrconv {
 		sb.WriteString("\t\"strconv\"\n")
 	}
-	if needsStrings {
-		sb.WriteString("\t\"strings\"\n")
-	}
 	sb.WriteString(")\n\n")
+
+	// Write inline string helpers if needed (avoids importing strings package)
+	if needsReplaceHelpers {
+		sb.WriteString(`func replaceOnce(s, old, new string) string {
+	for i := 0; i <= len(s)-len(old); i++ {
+		if s[i:i+len(old)] == old {
+			return s[:i] + new + s[i+len(old):]
+		}
+	}
+	return s
+}
+
+func replaceAll(s, old, new string) string {
+	if old == "" {
+		return s
+	}
+	var result []byte
+	for i := 0; i < len(s); {
+		if i <= len(s)-len(old) && s[i:i+len(old)] == old {
+			result = append(result, new...)
+			i += len(old)
+		} else {
+			result = append(result, s[i])
+			i++
+		}
+	}
+	return string(result)
+}
+
+`)
+	}
 
 	sb.WriteString("var document = preveltekit.Document\n")
 	sb.WriteString("var initialized = make(map[string]bool)\n")
@@ -588,7 +616,7 @@ func generateAttrBindingsWiring(sb *strings.Builder, attrBindings []attrBinding,
 		fmt.Fprintf(sb, "%sattr%s := document.Call(\"querySelector\", \"[data-attrbind=\\\"%s\\\"]\")\n", indent, fullID, fullID)
 		fmt.Fprintf(sb, "%supdateAttr%s := func() {\n%s\tval := %s\n", indent, fullID, indent, escapeForGoString(ab.template))
 		for _, field := range ab.fields {
-			fmt.Fprintf(sb, "%s\tval = strings.ReplaceAll(val, \"{%s}\", %s)\n", indent, field, toJS(fieldTypes[field], varName+"."+field+".Get()"))
+			fmt.Fprintf(sb, "%s\tval = replaceAll(val, \"{%s}\", %s)\n", indent, field, toJS(fieldTypes[field], varName+"."+field+".Get()"))
 		}
 		fmt.Fprintf(sb, "%s\tattr%s.Call(\"setAttribute\", \"%s\", val)\n%s}\n", indent, fullID, ab.attrName, indent)
 		for _, field := range ab.fields {
@@ -754,7 +782,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 			seen[compID] = true
 			prefixedCompID := ctx.prefixID(compID)
 			shortCompMarker := toShortMarker(compID)
-			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortCompMarker, prefixedCompID)
+			fmt.Fprintf(sb, "%s\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortCompMarker, prefixedCompID)
 		}
 
 		// Replace nested component placeholders
@@ -773,7 +801,7 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 				seen[nestedID] = true
 				prefixedNestedID := ctx.prefixID(nestedID)
 				shortNestedMarker := toShortMarker(nestedID)
-				fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortNestedMarker, prefixedNestedID)
+				fmt.Fprintf(sb, "%s\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortNestedMarker, prefixedNestedID)
 			}
 		}
 
@@ -1200,7 +1228,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 			fmt.Fprintf(sb, "%sattr%s := document.Call(\"querySelector\", \"[data-attrbind=\\\"%s\\\"]\")\n", innerIndent, fullID, fullID)
 			fmt.Fprintf(sb, "%supdateAttr%s := func() {\n", innerIndent, fullID)
 			fmt.Fprintf(sb, "%s\tval := %s\n", innerIndent, escapeForGoString(ab.template))
-			fmt.Fprintf(sb, "%s\tval = strings.ReplaceAll(val, \"{%s}\", %s)\n", innerIndent, field, toJS(fieldType, compID+"."+field+".Get()"))
+			fmt.Fprintf(sb, "%s\tval = replaceAll(val, \"{%s}\", %s)\n", innerIndent, field, toJS(fieldType, compID+"."+field+".Get()"))
 			fmt.Fprintf(sb, "%s\tattr%s.Call(\"setAttribute\", \"%s\", val)\n", innerIndent, fullID, ab.attrName)
 			fmt.Fprintf(sb, "%s}\n", innerIndent)
 			fmt.Fprintf(sb, "%s%s.%s.OnChange(func(_ %s) { updateAttr%s() })\n", innerIndent, compID, field, fieldType, fullID)
@@ -1213,7 +1241,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 				if fieldType == "" {
 					fieldType = "string"
 				}
-				fmt.Fprintf(sb, "%s\tval = strings.ReplaceAll(val, \"{%s}\", %s)\n",
+				fmt.Fprintf(sb, "%s\tval = replaceAll(val, \"{%s}\", %s)\n",
 					innerIndent, field, toJS(fieldType, compID+"."+field+".Get()"))
 			}
 			fmt.Fprintf(sb, "%s\tattr%s.Call(\"setAttribute\", \"%s\", val)\n%s}\n", innerIndent, fullID, ab.attrName, innerIndent)
@@ -1369,7 +1397,7 @@ func generateChildIfBlocks(sb *strings.Builder, ifBlocks []ifBinding, components
 		for _, comp := range compsInBlock {
 			nestedID := compID + "_" + comp.elementID
 			shortCompMarker := toShortMarker(comp.elementID)
-			fmt.Fprintf(sb, "%s\thtml = strings.Replace(html, \"<!--%s-->\", %sHTML, 1)\n", indent, shortCompMarker, nestedID)
+			fmt.Fprintf(sb, "%s\thtml = replaceOnce(html, \"<!--%s-->\", %sHTML)\n", indent, shortCompMarker, nestedID)
 		}
 
 		// Insert HTML (use map for persistence across route changes)
@@ -1560,7 +1588,7 @@ func needsStrconvImport(bindings templateBindings, childComponents map[string]*c
 	return false
 }
 
-func needsStringsImport(bindings templateBindings, childComponents map[string]*component) bool {
+func needsReplaceHelpers(bindings templateBindings, childComponents map[string]*component) bool {
 	if len(bindings.attrBindings) > 0 {
 		return true
 	}
