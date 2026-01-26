@@ -4,6 +4,7 @@ package preveltekit
 
 import (
 	"syscall/js"
+	"time"
 )
 
 // SetInterval creates a JavaScript interval that calls the callback every ms milliseconds.
@@ -71,12 +72,17 @@ func SetTimeout(ms int, callback func()) func() {
 //	cleanup()
 func Debounce(ms int, callback func()) (func(), func()) {
 	var timeoutID js.Value
+	var released bool
+
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		callback()
 		return nil
 	})
 
 	debounced := func() {
+		if released {
+			return // Don't schedule if already cleaned up
+		}
 		if !timeoutID.IsUndefined() && !timeoutID.IsNull() {
 			js.Global().Call("clearTimeout", timeoutID)
 		}
@@ -84,6 +90,10 @@ func Debounce(ms int, callback func()) (func(), func()) {
 	}
 
 	cleanup := func() {
+		if released {
+			return // Already cleaned up, prevent double-release panic
+		}
+		released = true
 		if !timeoutID.IsUndefined() && !timeoutID.IsNull() {
 			js.Global().Call("clearTimeout", timeoutID)
 		}
@@ -103,20 +113,21 @@ func Debounce(ms int, callback func()) (func(), func()) {
 //	    updateScrollPosition()
 //	})
 func Throttle(ms int, callback func()) func() {
-	var lastRun float64
+	var lastRun int64
 	var scheduled bool
+	msInt64 := int64(ms)
 
 	return func() {
-		now := js.Global().Get("Date").Call("now").Float()
-		if now-lastRun >= float64(ms) {
+		now := time.Now().UnixMilli()
+		if now-lastRun >= msInt64 {
 			lastRun = now
 			callback()
 		} else if !scheduled {
 			scheduled = true
-			remaining := int(float64(ms) - (now - lastRun))
+			remaining := int(msInt64 - (now - lastRun))
 			SetTimeout(remaining, func() {
 				scheduled = false
-				lastRun = js.Global().Get("Date").Call("now").Float()
+				lastRun = time.Now().UnixMilli()
 				callback()
 			})
 		}

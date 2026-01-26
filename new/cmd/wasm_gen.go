@@ -132,6 +132,8 @@ func generateMain(comp *component, tmpl string, bindings templateBindings, child
 	sb.WriteString("\nfunc main() {\n\tcomponent := &" + comp.name + "{\n")
 	generateFieldInit(&sb, comp.fields, "\t\t")
 	sb.WriteString("\t}\n")
+	sb.WriteString("\tcleanup := &preveltekit.Cleanup{}\n")
+	sb.WriteString("\t_ = cleanup // used for event listener cleanup\n")
 
 	// OnCreate - called once at initialization
 	if comp.hasOnCreate {
@@ -425,7 +427,7 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 
 	// Generate batch call for simple events
 	if len(simpleEvents) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindEvents([]preveltekit.Evt{\n", indent)
+		fmt.Fprintf(sb, "%spreveltekit.BindEvents(cleanup, []preveltekit.Evt{\n", indent)
 		for _, evt := range simpleEvents {
 			fullID := ctx.prefixID(evt.elementID)
 			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",
@@ -490,7 +492,7 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 
 	// Batch string inputs
 	if len(stringInputs) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindInputs([]preveltekit.Inp{\n", indent)
+		fmt.Fprintf(sb, "%spreveltekit.BindInputs(cleanup, []preveltekit.Inp{\n", indent)
 		for _, bind := range stringInputs {
 			fullID := ctx.prefixID(bind.elementID)
 			varRef := varName + "." + bind.fieldName
@@ -508,7 +510,7 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 
 	// Batch checkboxes
 	if len(checkboxInputs) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes([]preveltekit.Chk{\n", indent)
+		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes(cleanup, []preveltekit.Chk{\n", indent)
 		for _, bind := range checkboxInputs {
 			fullID := ctx.prefixID(bind.elementID)
 			varRef := varName + "." + bind.fieldName
@@ -1149,7 +1151,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 
 	// Batch string inputs
 	if len(compStringInputs) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindInputs([]preveltekit.Inp{\n", innerIndent)
+		fmt.Fprintf(sb, "%spreveltekit.BindInputs(cleanup, []preveltekit.Inp{\n", innerIndent)
 		for _, bind := range compStringInputs {
 			fullID := compID + "_" + bind.elementID
 			varRef := compID + "." + bind.fieldName
@@ -1167,7 +1169,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 
 	// Batch checkboxes
 	if len(compCheckboxInputs) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes([]preveltekit.Chk{\n", innerIndent)
+		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes(cleanup, []preveltekit.Chk{\n", innerIndent)
 		for _, bind := range compCheckboxInputs {
 			fullID := compID + "_" + bind.elementID
 			varRef := compID + "." + bind.fieldName
@@ -1239,7 +1241,7 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 
 	// Generate batch call for simple child events
 	if len(simpleChildEvents) > 0 {
-		fmt.Fprintf(sb, "%spreveltekit.BindEvents([]preveltekit.Evt{\n", innerIndent)
+		fmt.Fprintf(sb, "%spreveltekit.BindEvents(cleanup, []preveltekit.Evt{\n", innerIndent)
 		for _, evt := range simpleChildEvents {
 			fullID := compID + "_" + evt.elementID
 			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",

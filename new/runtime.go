@@ -19,6 +19,9 @@ var textNodeRefs = make(map[string]js.Value)
 // boundMarkers tracks which markers have had OnChange registered
 var boundMarkers = make(map[string]bool)
 
+// nodeFilterShowComment is cached for TreeWalker (NodeFilter.SHOW_COMMENT = 128)
+var nodeFilterShowComment = js.ValueOf(128)
+
 // InjectStyle injects a component's CSS once (deduplicated by name)
 func InjectStyle(name, css string) {
 	if injectedStyles[name] || css == "" {
@@ -40,14 +43,42 @@ func ok(el js.Value) bool {
 	return !el.IsNull() && !el.IsUndefined()
 }
 
-// On adds an event listener to an element
-func On(el js.Value, event string, handler func()) {
-	if ok(el) {
-		el.Call("addEventListener", event, js.FuncOf(func(this js.Value, args []js.Value) any {
-			handler()
-			return nil
-		}))
+// Cleanup holds js.Func references for batch release.
+// Use this to prevent memory leaks when components unmount or re-render.
+type Cleanup struct {
+	funcs []js.Func
+}
+
+// Add registers a js.Func for later cleanup.
+// Safe to call with zero-value js.Func.
+func (c *Cleanup) Add(fn js.Func) {
+	if fn.Value.IsUndefined() {
+		return
 	}
+	c.funcs = append(c.funcs, fn)
+}
+
+// Release frees all registered js.Func references.
+// Safe to call multiple times.
+func (c *Cleanup) Release() {
+	for _, fn := range c.funcs {
+		fn.Release()
+	}
+	c.funcs = nil
+}
+
+// On adds an event listener to an element and returns the js.Func for cleanup.
+// The returned js.Func should be released when the component unmounts.
+func On(el js.Value, event string, handler func()) js.Func {
+	if !ok(el) {
+		return js.Func{}
+	}
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
+		handler()
+		return nil
+	})
+	el.Call("addEventListener", event, fn)
+	return fn
 }
 
 // Bindable is implemented by types that can be bound to DOM elements.
@@ -79,7 +110,7 @@ func toString[T any](v T) string {
 func FindComment(marker string) js.Value {
 	walker := Document.Call("createTreeWalker",
 		Document.Get("body"),
-		js.ValueOf(128), // NodeFilter.SHOW_COMMENT
+		nodeFilterShowComment,
 		js.Null(),
 	)
 	for {
@@ -104,11 +135,15 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	var node js.Value
 	prevSibling := comment.Get("previousSibling")
 	nodeType := 3
+	prop := "nodeValue"
 	if isHTML {
 		nodeType = 1
+		prop = "innerHTML"
 	}
 	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == nodeType {
 		node = prevSibling
+		// Only set value when reusing existing node (new nodes already have the value)
+		node.Set(prop, toString(store.Get()))
 	} else {
 		if isHTML {
 			node = Document.Call("createElement", "span")
@@ -121,11 +156,6 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	// Remove comment marker after hydration (no longer needed)
 	comment.Call("remove")
 	textNodeRefs[marker] = node
-	prop := "nodeValue"
-	if isHTML {
-		prop = "innerHTML"
-	}
-	node.Set(prop, toString(store.Get()))
 	if !boundMarkers[marker] {
 		boundMarkers[marker] = true
 		store.OnChange(func(v T) {
@@ -152,46 +182,55 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-// BindInput binds a text input to a string store (two-way)
-func BindInput(id string, store Settable[string]) {
+// BindInput binds a text input to a string store (two-way).
+// Returns the js.Func for cleanup.
+func BindInput(id string, store Settable[string]) js.Func {
 	el := GetEl(id)
 	if !ok(el) {
-		return
+		return js.Func{}
 	}
-	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		store.Set(this.Get("value").String())
 		return nil
-	}))
+	})
+	el.Call("addEventListener", "input", fn)
 	store.OnChange(func(v string) { el.Set("value", v) })
+	return fn
 }
 
-// BindInputInt binds a text input to an int store (two-way)
-func BindInputInt(id string, store Settable[int]) {
+// BindInputInt binds a text input to an int store (two-way).
+// Returns the js.Func for cleanup.
+func BindInputInt(id string, store Settable[int]) js.Func {
 	el := GetEl(id)
 	if !ok(el) {
-		return
+		return js.Func{}
 	}
-	el.Call("addEventListener", "input", js.FuncOf(func(this js.Value, args []js.Value) any {
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		if v, err := strconv.Atoi(this.Get("value").String()); err == nil {
 			store.Set(v)
 		}
 		return nil
-	}))
+	})
+	el.Call("addEventListener", "input", fn)
 	store.OnChange(func(v int) { el.Set("value", strconv.Itoa(v)) })
+	return fn
 }
 
-// BindCheckbox binds a checkbox to a bool store (two-way)
-func BindCheckbox(id string, store Settable[bool]) {
+// BindCheckbox binds a checkbox to a bool store (two-way).
+// Returns the js.Func for cleanup.
+func BindCheckbox(id string, store Settable[bool]) js.Func {
 	el := GetEl(id)
 	if !ok(el) {
-		return
+		return js.Func{}
 	}
-	el.Call("addEventListener", "change", js.FuncOf(func(this js.Value, args []js.Value) any {
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		store.Set(this.Get("checked").Bool())
 		return nil
-	}))
+	})
+	el.Call("addEventListener", "change", fn)
 	store.OnChange(func(v bool) { el.Set("checked", v) })
 	el.Set("checked", store.Get())
+	return fn
 }
 
 // ToggleClass adds or removes a class based on a condition
@@ -240,10 +279,11 @@ type Evt struct {
 	Fn    func()
 }
 
-// BindEvents binds multiple events in a loop (smaller WASM than separate calls)
-func BindEvents(events []Evt) {
+// BindEvents binds multiple events in a loop (smaller WASM than separate calls).
+// Pass a Cleanup to collect js.Func references for later release.
+func BindEvents(c *Cleanup, events []Evt) {
 	for _, e := range events {
-		On(GetEl(e.ID), e.Event, e.Fn)
+		c.Add(On(GetEl(e.ID), e.Event, e.Fn))
 	}
 }
 
@@ -266,10 +306,11 @@ type Inp struct {
 	Store Settable[string]
 }
 
-// BindInputs binds multiple inputs in a loop
-func BindInputs(bindings []Inp) {
+// BindInputs binds multiple inputs in a loop.
+// Pass a Cleanup to collect js.Func references for later release.
+func BindInputs(c *Cleanup, bindings []Inp) {
 	for _, b := range bindings {
-		BindInput(b.ID, b.Store)
+		c.Add(BindInput(b.ID, b.Store))
 	}
 }
 
@@ -279,9 +320,10 @@ type Chk struct {
 	Store Settable[bool]
 }
 
-// BindCheckboxes binds multiple checkboxes in a loop
-func BindCheckboxes(bindings []Chk) {
+// BindCheckboxes binds multiple checkboxes in a loop.
+// Pass a Cleanup to collect js.Func references for later release.
+func BindCheckboxes(c *Cleanup, bindings []Chk) {
 	for _, b := range bindings {
-		BindCheckbox(b.ID, b.Store)
+		c.Add(BindCheckbox(b.ID, b.Store))
 	}
 }
