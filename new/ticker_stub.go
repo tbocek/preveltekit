@@ -13,8 +13,9 @@ func SetTimeout(ms int, callback func()) func() {
 }
 
 // Debounce stub for non-WASM builds - executes callback immediately.
-func Debounce(ms int, callback func()) func() {
-	return callback
+// Returns the debounced function and a no-op cleanup function.
+func Debounce(ms int, callback func()) (func(), func()) {
+	return callback, func() {}
 }
 
 // Throttle stub for non-WASM builds - executes callback immediately.

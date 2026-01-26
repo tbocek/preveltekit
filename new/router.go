@@ -19,6 +19,7 @@ type Router struct {
 	notFound    func()
 	currentPath *Store[string]
 	beforeNav   func(from, to string) bool // return false to cancel navigation
+	linksSetup  bool                       // tracks if click listener is already registered
 }
 
 // NewRouter creates a new router instance
@@ -79,8 +80,12 @@ func (r *Router) Start() {
 }
 
 // SetupLinks intercepts clicks on all internal anchor elements for SPA navigation
-// This is called automatically by Start(), but can be called again after dynamic content is added
+// This is called automatically by Start(). Safe to call multiple times.
 func (r *Router) SetupLinks() {
+	if r.linksSetup {
+		return
+	}
+	r.linksSetup = true
 
 	js.Global().Get("document").Call("addEventListener", "click", js.FuncOf(func(this js.Value, args []js.Value) any {
 		if len(args) == 0 {

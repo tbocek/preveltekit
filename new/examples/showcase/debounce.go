@@ -10,8 +10,9 @@ type Debounce struct {
 	ThrottleCount *preveltekit.Store[int]
 	Status        *preveltekit.Store[string]
 
-	doSearch      func()
-	throttleClick func()
+	doSearch        func()
+	cleanupDebounce func()
+	throttleClick   func()
 }
 
 func (d *Debounce) OnMount() {
@@ -22,7 +23,7 @@ func (d *Debounce) OnMount() {
 	d.ThrottleCount.Set(0)
 	d.Status.Set("Type to search...")
 
-	d.doSearch = preveltekit.Debounce(300, func() {
+	d.doSearch, d.cleanupDebounce = preveltekit.Debounce(300, func() {
 		query := d.SearchInput.Get()
 		if query == "" {
 			d.SearchResult.Set("")

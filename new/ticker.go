@@ -58,29 +58,39 @@ func SetTimeout(ms int, callback func()) func() {
 
 // Debounce returns a debounced version of the callback that delays execution
 // until ms milliseconds have passed without another call.
+// Returns the debounced function and a cleanup function to release resources.
 //
 // Example:
 //
-//	search := reactive.Debounce(300, func() {
+//	search, cleanup := reactive.Debounce(300, func() {
 //	    // This runs 300ms after the last keystroke
 //	    performSearch(input.Get())
 //	})
 //	input.OnChange(func(_ string) { search() })
-func Debounce(ms int, callback func()) func() {
+//	// When done:
+//	cleanup()
+func Debounce(ms int, callback func()) (func(), func()) {
 	var timeoutID js.Value
-	var fn js.Func
-
-	fn = js.FuncOf(func(this js.Value, args []js.Value) any {
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		callback()
 		return nil
 	})
 
-	return func() {
+	debounced := func() {
 		if !timeoutID.IsUndefined() && !timeoutID.IsNull() {
 			js.Global().Call("clearTimeout", timeoutID)
 		}
 		timeoutID = js.Global().Call("setTimeout", fn, ms)
 	}
+
+	cleanup := func() {
+		if !timeoutID.IsUndefined() && !timeoutID.IsNull() {
+			js.Global().Call("clearTimeout", timeoutID)
+		}
+		fn.Release()
+	}
+
+	return debounced, cleanup
 }
 
 // Throttle returns a throttled version of the callback that executes at most
