@@ -208,8 +208,8 @@ func encodeStruct(rv reflect.Value) js.Value {
 		if jsName == "" {
 			jsName = field.Name
 		}
-		if strings.HasSuffix(jsName, ",omitempty") {
-			jsName = strings.TrimSuffix(jsName, ",omitempty")
+		if name, ok := strings.CutSuffix(jsName, ",omitempty"); ok {
+			jsName = name
 			if fieldVal.IsZero() {
 				continue
 			}
