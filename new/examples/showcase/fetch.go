@@ -14,6 +14,13 @@ type User struct {
 	Name string `js:"name"`
 }
 
+type Post struct {
+	ID     int    `js:"id"`
+	UserID int    `js:"userId"`
+	Title  string `js:"title"`
+	Body   string `js:"body"`
+}
+
 type Fetch struct {
 	Status  *preveltekit.Store[string]
 	RawData *preveltekit.Store[string]
@@ -59,7 +66,6 @@ func (f *Fetch) FetchUser() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-
 		f.RawData.Set("ID: " + itoa(user.ID) + "\nName: " + user.Name)
 		f.Status.Set("done")
 	}()
@@ -70,18 +76,11 @@ func (f *Fetch) FetchPost() {
 	f.RawData.Set("")
 
 	go func() {
-		type Post struct {
-			ID     int    `js:"id"`
-			UserID int    `js:"userId"`
-			Title  string `js:"title"`
-			Body   string `js:"body"`
-		}
 		post, err := preveltekit.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-
 		f.RawData.Set("ID: " + itoa(post.ID) + "\nUser: " + itoa(post.UserID) + "\nTitle: " + post.Title)
 		f.Status.Set("done")
 	}()
@@ -128,7 +127,11 @@ func (f *Fetch) Template() string {
     Name string ` + "`js:\"name\"`" + `
 }
 
-user, err := preveltekit.Get[User](url)</pre>
+go func() {
+    user, err := preveltekit.Get[User](url)
+    if err != nil { ... }
+    // use user
+}()</pre>
 	</section>
 </div>`
 }
