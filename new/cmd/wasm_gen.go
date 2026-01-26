@@ -412,8 +412,30 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 		}
 	}
 
-	// Event bindings
+	// Event bindings - collect simple events for batch, handle complex ones individually
+	var simpleEvents []eventBinding
+	var complexEvents []eventBinding
 	for _, evt := range bindings.events {
+		if len(evt.modifiers) == 0 && evt.args == "" {
+			simpleEvents = append(simpleEvents, evt)
+		} else {
+			complexEvents = append(complexEvents, evt)
+		}
+	}
+
+	// Generate batch call for simple events
+	if len(simpleEvents) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindEvents([]preveltekit.Evt{\n", indent)
+		for _, evt := range simpleEvents {
+			fullID := ctx.prefixID(evt.elementID)
+			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",
+				indent, fullID, evt.event, varName, evt.methodName)
+		}
+		fmt.Fprintf(sb, "%s})\n", indent)
+	}
+
+	// Handle complex events individually
+	for _, evt := range complexEvents {
 		fullID := ctx.prefixID(evt.elementID)
 		callArgs := transformEventArgs(evt.args, ctx.Scope)
 
@@ -439,6 +461,7 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 			fmt.Fprintf(sb, "%s\tjs.FuncOf(func(this js.Value, args []js.Value) any {\n%s%s\t\t%s.%s(%s)\n%s\t\treturn nil\n%s\t})%s)\n\n",
 				indent, modifierCode, indent, varName, evt.methodName, callArgs, indent, indent, onceOpt)
 		} else {
+			// Has args but no modifiers - generate individual call
 			fmt.Fprintf(sb, "%spreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",
 				indent, fullID, evt.event, varName, evt.methodName, callArgs)
 		}
@@ -447,25 +470,51 @@ func generateBindingsWiring(sb *strings.Builder, bindings templateBindings, ctx 
 	// If blocks
 	generateIfBlocksWiring(sb, bindings.ifBlocks, bindings.components, ctx)
 
-	// Input bindings
+	// Input bindings - group by type for batching
+	var stringInputs []inputBinding
+	var intInputs []inputBinding
+	var checkboxInputs []inputBinding
 	for _, bind := range bindings.bindings {
-		fullID := ctx.prefixID(bind.elementID)
 		valueType := fieldTypes[bind.fieldName]
 		if valueType == "" {
 			valueType = "string"
 		}
-		varRef := varName + "." + bind.fieldName
-
 		if bind.bindType == "checked" {
-			fmt.Fprintf(sb, "%spreveltekit.BindCheckbox(\"%s\", %s)\n", indent, fullID, varRef)
+			checkboxInputs = append(checkboxInputs, bind)
+		} else if valueType == "int" {
+			intInputs = append(intInputs, bind)
 		} else {
-			switch valueType {
-			case "int":
-				fmt.Fprintf(sb, "%spreveltekit.BindInputInt(\"%s\", %s)\n", indent, fullID, varRef)
-			default:
-				fmt.Fprintf(sb, "%spreveltekit.BindInput(\"%s\", %s)\n", indent, fullID, varRef)
-			}
+			stringInputs = append(stringInputs, bind)
 		}
+	}
+
+	// Batch string inputs
+	if len(stringInputs) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindInputs([]preveltekit.Inp{\n", indent)
+		for _, bind := range stringInputs {
+			fullID := ctx.prefixID(bind.elementID)
+			varRef := varName + "." + bind.fieldName
+			fmt.Fprintf(sb, "%s\t{\"%s\", %s},\n", indent, fullID, varRef)
+		}
+		fmt.Fprintf(sb, "%s})\n", indent)
+	}
+
+	// Batch int inputs (can't easily batch due to different function signature)
+	for _, bind := range intInputs {
+		fullID := ctx.prefixID(bind.elementID)
+		varRef := varName + "." + bind.fieldName
+		fmt.Fprintf(sb, "%spreveltekit.BindInputInt(\"%s\", %s)\n", indent, fullID, varRef)
+	}
+
+	// Batch checkboxes
+	if len(checkboxInputs) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes([]preveltekit.Chk{\n", indent)
+		for _, bind := range checkboxInputs {
+			fullID := ctx.prefixID(bind.elementID)
+			varRef := varName + "." + bind.fieldName
+			fmt.Fprintf(sb, "%s\t{\"%s\", %s},\n", indent, fullID, varRef)
+		}
+		fmt.Fprintf(sb, "%s})\n", indent)
 	}
 
 	// Class bindings
@@ -833,11 +882,105 @@ func generateIfBlocksWiring(sb *strings.Builder, ifBlocks []ifBinding, component
 		fmt.Fprintf(sb, "%s\t%s_lastBranch = branchIdx\n", indent, fullID)
 		fmt.Fprintf(sb, "%s}\n", indent)
 
-		// Subscribe to dependencies
+		// === INITIAL HYDRATION (no ReplaceContent) ===
+		// Find existing SSR content and wire up bindings without replacing
+		shortMarker = toShortMarker(fullID)
+		fmt.Fprintf(sb, "\n%s// Initial hydration - use existing SSR content\n", indent)
+		fmt.Fprintf(sb, "%s%s_current = preveltekit.FindExistingIfContent(\"%s\")\n", indent, fullID, shortMarker)
+		fmt.Fprintf(sb, "%s{\n", indent)
+
+		// Determine initial branch index
+		fmt.Fprintf(sb, "%s\tvar branchIdx int\n", indent)
+		for i, branch := range ifb.branches {
+			cond := transformCondition(branch.condition, fieldTypes, varName)
+			if i == 0 {
+				fmt.Fprintf(sb, "%s\tif %s {\n%s\t\tbranchIdx = %d\n", indent, cond, indent, i)
+			} else {
+				fmt.Fprintf(sb, "%s\t} else if %s {\n%s\t\tbranchIdx = %d\n", indent, cond, indent, i)
+			}
+		}
+		if ifb.elseHTML != "" {
+			fmt.Fprintf(sb, "%s\t} else {\n%s\t\tbranchIdx = -1\n%s\t}\n", indent, indent, indent)
+		} else {
+			fmt.Fprintf(sb, "%s\t} else {\n%s\t\tbranchIdx = -1\n%s\t}\n", indent, indent, indent)
+		}
+
+		// Wire up child components for initial hydration
+		for _, compBinding := range compsInBlock {
+			childDef := ctx.AllComponents[compBinding.name]
+			if childDef != nil {
+				childCtx := ctx.ChildContext(compBinding, childDef)
+				childCtx.SkipCreate = true
+				childCtx.InsideIfBlock = true
+				childCtx.Indent = indent + "\t"
+				generateComponentWiring(sb, childCtx)
+			}
+		}
+
+		// Wire up each blocks inside branches for initial hydration
+		for i, branch := range ifb.branches {
+			if len(branch.eachBlocks) > 0 {
+				fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
+				for _, each := range branch.eachBlocks {
+					generateEachBlockInline(sb, each, ctx, indent+"\t\t")
+				}
+				fmt.Fprintf(sb, "%s\t}\n", indent)
+			}
+		}
+
+		// Wire up class bindings inside branches for initial hydration
+		for i, branch := range ifb.branches {
+			if len(branch.classBindings) > 0 {
+				fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
+				for _, cb := range branch.classBindings {
+					generateClassBindingInline(sb, cb, ctx, indent+"\t\t")
+				}
+				fmt.Fprintf(sb, "%s\t}\n", indent)
+			}
+		}
+
+		// Wire up expressions inside branches for initial hydration
+		for i, branch := range ifb.branches {
+			if len(branch.expressions) > 0 {
+				fmt.Fprintf(sb, "%s\tif branchIdx == %d {\n", indent, i)
+				for _, expr := range branch.expressions {
+					fullExprID := ctx.prefixID(expr.elementID)
+					exprShortMarker := toShortMarker(fullExprID)
+					varRef := varName + "." + expr.fieldName
+					if expr.isHTML {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, exprShortMarker, varRef)
+					} else {
+						fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, exprShortMarker, varRef)
+					}
+				}
+				fmt.Fprintf(sb, "%s\t}\n", indent)
+			}
+		}
+
+		// Wire up expressions in else branch for initial hydration
+		if len(ifb.elseExpressions) > 0 {
+			fmt.Fprintf(sb, "%s\tif branchIdx == -1 {\n", indent)
+			for _, expr := range ifb.elseExpressions {
+				fullExprID := ctx.prefixID(expr.elementID)
+				exprShortMarker := toShortMarker(fullExprID)
+				varRef := varName + "." + expr.fieldName
+				if expr.isHTML {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindHTML(\"%s\", %s)\n", indent, exprShortMarker, varRef)
+				} else {
+					fmt.Fprintf(sb, "%s\t\tpreveltekit.BindText(\"%s\", %s)\n", indent, exprShortMarker, varRef)
+				}
+			}
+			fmt.Fprintf(sb, "%s\t}\n", indent)
+		}
+		fmt.Fprintf(sb, "%s\t%s_lastBranch = branchIdx\n", indent, fullID)
+		fmt.Fprintf(sb, "%s}\n", indent)
+
+		// Subscribe to dependencies for future updates (navigations)
+		fmt.Fprintf(sb, "\n%s// Subscribe for future navigations\n", indent)
 		for _, dep := range ifb.deps {
 			fmt.Fprintf(sb, "%s%s.%s.OnChange(func(_ %s) { update%s() })\n", indent, varName, dep, fieldTypes[dep], fullID)
 		}
-		fmt.Fprintf(sb, "%supdate%s()\n\n", indent, fullID)
+		fmt.Fprintf(sb, "\n")
 	}
 }
 
@@ -986,25 +1129,51 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 		}
 	}
 
-	// Input bindings
+	// Input bindings - group by type for batching
+	var compStringInputs []inputBinding
+	var compIntInputs []inputBinding
+	var compCheckboxInputs []inputBinding
 	for _, bind := range childBindings.bindings {
-		fullID := compID + "_" + bind.elementID
 		valueType := childFieldTypes[bind.fieldName]
 		if valueType == "" {
 			valueType = "string"
 		}
-		varRef := compID + "." + bind.fieldName
-
 		if bind.bindType == "checked" {
-			fmt.Fprintf(sb, "%spreveltekit.BindCheckbox(\"%s\", %s)\n", innerIndent, fullID, varRef)
+			compCheckboxInputs = append(compCheckboxInputs, bind)
+		} else if valueType == "int" {
+			compIntInputs = append(compIntInputs, bind)
 		} else {
-			switch valueType {
-			case "int":
-				fmt.Fprintf(sb, "%spreveltekit.BindInputInt(\"%s\", %s)\n", innerIndent, fullID, varRef)
-			default:
-				fmt.Fprintf(sb, "%spreveltekit.BindInput(\"%s\", %s)\n", innerIndent, fullID, varRef)
-			}
+			compStringInputs = append(compStringInputs, bind)
 		}
+	}
+
+	// Batch string inputs
+	if len(compStringInputs) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindInputs([]preveltekit.Inp{\n", innerIndent)
+		for _, bind := range compStringInputs {
+			fullID := compID + "_" + bind.elementID
+			varRef := compID + "." + bind.fieldName
+			fmt.Fprintf(sb, "%s\t{\"%s\", %s},\n", innerIndent, fullID, varRef)
+		}
+		fmt.Fprintf(sb, "%s})\n", innerIndent)
+	}
+
+	// Batch int inputs (individual calls)
+	for _, bind := range compIntInputs {
+		fullID := compID + "_" + bind.elementID
+		varRef := compID + "." + bind.fieldName
+		fmt.Fprintf(sb, "%spreveltekit.BindInputInt(\"%s\", %s)\n", innerIndent, fullID, varRef)
+	}
+
+	// Batch checkboxes
+	if len(compCheckboxInputs) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindCheckboxes([]preveltekit.Chk{\n", innerIndent)
+		for _, bind := range compCheckboxInputs {
+			fullID := compID + "_" + bind.elementID
+			varRef := compID + "." + bind.fieldName
+			fmt.Fprintf(sb, "%s\t{\"%s\", %s},\n", innerIndent, fullID, varRef)
+		}
+		fmt.Fprintf(sb, "%s})\n", innerIndent)
 	}
 
 	// Class bindings - prefix IDs and reuse shared function
@@ -1057,8 +1226,30 @@ func generateComponentWiring(sb *strings.Builder, ctx *WiringContext) {
 		}
 	}
 
-	// Internal events
+	// Internal events - collect simple ones for batch
+	var simpleChildEvents []eventBinding
+	var complexChildEvents []eventBinding
 	for _, evt := range childBindings.events {
+		if len(evt.modifiers) == 0 && evt.args == "" {
+			simpleChildEvents = append(simpleChildEvents, evt)
+		} else {
+			complexChildEvents = append(complexChildEvents, evt)
+		}
+	}
+
+	// Generate batch call for simple child events
+	if len(simpleChildEvents) > 0 {
+		fmt.Fprintf(sb, "%spreveltekit.BindEvents([]preveltekit.Evt{\n", innerIndent)
+		for _, evt := range simpleChildEvents {
+			fullID := compID + "_" + evt.elementID
+			fmt.Fprintf(sb, "%s\t{\"%s\", \"%s\", func() { %s.%s() }},\n",
+				innerIndent, fullID, evt.event, compID, evt.methodName)
+		}
+		fmt.Fprintf(sb, "%s})\n", innerIndent)
+	}
+
+	// Handle complex child events individually
+	for _, evt := range complexChildEvents {
 		fullID := compID + "_" + evt.elementID
 		callArgs := transformEventArgs(evt.args, childScope)
 		fmt.Fprintf(sb, "%spreveltekit.On(preveltekit.GetEl(\"%s\"), \"%s\", func() { %s.%s(%s) })\n",

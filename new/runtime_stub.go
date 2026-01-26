@@ -37,3 +37,34 @@ func BindInputInt(id string, store Settable[int])                              {
 func BindCheckbox(id string, store Settable[bool])                             {}
 func ToggleClass(el jsValue, class string, add bool)                           {}
 func ReplaceContent(anchorMarker string, current jsValue, html string) jsValue { return jsValue{} }
+func FindExistingIfContent(anchorMarker string) jsValue                        { return jsValue{} }
+
+// Batch binding types and functions (stubs for SSR)
+type Evt struct {
+	ID    string
+	Event string
+	Fn    func()
+}
+
+func BindEvents(events []Evt) {}
+
+type Txt[T any] struct {
+	Marker string
+	Store  Bindable[T]
+}
+
+func BindTexts[T any](bindings []Txt[T]) {}
+
+type Inp struct {
+	ID    string
+	Store Settable[string]
+}
+
+func BindInputs(bindings []Inp) {}
+
+type Chk struct {
+	ID    string
+	Store Settable[bool]
+}
+
+func BindCheckboxes(bindings []Chk) {}

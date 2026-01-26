@@ -1,0 +1,14 @@
+{
+    admin off
+    auto_https off
+}
+
+#https://caddyserver.com/docs/caddyfile/patterns#single-page-apps-spas
+:8080 {
+    root * examples/showcase/dist/
+    try_files {path} {path}.html /index.html
+    file_server {
+        #https://caddyserver.com/docs/caddyfile/directives/file_server#precompressed
+ 	    precompressed br gzip
+    }
+}

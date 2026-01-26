@@ -214,3 +214,74 @@ func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value
 	}
 	return newEl
 }
+
+// FindExistingIfContent finds the existing SSR-rendered content before an if-block anchor comment.
+// Returns the element if found, or js.Null() if not found.
+// This is used during hydration to avoid replacing pre-rendered content.
+func FindExistingIfContent(anchorMarker string) js.Value {
+	anchor := FindComment(anchorMarker)
+	if !ok(anchor) {
+		return js.Null()
+	}
+	// The SSR content is the previous sibling (a span element)
+	prev := anchor.Get("previousSibling")
+	if !prev.IsNull() && prev.Get("nodeType").Int() == 1 { // Element node
+		return prev
+	}
+	return js.Null()
+}
+
+// === Batch Binding Types (for smaller WASM) ===
+
+// Evt represents an event binding for batch processing
+type Evt struct {
+	ID    string
+	Event string
+	Fn    func()
+}
+
+// BindEvents binds multiple events in a loop (smaller WASM than separate calls)
+func BindEvents(events []Evt) {
+	for _, e := range events {
+		On(GetEl(e.ID), e.Event, e.Fn)
+	}
+}
+
+// Txt represents a text binding for batch processing
+type Txt[T any] struct {
+	Marker string
+	Store  Bindable[T]
+}
+
+// BindTexts binds multiple text nodes in a loop
+func BindTexts[T any](bindings []Txt[T]) {
+	for _, b := range bindings {
+		BindText(b.Marker, b.Store)
+	}
+}
+
+// Inp represents an input binding for batch processing
+type Inp struct {
+	ID    string
+	Store Settable[string]
+}
+
+// BindInputs binds multiple inputs in a loop
+func BindInputs(bindings []Inp) {
+	for _, b := range bindings {
+		BindInput(b.ID, b.Store)
+	}
+}
+
+// Chk represents a checkbox binding for batch processing
+type Chk struct {
+	ID    string
+	Store Settable[bool]
+}
+
+// BindCheckboxes binds multiple checkboxes in a loop
+func BindCheckboxes(bindings []Chk) {
+	for _, b := range bindings {
+		BindCheckbox(b.ID, b.Store)
+	}
+}
