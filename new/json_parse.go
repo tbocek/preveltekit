@@ -50,6 +50,8 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 			b.AttrBindings = p.parseAttrBindings()
 		case "EachBlocks":
 			b.EachBlocks = p.parseEachBlocks()
+		case "RouterBindings":
+			b.RouterBindings = p.parseRouterBindings()
 		case "Components":
 			// Skip these - not needed for hydration yet
 			p.skipValue()
@@ -164,10 +166,6 @@ func (p *jsonParser) parseEvents() []HydrateEvent {
 				ev.ElementID = p.parseString()
 			case "Event":
 				ev.Event = p.parseString()
-			case "HandlerID":
-				ev.HandlerID = p.parseString()
-			case "ArgsStr":
-				ev.ArgsStr = p.parseString()
 			case "Modifiers":
 				ev.Modifiers = p.parseStringArray()
 			default:
@@ -439,6 +437,10 @@ func (p *jsonParser) parseClassBindings() []HydrateClassBinding {
 				cb.ClassName = p.parseString()
 			case "cond_expr":
 				cb.CondExpr = p.parseString()
+			case "op":
+				cb.Op = p.parseString()
+			case "operand":
+				cb.Operand = p.parseString()
 			case "deps":
 				cb.Deps = p.parseStringArray()
 			default:
@@ -646,6 +648,63 @@ func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
 			}
 		}
 		result = append(result, eb)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseRouterBindings() []HydrateRouterBinding {
+	var result []HydrateRouterBinding
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		rb := HydrateRouterBinding{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "store_id":
+				rb.StoreID = p.parseString()
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, rb)
 
 		p.skipWS()
 		if !p.consume(',') {

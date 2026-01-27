@@ -12,45 +12,45 @@ func (l *Links) OnMount() {
 }
 
 func (l *Links) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Links"),
+	return p.Html(`<div class="demo">
+		<h1>Links</h1>
 
-		p.Section(
-			p.H2("Client-Side vs Server-Side"),
-			p.P("Same URL, different behavior:"),
+		<section>
+			<h2>Client-Side vs Server-Side</h2>
+			<p>Same URL, different behavior:</p>
 
-			p.Div(p.Class("link-list"),
-				p.A(p.Href("/lists"), p.Class("nav-link"),
-					p.Span(p.Class("link-icon"), "->"),
-					p.Span("/lists"),
-					p.Span(p.Class("link-type"), "Client-side"),
-				),
-				p.A(p.Href("/lists"), p.Attr("external", ""), p.Class("nav-link", "external"),
-					p.Span(p.Class("link-icon"), "^"),
-					p.Span("/lists"),
-					p.Span(p.Class("link-type"), "Server (reload)"),
-				),
-			),
-			p.P(p.Class("hint"), "Click both - first one is instant, second reloads the page."),
-		),
+			<div class="link-list">
+				<a href="/lists" class="nav-link">
+					<span class="link-icon">-></span>
+					<span>/lists</span>
+					<span class="link-type">Client-side</span>
+				</a>
+				<a href="/lists" external class="nav-link external">
+					<span class="link-icon">^</span>
+					<span>/lists</span>
+					<span class="link-type">Server (reload)</span>
+				</a>
+			</div>
+			<p class="hint">Click both - first one is instant, second reloads the page.</p>
+		</section>
 
-		p.Section(
-			p.H2("When to use ", p.Code("external")),
-			p.Ul(p.Class("info-list"),
-				p.Li("Server-side routes (API, auth, downloads)"),
-				p.Li("Full page refresh needed"),
-				p.Li("Links to other apps on same domain"),
-			),
-		),
+		<section>
+			<h2>When to use <code>external</code></h2>
+			<ul class="info-list">
+				<li>Server-side routes (API, auth, downloads)</li>
+				<li>Full page refresh needed</li>
+				<li>Links to other apps on same domain</li>
+			</ul>
+		</section>
 
-		p.Section(
-			p.H2("Try It"),
-			p.Div(p.Class("button-links"),
-				p.A(p.Href("/basics"), p.Class("btn-link", "primary"), "Basics (SPA)"),
-				p.A(p.Href("/basics"), p.Attr("external", ""), p.Class("btn-link", "secondary"), "Basics (Reload)"),
-			),
-		),
-	)
+		<section>
+			<h2>Try It</h2>
+			<div class="button-links">
+				<a href="/basics" class="btn-link primary">Basics (SPA)</a>
+				<a href="/basics" external class="btn-link secondary">Basics (Reload)</a>
+			</div>
+		</section>
+	</div>`)
 }
 
 func (l *Links) Style() string {
@@ -73,8 +73,4 @@ func (l *Links) Style() string {
 .info-list{margin:0;padding-left:20px;color:#555}
 .info-list li{margin:5px 0}
 `
-}
-
-func (l *Links) HandleEvent(method string, args string) {
-	// Links has no event handlers
 }

@@ -32,6 +32,10 @@ func (b *Basics) Add(n int) {
 	b.Count.Update(func(v int) int { return v + n })
 }
 
+func (b *Basics) Double() {
+	b.Count.Update(func(v int) int { return v * 2 })
+}
+
 func (b *Basics) Reset() {
 	b.Count.Set(0)
 }
@@ -52,81 +56,66 @@ func (b *Basics) Submit() {
 }
 
 func (b *Basics) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Basics"),
+	return p.Html(`<div class="demo">
+		<h1>Basics</h1>
 
-		// Counter section
-		p.Section(
-			p.H2("Counter"),
-			p.P("Count: ", p.Strong(p.Bind(b.Count))),
-			p.Button("-1", p.OnClick(b.Decrement)),
-			p.Button("+1", p.OnClick(b.Increment)),
-			p.Button("+5", p.OnClick(b.Add, 5)),
-			p.Button("Double", p.OnClick(b.Add, b.Count.Get())),
-			p.Button("Reset", p.OnClick(b.Reset)),
-		),
+		<section>
+			<h2>Counter</h2>
+			<p>Count: <strong>`, p.Bind(b.Count), `</strong></p>
+			<button `, p.OnClick(b.Decrement), `>-1</button>
+			<button `, p.OnClick(b.Increment), `>+1</button>
+			<button `, p.OnClick(func() { b.Add(5) }), `>+5</button>
+			<button `, p.OnClick(b.Double), `>Double</button>
+			<button `, p.OnClick(b.Reset), `>Reset</button>
+		</section>
 
-		// Conditionals section
-		p.Section(
-			p.H2("Conditionals"),
-			p.P("Score: ", p.Bind(b.Score)),
-			p.If(b.Score.Ge(90),
-				p.P(p.Class("grade", "a"), "Grade: A - Excellent!"),
-			).ElseIf(b.Score.Ge(80),
-				p.P(p.Class("grade", "b"), "Grade: B - Good"),
-			).ElseIf(b.Score.Ge(70),
-				p.P(p.Class("grade", "c"), "Grade: C - Average"),
-			).ElseIf(b.Score.Ge(60),
-				p.P(p.Class("grade", "d"), "Grade: D - Below Average"),
-			).Else(
-				p.P(p.Class("grade", "f"), "Grade: F - Failing"),
-			),
-			p.Div(p.Class("buttons"),
-				p.Button("A", p.OnClick(b.SetScore, 95)),
-				p.Button("B", p.OnClick(b.SetScore, 85)),
-				p.Button("C", p.OnClick(b.SetScore, 75)),
-				p.Button("D", p.OnClick(b.SetScore, 65)),
-				p.Button("F", p.OnClick(b.SetScore, 50)),
-			),
-		),
+		<section>
+			<h2>Conditionals</h2>
+			<p>Score: `, p.Bind(b.Score), `</p>
+			`, p.If(b.Score.Ge(90),
+		p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
+	).ElseIf(b.Score.Ge(80),
+		p.Html(`<p class="grade b">Grade: B - Good</p>`),
+	).ElseIf(b.Score.Ge(70),
+		p.Html(`<p class="grade c">Grade: C - Average</p>`),
+	).ElseIf(b.Score.Ge(60),
+		p.Html(`<p class="grade d">Grade: D - Below Average</p>`),
+	).Else(
+		p.Html(`<p class="grade f">Grade: F - Failing</p>`),
+	), `
+			<div class="buttons">
+				<button `, p.OnClick(func() { b.SetScore(95) }), `>A</button>
+				<button `, p.OnClick(func() { b.SetScore(85) }), `>B</button>
+				<button `, p.OnClick(func() { b.SetScore(75) }), `>C</button>
+				<button `, p.OnClick(func() { b.SetScore(65) }), `>D</button>
+				<button `, p.OnClick(func() { b.SetScore(50) }), `>F</button>
+			</div>
+		</section>
 
-		// Two-way binding section
-		p.Section(
-			p.H2("Two-Way Binding"),
-			p.Label("Your name: ",
-				p.Input(p.Type("text"), p.BindValue(b.Name), p.Placeholder("Enter name")),
-			),
-			p.P("Hello, ", p.Bind(b.Name), "!"),
-		),
+		<section>
+			<h2>Two-Way Binding</h2>
+			<label>Your name: `, p.BindValue(`<input type="text" placeholder="Enter name">`, b.Name), `</label>
+			<p>Hello, `, p.Bind(b.Name), `!</p>
+		</section>
 
-		// Checkbox binding section
-		p.Section(
-			p.H2("Checkbox Binding"),
-			p.Label(
-				p.Input(p.Type("checkbox"), p.BindChecked(b.DarkMode)),
-				" Dark Mode",
-			),
-			p.Div(p.ClassIf("dark", p.IsTrue(b.DarkMode)),
-				"This box uses dark mode styling when checked.",
-			),
-		),
+		<section>
+			<h2>Checkbox Binding</h2>
+			<label>`, p.BindChecked(`<input type="checkbox">`, b.DarkMode), ` Dark Mode</label>
+			<div `, p.ClassIf("dark", p.IsTrue(b.DarkMode)), `>
+				This box uses dark mode styling when checked.
+			</div>
+		</section>
 
-		// Form section
-		p.Section(
-			p.H2("Form"),
-			p.Form(p.OnSubmit(b.Submit).PreventDefault(),
-				p.Label("Name: ",
-					p.Input(p.Type("text"), p.BindValue(b.Name), p.Placeholder("Your name")),
-				),
-				p.Label(
-					p.Input(p.Type("checkbox"), p.BindChecked(b.Agreed)),
-					" I agree to the terms",
-				),
-				p.Button("Submit", p.Type("submit")),
-			),
-			p.P(p.Class("message"), p.Bind(b.Message)),
-		),
-	)
+		<section>
+			<h2>Form</h2>
+			<form `, p.OnSubmit(b.Submit).PreventDefault(), `>
+				<label>Name: `, p.BindValue(`<input type="text" placeholder="Your name">`, b.Name), `</label>
+				<label>`, p.BindChecked(`<input type="checkbox">`, b.Agreed), ` I agree to the terms</label>
+				<button type="submit">Submit</button>
+			</form>
+			<p class="message">`, p.Bind(b.Message), `</p>
+		</section>
+	</div>`)
 }
 
 func (b *Basics) Style() string {
@@ -141,23 +130,6 @@ func (b *Basics) Style() string {
 .dark{background:#333;color:#fff;padding:10px;border-radius:4px;margin-top:10px}
 .message{padding:10px;background:#e7f3ff;border-radius:4px}
 `
-}
-
-func (b *Basics) HandleEvent(method string, args string) {
-	switch method {
-	case "Increment":
-		b.Increment()
-	case "Decrement":
-		b.Decrement()
-	case "Add":
-		b.Add(atoi(args))
-	case "Reset":
-		b.Reset()
-	case "SetScore":
-		b.SetScore(atoi(args))
-	case "Submit":
-		b.Submit()
-	}
 }
 
 func atoi(s string) int {

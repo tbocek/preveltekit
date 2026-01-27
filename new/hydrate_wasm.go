@@ -42,12 +42,8 @@ func containsChar(s string, c byte) bool {
 }
 
 // Component is the interface that all declarative components must implement.
-// In WASM mode, we don't actually call Render() - we just need the component
-// for lifecycle methods and store access.
 type Component interface {
-	// Render is not called in WASM mode, but components must implement it
-	// for the SSR phase. We use an empty interface here since Node is not
-	// available in WASM builds.
+	Render() Node
 }
 
 // HasRoutes is implemented by components that define routes.
@@ -70,10 +66,9 @@ type HasOnMount interface {
 	OnMount()
 }
 
-// HasHandleEvent is implemented by components that handle events.
-// The method name and args string are passed, and the component switches on it.
-type HasHandleEvent interface {
-	HandleEvent(method string, args string)
+// HasCurrentComponent is implemented by apps that have a CurrentComponent store for routing.
+type HasCurrentComponent interface {
+	GetCurrentComponent() *Store[Component]
 }
 
 // HydrateConfig configures the hydration process.
@@ -93,6 +88,33 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 		opt(cfg)
 	}
 
+	// Initialize app stores first
+	initStores(app)
+
+	// Call OnCreate to let app initialize its children
+	if oc, ok := app.(HasOnCreate); ok {
+		oc.OnCreate()
+	}
+
+	// Auto-discover children from Routes() by calling handlers and reading CurrentComponent
+	if hr, ok := app.(HasRoutes); ok {
+		if hcc, ok := app.(HasCurrentComponent); ok {
+			currentStore := hcc.GetCurrentComponent()
+			if currentStore != nil {
+				for _, route := range hr.Routes() {
+					if route.Handler != nil {
+						// Call handler to set CurrentComponent
+						route.Handler(nil)
+						// Read the component that was set
+						if comp := currentStore.Get(); comp != nil {
+							cfg.Children[route.Path] = comp
+						}
+					}
+				}
+			}
+		}
+	}
+
 	hydrateWASM(app, cfg)
 }
 
@@ -110,20 +132,11 @@ func WithChild(path string, comp Component) func(*HydrateConfig) {
 	}
 }
 
-// WithNestedComponent registers a nested component type by name.
-// In WASM mode, this is a no-op since nested components are pre-rendered during SSR.
-func WithNestedComponent(name string, factory func() Component) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		// No-op in WASM - nested components are already rendered in HTML
-	}
-}
-
 // hydrateWASM sets up DOM bindings from the embedded bindings JSON.
 func hydrateWASM(app Component, cfg *HydrateConfig) {
 	// Get bindings from global variable (set by CLI-generated code)
 	bindingsJS := js.Global().Get("_preveltekit_bindings")
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
-		// No bindings - just run lifecycle and keep alive
 		runLifecycle(app, cfg)
 		select {}
 		return
@@ -142,94 +155,54 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 		"component": app,
 	}
 	for path, child := range cfg.Children {
-		// Extract component name from path (e.g., "/basics" -> "basics")
 		name := trimPrefix(path, "/")
 		components[name] = child
 	}
 
-	// Call OnCreate
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
-	}
-	for _, child := range cfg.Children {
-		if oc, ok := child.(HasOnCreate); ok {
-			oc.OnCreate()
-		}
-	}
+	// Run OnCreate phase
+	runOnCreate(app, cfg)
 
-	// Inject styles
-	if hs, ok := app.(HasStyle); ok {
-		InjectStyle("app", hs.Style())
-	}
+	// Collect event handlers from component Render() trees
+	collectHandlers(app, "")
 	for path, child := range cfg.Children {
-		if hs, ok := child.(HasStyle); ok {
-			name := trimPrefix(path, "/")
-			InjectStyle(name, hs.Style())
-		}
+		name := trimPrefix(path, "/")
+		collectHandlers(child, name)
 	}
 
+	// Apply all bindings
 	cleanup := &Cleanup{}
+	applyBindings(bindings, components, cleanup)
 
-	// Set up text bindings
-	for _, tb := range bindings.TextBindings {
-		store := resolveStore(tb.StoreID, components)
-		if store != nil {
-			bindTextDynamic(tb.MarkerID, store, tb.IsHTML)
-		}
-	}
-
-	// Set up input bindings
-	for _, ib := range bindings.InputBindings {
-		store := resolveStore(ib.StoreID, components)
-		if store != nil {
-			bindInputDynamic(cleanup, ib.ElementID, store, ib.BindType)
-		}
-	}
-
-	// Set up event bindings
-	for _, ev := range bindings.Events {
-		handler := resolveHandler(ev.HandlerID, ev.ArgsStr, components)
-		if handler != nil {
-			bindEventDynamic(cleanup, ev.ElementID, ev.Event, handler)
-		}
-	}
-
-	// Set up if-block bindings
-	for _, ifb := range bindings.IfBlocks {
-		bindIfBlock(ifb, components)
-	}
-
-	// Set up show-if bindings
-	for _, sib := range bindings.ShowIfBindings {
-		bindShowIf(sib, components)
-	}
-
-	// Call OnMount
-	if om, ok := app.(HasOnMount); ok {
-		om.OnMount()
-	}
-	for _, child := range cfg.Children {
-		if om, ok := child.(HasOnMount); ok {
-			om.OnMount()
-		}
-	}
+	// Run OnMount phase
+	runOnMount(app, cfg)
 
 	// Keep WASM running
 	select {}
 }
 
-func runLifecycle(app Component, cfg *HydrateConfig) {
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
-	}
-	for _, child := range cfg.Children {
-		if oc, ok := child.(HasOnCreate); ok {
-			oc.OnCreate()
-		}
-	}
+// runOnCreate calls OnCreate and injects styles for app and all children.
+func runOnCreate(app Component, cfg *HydrateConfig) {
+	// App's OnCreate was already called in Hydrate before Routes() was called
 	if hs, ok := app.(HasStyle); ok {
 		InjectStyle("app", hs.Style())
 	}
+	// Initialize stores for all children first
+	for _, child := range cfg.Children {
+		initStores(child)
+	}
+	// Then call OnCreate
+	for path, child := range cfg.Children {
+		if oc, ok := child.(HasOnCreate); ok {
+			oc.OnCreate()
+		}
+		if hs, ok := child.(HasStyle); ok {
+			InjectStyle(trimPrefix(path, "/"), hs.Style())
+		}
+	}
+}
+
+// runOnMount calls OnMount for app and all children.
+func runOnMount(app Component, cfg *HydrateConfig) {
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
 	}
@@ -238,6 +211,12 @@ func runLifecycle(app Component, cfg *HydrateConfig) {
 			om.OnMount()
 		}
 	}
+}
+
+// runLifecycle runs full lifecycle (OnCreate + styles + OnMount) for all components.
+func runLifecycle(app Component, cfg *HydrateConfig) {
+	runOnCreate(app, cfg)
+	runOnMount(app, cfg)
 }
 
 // resolveStore resolves a store path like "component.Count" or "basics.Score" to a store pointer.
@@ -261,45 +240,147 @@ func resolveStore(storeID string, components map[string]Component) any {
 	return field.Interface()
 }
 
-// resolveHandler resolves a handler path like "component.Increment" or "basics.AddItem".
-func resolveHandler(handlerID string, argsStr string, components map[string]Component) func() {
-	compName, methodName, ok := splitFirst(handlerID, ".")
-	if !ok {
-		return nil
+// handlerMap stores element ID -> handler function mappings collected from Render()
+var handlerMap = make(map[string]func())
+
+// collectHandlers walks a component's Render() tree and extracts event handlers.
+// It uses the same ID generation logic as SSR to ensure IDs match.
+func collectHandlers(comp Component, prefix string) {
+	node := comp.Render()
+	ctx := &handlerCollectCtx{prefix: prefix}
+	collectHandlersFromNode(node, ctx)
+}
+
+// handlerCollectCtx tracks state while collecting handlers (mirrors BuildContext counters)
+type handlerCollectCtx struct {
+	prefix       string
+	eventCounter int
+	bindCounter  int
+	classCounter int
+	attrCounter  int
+	compCounter  int
+}
+
+func (ctx *handlerCollectCtx) nextEventID() string {
+	id := "ev" + intToStr(ctx.eventCounter)
+	ctx.eventCounter++
+	return id
+}
+
+func (ctx *handlerCollectCtx) nextClassID() string {
+	id := "cl" + intToStr(ctx.classCounter)
+	ctx.classCounter++
+	return id
+}
+
+func (ctx *handlerCollectCtx) fullElementID(localID string) string {
+	if ctx.prefix == "" {
+		return localID
+	}
+	return ctx.prefix + "_" + localID
+}
+
+// collectHandlersFromNode recursively walks a node tree collecting event handlers.
+func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
+	if n == nil {
+		return
 	}
 
-	comp, ok := components[compName]
-	if !ok {
-		return nil
-	}
+	switch node := n.(type) {
+	case *Element:
+		// Check for event attributes
+		for _, attr := range node.Attrs {
+			if ev, ok := attr.(*EventAttr); ok {
+				localID := ctx.nextEventID()
+				fullID := ctx.fullElementID(localID)
+				// Store the handler function directly
+				handlerMap[fullID] = ev.Handler
+			}
+		}
+		// Recurse into children
+		for _, child := range node.Children {
+			collectHandlersFromNode(child, ctx)
+		}
 
-	// Use HasHandleEvent interface instead of reflection
-	handler, ok := comp.(HasHandleEvent)
-	if !ok {
-		return nil
-	}
+	case *HtmlNode:
+		// Html nodes can contain embedded EventAttr
+		for _, part := range node.Parts {
+			if ev, ok := part.(*EventAttr); ok {
+				localID := ctx.nextEventID()
+				fullID := ctx.fullElementID(localID)
+				handlerMap[fullID] = ev.Handler
+			} else if childNode, ok := part.(Node); ok {
+				collectHandlersFromNode(childNode, ctx)
+			}
+		}
 
-	return func() {
-		handler.HandleEvent(methodName, argsStr)
+	case *Fragment:
+		for _, child := range node.Children {
+			collectHandlersFromNode(child, ctx)
+		}
+
+	case *IfNode:
+		// Collect from all branches (handlers exist in all possible paths)
+		for _, branch := range node.Branches {
+			for _, child := range branch.Children {
+				collectHandlersFromNode(child, ctx)
+			}
+		}
+		for _, child := range node.ElseNode {
+			collectHandlersFromNode(child, ctx)
+		}
+
+	case *EachNode:
+		// Each nodes have a body function - we can't easily extract handlers from it
+		// since it requires an item. For now, skip (each items are re-rendered anyway)
+
+	case *ClassIfNode:
+		// ClassIfNode can have an OnClick handler attached via WithOnClick()
+		if node.OnClick != nil {
+			localID := ctx.nextEventID()
+			fullID := ctx.fullElementID(localID)
+			handlerMap[fullID] = node.OnClick
+		} else {
+			// No OnClick - still need to increment class counter to stay in sync with SSR
+			ctx.nextClassID()
+		}
+
+	case *ComponentNode:
+		// Nested component - recurse with new prefix
+		compMarker := "comp" + intToStr(ctx.compCounter)
+		ctx.compCounter++
+		fullPrefix := ctx.fullElementID(compMarker)
+		if comp, ok := node.Instance.(Component); ok {
+			collectHandlers(comp, fullPrefix)
+		}
 	}
 }
 
-// bindTextDynamic sets up a text binding using reflection.
+// getHandler looks up a handler by element ID from the collected handlers.
+func getHandler(elementID string) func() {
+	return handlerMap[elementID]
+}
+
+// bindTextDynamic sets up a text binding for any store type.
 func bindTextDynamic(markerID string, store any, isHTML bool) {
-	// Use type switch to handle known store types
 	switch s := store.(type) {
 	case *Store[string]:
-		if isHTML {
-			BindHTML(markerID, s)
-		} else {
-			BindText(markerID, s)
-		}
+		bindText(markerID, s, isHTML)
 	case *Store[int]:
-		BindText(markerID, s)
+		bindText(markerID, s, isHTML)
 	case *Store[bool]:
-		BindText(markerID, s)
+		bindText(markerID, s, isHTML)
 	case *Store[float64]:
-		BindText(markerID, s)
+		bindText(markerID, s, isHTML)
+	}
+}
+
+// bindText is a helper that calls BindText or BindHTML based on isHTML flag.
+func bindText[T any](markerID string, store Bindable[T], isHTML bool) {
+	if isHTML {
+		BindHTML(markerID, store)
+	} else {
+		BindText(markerID, store)
 	}
 }
 
@@ -328,13 +409,11 @@ func bindEventDynamic(cleanup *Cleanup, elementID, event string, handler func())
 func bindShowIf(sib HydrateShowIfBinding, components map[string]Component) {
 	el := GetEl(sib.ElementID)
 	if !ok(el) {
-		println("bindShowIf: element not found:", sib.ElementID)
 		return
 	}
 
 	store := resolveStore(sib.StoreID, components)
 	if store == nil {
-		println("bindShowIf: store not found:", sib.StoreID)
 		return
 	}
 
@@ -349,16 +428,11 @@ func bindShowIf(sib HydrateShowIfBinding, components map[string]Component) {
 			// Comparison condition
 			switch s := store.(type) {
 			case *Store[int]:
-				val := s.Get()
-				operand := atoiSafe(sib.Operand)
-				visible = compareInt(val, sib.Op, operand)
+				visible = compare(s.Get(), sib.Op, atoiSafe(sib.Operand))
 			case *Store[string]:
-				val := s.Get()
-				visible = compareString(val, sib.Op, sib.Operand)
+				visible = compare(s.Get(), sib.Op, sib.Operand)
 			case *Store[float64]:
-				val := s.Get()
-				operand := atofSafe(sib.Operand)
-				visible = compareFloat(val, sib.Op, operand)
+				visible = compare(s.Get(), sib.Op, atofSafe(sib.Operand))
 			}
 		}
 
@@ -383,7 +457,6 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		return
 	}
 	setupIfBlocks[ifb.MarkerID] = true
-	println("bindIfBlock:", ifb.MarkerID)
 
 	// Find the existing SSR content
 	currentEl := FindExistingIfContent(ifb.MarkerID)
@@ -393,20 +466,16 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 
 	// Evaluate which branch is active and update content
 	updateIfBlock := func() {
-		println("updateIfBlock:", ifb.MarkerID, "branches:", len(ifb.Branches))
 		var activeHTML string
 		var activeBindings *HydrateBindings
 		found := false
 
 		for i := 0; i < len(ifb.Branches); i++ {
-			println("updateIfBlock: eval branch", i)
 			branch := ifb.Branches[i]
-			result := evalCondition(branch, components)
-			if result {
+			if evalCondition(branch, components) {
 				activeHTML = branch.HTML
 				activeBindings = branch.Bindings
 				found = true
-				println("updateIfBlock: matched branch", i)
 				break
 			}
 		}
@@ -414,23 +483,18 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		if !found {
 			activeHTML = ifb.ElseHTML
 			activeBindings = ifb.ElseBindings
-			println("updateIfBlock: using else")
 		}
 
-		println("updateIfBlock: replacing content")
 		currentEl = FindExistingIfContent(ifb.MarkerID)
 		currentEl = ReplaceContent(ifb.MarkerID, currentEl, activeHTML)
 
-		println("updateIfBlock: cleanup")
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
 
-		println("updateIfBlock: applying")
 		if activeBindings != nil {
 			clearBoundMarkers(activeBindings)
 			applyBindings(activeBindings, components, currentCleanup)
 		}
-		println("updateIfBlock: done", ifb.MarkerID)
 	}
 
 	// Subscribe to store changes for all dependencies (deduplicated)
@@ -449,16 +513,12 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 			}
 		}
 		if store != nil {
-			println("bindIfBlock: subscribing to", dep, "for", ifb.MarkerID)
 			subscribeToStore(store, updateIfBlock)
-		} else {
-			println("bindIfBlock: WARNING - could not resolve dep", dep, "for", ifb.MarkerID)
 		}
 	}
 
 	// Call updateIfBlock to sync DOM with current state
 	// This handles nested if-blocks where state may have changed after SSR
-	// (e.g., Lists page if-block when ItemCount was set in OnMount before navigation)
 	updateIfBlock()
 }
 
@@ -510,10 +570,15 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 
 	// Event bindings
 	for _, ev := range bindings.Events {
-		handler := resolveHandler(ev.HandlerID, ev.ArgsStr, components)
+		handler := getHandler(ev.ElementID)
 		if handler != nil {
 			bindEventDynamic(cleanup, ev.ElementID, ev.Event, handler)
 		}
+	}
+
+	// Class bindings
+	for _, cb := range bindings.ClassBindings {
+		bindClassBinding(cb, components)
 	}
 
 	// Nested if-blocks
@@ -534,6 +599,76 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	// Each block bindings (list iteration)
 	for _, eb := range bindings.EachBlocks {
 		bindEachBlock(eb, components)
+	}
+
+	// Router bindings
+	for _, rb := range bindings.RouterBindings {
+		bindRouter(rb, components)
+	}
+}
+
+// bindClassBinding sets up a class toggle binding based on condition.
+func bindClassBinding(cb HydrateClassBinding, components map[string]Component) {
+	el := GetEl(cb.ElementID)
+	if !ok(el) {
+		return
+	}
+
+	// Resolve stores from dependencies
+	var stores []any
+	for _, dep := range cb.Deps {
+		store := resolveStore(dep, components)
+		if store != nil {
+			stores = append(stores, store)
+		}
+	}
+
+	if len(stores) == 0 {
+		return
+	}
+
+	// Use first store for condition evaluation
+	store := stores[0]
+
+	// Function to evaluate the condition and toggle class
+	updateClass := func() {
+		var active bool
+
+		// Check if it's a boolean store with no operator
+		if cb.Op == "" {
+			if s, ok := store.(*Store[bool]); ok {
+				active = s.Get()
+			}
+		} else {
+			// Comparison condition
+			switch s := store.(type) {
+			case *Store[int]:
+				active = compare(s.Get(), cb.Op, atoiSafe(cb.Operand))
+			case *Store[string]:
+				active = compare(s.Get(), cb.Op, cb.Operand)
+			case *Store[float64]:
+				active = compare(s.Get(), cb.Op, atofSafe(cb.Operand))
+			case *Store[bool]:
+				// Boolean with operator (e.g., "== true")
+				operandBool := cb.Operand == "true"
+				active = compareBool(s.Get(), cb.Op, operandBool)
+			}
+		}
+
+		classList := el.Get("classList")
+		if active {
+			classList.Call("add", cb.ClassName)
+		} else {
+			classList.Call("remove", cb.ClassName)
+		}
+	}
+
+	// Initial update
+	updateClass()
+
+	// Subscribe to changes for all dependencies
+	for _, s := range stores {
+		subscribeToStore(s, updateClass)
 	}
 }
 
@@ -566,20 +701,7 @@ func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
 		value := ab.Template
 		for i, store := range stores {
 			placeholder := "{" + intToStr(i) + "}"
-			var storeVal string
-			switch s := store.(type) {
-			case *Store[string]:
-				storeVal = s.Get()
-			case *Store[int]:
-				storeVal = intToStr(s.Get())
-			case *Store[bool]:
-				if s.Get() {
-					storeVal = "true"
-				} else {
-					storeVal = "false"
-				}
-			}
-			value = replaceAll(value, placeholder, storeVal)
+			value = replaceAll(value, placeholder, storeToString(store))
 		}
 		el.Call("setAttribute", ab.AttrName, value)
 	}
@@ -604,7 +726,6 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 		return
 	}
 	setupEachBlocks[eb.MarkerID] = true
-	println("bindEachBlock:", eb.MarkerID, eb.ListID)
 
 	// Find the marker comment
 	marker := FindComment(eb.MarkerID)
@@ -625,65 +746,110 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 		return
 	}
 
-	// Get the parent element (should be the <ul> or container)
-	parent := marker.Get("previousSibling")
-	if parent.IsNull() || parent.Get("nodeType").Int() != 1 {
-		// Try parent node (the marker is inside the <ul>)
-		parent = marker.Get("parentNode")
+	// Get the parent element (the <ul> or container that holds the list items)
+	// The marker comment is placed after all the <span> wrappers, inside the container
+	parent := marker.Get("parentNode")
+
+	// Extract item ID prefix from marker (e.g., "lists_e0" -> "lists_")
+	itemIDPrefix := eb.MarkerID[:len(eb.MarkerID)-1]
+	if len(itemIDPrefix) > 0 && itemIDPrefix[len(itemIDPrefix)-1] == 'e' {
+		itemIDPrefix = itemIDPrefix[:len(itemIDPrefix)-1]
 	}
 
 	// Subscribe to list changes and re-render
 	switch list := listAny.(type) {
 	case *List[string]:
-		renderItems := func(items []string) {
-			var html string
-			for i, item := range items {
-				itemID := eb.MarkerID[:len(eb.MarkerID)-1]
-				if len(itemID) > 0 && itemID[len(itemID)-1] == 'e' {
-					itemID = itemID[:len(itemID)-1]
-				}
-				html += `<span id="` + itemID + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + escapeHTMLWasm(item) + `</li></span>`
-			}
-			if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
-				parent.Set("innerHTML", html)
-			}
-		}
-
-		items := list.Get()
-		if len(items) > 0 {
-			renderItems(items)
-		}
-
-		list.OnChange(func(items []string) {
-			renderItems(items)
-		})
-
+		bindListItems(list, parent, itemIDPrefix, escapeHTMLWasm)
 	case *List[int]:
-		renderItems := func(items []int) {
-			var html string
-			for i, item := range items {
-				itemID := eb.MarkerID[:len(eb.MarkerID)-1]
-				if len(itemID) > 0 && itemID[len(itemID)-1] == 'e' {
-					itemID = itemID[:len(itemID)-1]
-				}
-				html += `<span id="` + itemID + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + intToStr(item) + `</li></span>`
-			}
-			if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
-				parent.Set("innerHTML", html)
-			}
-		}
-
-		items := list.Get()
-		if len(items) > 0 {
-			renderItems(items)
-		}
-
-		list.OnChange(func(items []int) {
-			renderItems(items)
-		})
+		bindListItems(list, parent, itemIDPrefix, intToStr)
 	}
 
 	_ = comp
+}
+
+// bindListItems sets up list rendering and subscribes to changes.
+func bindListItems[T comparable](list *List[T], parent js.Value, itemIDPrefix string, format func(T) string) {
+	renderItems := func(items []T) {
+		var html string
+		for i, item := range items {
+			html += `<span id="` + itemIDPrefix + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + format(item) + `</li></span>`
+		}
+		if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
+			parent.Set("innerHTML", html)
+		}
+	}
+
+	// Don't render initially - SSR already rendered the items
+	// Just subscribe to changes for future updates
+	list.OnChange(renderItems)
+}
+
+// bindRouter sets up page switching based on a component store.
+func bindRouter(rb HydrateRouterBinding, components map[string]Component) {
+	store := resolveStore(rb.StoreID, components)
+	if store == nil {
+		return
+	}
+
+	compStore, isCompStore := store.(*Store[Component])
+	if !isCompStore {
+		return
+	}
+
+	// Track currently visible page
+	var currentPage string
+
+	updateVisibility := func(comp Component) {
+		newPage := componentNameWasm(comp)
+
+		// Hide old page
+		if currentPage != "" && currentPage != newPage {
+			if oldEl := GetEl("page-" + currentPage); ok(oldEl) {
+				oldEl.Get("style").Set("display", "none")
+			}
+		}
+		// Hide notfound
+		if notFoundEl := GetEl("page-notfound"); ok(notFoundEl) {
+			notFoundEl.Get("style").Set("display", "none")
+		}
+
+		// Show new page
+		newEl := GetEl("page-" + newPage)
+		if ok(newEl) {
+			newEl.Get("style").Call("removeProperty", "display")
+			currentPage = newPage
+		} else {
+			// Show notfound if page doesn't exist
+			if notFoundEl := GetEl("page-notfound"); ok(notFoundEl) {
+				notFoundEl.Get("style").Call("removeProperty", "display")
+			}
+			currentPage = ""
+		}
+	}
+
+	// Initial state - don't call updateVisibility since SSR already rendered correctly
+	currentPage = componentNameWasm(compStore.Get())
+
+	// Subscribe to changes
+	compStore.OnChange(updateVisibility)
+}
+
+// componentNameWasm returns the lowercase type name of a component.
+func componentNameWasm(c Component) string {
+	if c == nil {
+		return ""
+	}
+	t := reflect.TypeOf(c)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	name := t.Name()
+	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
+		b := []byte(name)
+		b[0] = b[0] + 32
+		return string(b)
+	}
+	return name
 }
 
 // escapeHTMLWasm escapes HTML special characters
@@ -729,6 +895,95 @@ func intToStr(n int) string {
 	return string(buf[i:])
 }
 
+// initStores initializes all nil store fields in a component with default values.
+func initStores(comp Component) {
+	rv := reflect.ValueOf(comp).Elem()
+	rt := rv.Type()
+
+	for i := 0; i < rt.NumField(); i++ {
+		f := rv.Field(i)
+		ft := rt.Field(i).Type
+
+		// Check if field is a nil pointer to a store type
+		if f.Kind() == reflect.Ptr && f.IsNil() && f.CanSet() {
+			// Get the element type to check the actual store type
+			elemType := ft.Elem()
+			elemName := elemType.Name()
+			pkgPath := elemType.PkgPath()
+
+			// Check if it's from preveltekit package
+			if pkgPath != "preveltekit" {
+				continue
+			}
+
+			switch elemName {
+			case "LocalStore":
+				f.Set(reflect.ValueOf(&LocalStore{Store: New("")}))
+			case "Store":
+				// Need to determine the type parameter - check the field's type
+				// Since we can't easily get generic params, use the Elem().Field approach
+				// or just try to create based on common types
+				// For now, create a Store[string] as default and let OnCreate override
+				// Actually, we need to check the actual generic type
+				// Use reflection to check the type parameter
+				initGenericStore(f, ft)
+			case "List":
+				initGenericList(f, ft)
+			}
+		}
+	}
+}
+
+// initGenericStore initializes a generic Store field based on its type parameter.
+func initGenericStore(f reflect.Value, ft reflect.Type) {
+	// Create a zero value of the pointer type and check what methods it has
+	// This is tricky with generics - we need to use type assertions at runtime
+
+	// Get the full type string which includes generic params in some cases
+	// For WASM, the type shows as *preveltekit.Store without params
+	// We need to infer from the field usage or use a different approach
+
+	// Try to create each type and see which one is assignable
+	stringStore := New("")
+	if reflect.TypeOf(stringStore).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(stringStore))
+		return
+	}
+
+	intStore := New(0)
+	if reflect.TypeOf(intStore).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(intStore))
+		return
+	}
+
+	boolStore := New(false)
+	if reflect.TypeOf(boolStore).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(boolStore))
+		return
+	}
+
+	float64Store := New(0.0)
+	if reflect.TypeOf(float64Store).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(float64Store))
+		return
+	}
+}
+
+// initGenericList initializes a generic List field based on its type parameter.
+func initGenericList(f reflect.Value, ft reflect.Type) {
+	stringList := NewList[string]()
+	if reflect.TypeOf(stringList).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(stringList))
+		return
+	}
+
+	intList := NewList[int]()
+	if reflect.TypeOf(intList).AssignableTo(ft) {
+		f.Set(reflect.ValueOf(intList))
+		return
+	}
+}
+
 // replaceAll replaces all occurrences of old with new in s
 func replaceAll(s, old, new string) string {
 	if old == "" {
@@ -768,18 +1023,23 @@ func evalCondition(branch HydrateIfBranch, components map[string]Component) bool
 	// Compare based on operator
 	switch s := store.(type) {
 	case *Store[int]:
-		return compareInt(s.Get(), branch.Op, atoiSafe(branch.Operand))
+		return compare(s.Get(), branch.Op, atoiSafe(branch.Operand))
 	case *Store[string]:
-		return compareString(s.Get(), branch.Op, branch.Operand)
+		return compare(s.Get(), branch.Op, branch.Operand)
 	case *Store[float64]:
-		return compareFloat(s.Get(), branch.Op, atofSafe(branch.Operand))
+		return compare(s.Get(), branch.Op, atofSafe(branch.Operand))
 	}
 
 	return false
 }
 
-func compareInt(val int, op string, operand int) bool {
+// compare compares two ordered values with the given operator.
+func compare[T int | float64 | string](val T, op string, operand T) bool {
 	switch op {
+	case "==":
+		return val == operand
+	case "!=":
+		return val != operand
 	case ">=":
 		return val >= operand
 	case ">":
@@ -788,34 +1048,13 @@ func compareInt(val int, op string, operand int) bool {
 		return val <= operand
 	case "<":
 		return val < operand
-	case "==":
-		return val == operand
-	case "!=":
-		return val != operand
 	}
 	return false
 }
 
-func compareString(val string, op string, operand string) bool {
+// compareBool compares two boolean values with the given operator.
+func compareBool(val bool, op string, operand bool) bool {
 	switch op {
-	case "==":
-		return val == operand
-	case "!=":
-		return val != operand
-	}
-	return false
-}
-
-func compareFloat(val float64, op string, operand float64) bool {
-	switch op {
-	case ">=":
-		return val >= operand
-	case ">":
-		return val > operand
-	case "<=":
-		return val <= operand
-	case "<":
-		return val < operand
 	case "==":
 		return val == operand
 	case "!=":
@@ -889,6 +1128,54 @@ func subscribeToStore(store any, callback func()) {
 	}
 }
 
+// storeToString returns the string representation of a store's current value.
+func storeToString(store any) string {
+	switch s := store.(type) {
+	case *Store[string]:
+		return s.Get()
+	case *Store[int]:
+		return intToStr(s.Get())
+	case *Store[bool]:
+		if s.Get() {
+			return "true"
+		}
+		return "false"
+	case *Store[float64]:
+		// Simple float formatting (avoid fmt)
+		return floatToStr(s.Get())
+	}
+	return ""
+}
+
+// floatToStr converts float64 to string without fmt package.
+func floatToStr(f float64) string {
+	if f == 0 {
+		return "0"
+	}
+	neg := f < 0
+	if neg {
+		f = -f
+	}
+	// Integer part
+	intPart := int(f)
+	fracPart := f - float64(intPart)
+	result := intToStr(intPart)
+	// Fractional part (up to 6 digits)
+	if fracPart > 0.0000001 {
+		result += "."
+		for i := 0; i < 6 && fracPart > 0.0000001; i++ {
+			fracPart *= 10
+			digit := int(fracPart)
+			result += string(byte('0' + digit))
+			fracPart -= float64(digit)
+		}
+	}
+	if neg {
+		return "-" + result
+	}
+	return result
+}
+
 // HydrateBindings is the JSON representation of bindings for WASM.
 type HydrateBindings struct {
 	TextBindings   []HydrateTextBinding   `json:"TextBindings"`
@@ -899,6 +1186,7 @@ type HydrateBindings struct {
 	ClassBindings  []HydrateClassBinding  `json:"ClassBindings"`
 	ShowIfBindings []HydrateShowIfBinding `json:"ShowIfBindings"`
 	AttrBindings   []HydrateAttrBinding   `json:"AttrBindings"`
+	RouterBindings []HydrateRouterBinding `json:"RouterBindings"`
 }
 
 type HydrateTextBinding struct {
@@ -910,8 +1198,6 @@ type HydrateTextBinding struct {
 type HydrateEvent struct {
 	ElementID string   `json:"ElementID"`
 	Event     string   `json:"Event"`
-	HandlerID string   `json:"HandlerID"`
-	ArgsStr   string   `json:"ArgsStr"`
 	Modifiers []string `json:"Modifiers"`
 }
 
@@ -943,6 +1229,8 @@ type HydrateClassBinding struct {
 	ElementID string   `json:"element_id"`
 	ClassName string   `json:"class_name"`
 	CondExpr  string   `json:"cond_expr"`
+	Op        string   `json:"op"`
+	Operand   string   `json:"operand"`
 	Deps      []string `json:"deps"`
 }
 
@@ -967,4 +1255,8 @@ type HydrateEachBlock struct {
 	ListID   string `json:"ListID"`
 	ItemVar  string `json:"ItemVar"`
 	IndexVar string `json:"IndexVar"`
+}
+
+type HydrateRouterBinding struct {
+	StoreID string `json:"store_id"`
 }

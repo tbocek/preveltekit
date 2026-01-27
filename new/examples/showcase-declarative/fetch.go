@@ -120,41 +120,43 @@ func itoa(n int) string {
 }
 
 func (f *Fetch) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Fetch"),
+	return p.Html(`<div class="demo">
+		<h1>Fetch</h1>
 
-		p.Section(
-			p.H2("Typed Fetch"),
-			p.P("Fetch data with automatic JSON decoding into Go structs:"),
+		<section>
+			<h2>Typed Fetch</h2>
+			<p>Fetch data with automatic JSON decoding into Go structs:</p>
 
-			p.Div(p.Class("buttons"),
-				p.Button("Fetch Todo", p.OnClick(f.FetchTodo)),
-				p.Button("Fetch User", p.OnClick(f.FetchUser)),
-				p.Button("Fetch Post", p.OnClick(f.FetchPost)),
-				p.Button("Create Post (POST)", p.OnClick(f.CreatePost)),
-			),
+			<div class="buttons">
+				<button `, p.OnClick(f.FetchTodo), `>Fetch Todo</button>
+				<button `, p.OnClick(f.FetchUser), `>Fetch User</button>
+				<button `, p.OnClick(f.FetchPost), `>Fetch Post</button>
+				<button `, p.OnClick(f.CreatePost), `>Create Post (POST)</button>
+			</div>`,
 
-			p.If(f.RawData.Ne(""),
-				p.Pre(p.Bind(f.RawData)),
-			).Else(
-				p.Pre("Click a button to fetch data"),
-			),
-			p.P(p.Class("status"), "Status: ", p.Bind(f.Status)),
+		p.If(f.RawData.Ne(""),
+			p.Html(`<pre>`, p.Bind(f.RawData), `</pre>`),
+		).Else(
+			p.Html(`<pre>Click a button to fetch data</pre>`),
 		),
 
-		p.Section(
-			p.H2("Usage"),
-			p.Pre(p.Class("code"), `type User struct {
-    ID   int    `+"`js:\"id\"`"+`
-    Name string `+"`js:\"name\"`"+`
+		p.Html(`<p class="status">Status: `, p.Bind(f.Status), `</p>
+		</section>
+
+		<section>
+			<h2>Usage</h2>
+			<pre class="code">type User struct {
+    ID   int    `+"`"+`js:"id"`+"`"+`
+    Name string `+"`"+`js:"name"`+"`"+`
 }
 
 go func() {
     user, err := preveltekit.Get[User](url)
     if err != nil { ... }
     // use user
-}()`),
-		),
+}()</pre>
+		</section>
+	</div>`),
 	)
 }
 
@@ -164,17 +166,4 @@ func (f *Fetch) Style() string {
 .demo pre.code{background:#1a1a2e;color:#e0e0e0}
 .demo .status{color:#666;font-size:.9em;margin-top:10px}
 `
-}
-
-func (f *Fetch) HandleEvent(method string, args string) {
-	switch method {
-	case "FetchTodo":
-		f.FetchTodo()
-	case "FetchUser":
-		f.FetchUser()
-	case "FetchPost":
-		f.FetchPost()
-	case "CreatePost":
-		f.CreatePost()
-	}
 }

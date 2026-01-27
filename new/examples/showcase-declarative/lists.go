@@ -96,55 +96,52 @@ func (l *Lists) updateCount() {
 }
 
 func (l *Lists) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Lists"),
+	return p.Html(`<div class="demo">
+		<h1>Lists</h1>
 
-		p.Section(
-			p.H2("List Operations"),
-			p.P("Items: ", p.Strong(p.Bind(l.ItemCount))),
+		<section>
+			<h2>List Operations</h2>
+			<p>Items: <strong>`, p.Bind(l.ItemCount), `</strong></p>
 
-			p.Div(p.Class("input-row"),
-				p.Input(p.Type("text"), p.BindValue(l.NewItem), p.Placeholder("New item name")),
-			),
+			<div class="input-row">
+				`, p.BindValue(`<input type="text" placeholder="New item name">`, l.NewItem), `
+			</div>
 
-			p.Div(p.Class("button-group"),
-				p.H3("Add"),
-				p.Button("Prepend", p.OnClick(l.PrependItem)),
-				p.Button("Insert Middle", p.OnClick(l.InsertMiddle)),
-				p.Button("Append", p.OnClick(l.AddItem)),
-			),
+			<div class="button-group">
+				<h3>Add</h3>
+				<button `, p.OnClick(l.PrependItem), `>Prepend</button>
+				<button `, p.OnClick(l.InsertMiddle), `>Insert Middle</button>
+				<button `, p.OnClick(l.AddItem), `>Append</button>
+			</div>
 
-			p.Div(p.Class("button-group"),
-				p.H3("Remove"),
-				p.Button("First", p.OnClick(l.RemoveFirst)),
-				p.Button("Middle", p.OnClick(l.RemoveMiddle)),
-				p.Button("Last", p.OnClick(l.RemoveLast)),
-				p.Button("Clear All", p.OnClick(l.ClearAll)),
-			),
+			<div class="button-group">
+				<h3>Remove</h3>
+				<button `, p.OnClick(l.RemoveFirst), `>First</button>
+				<button `, p.OnClick(l.RemoveMiddle), `>Middle</button>
+				<button `, p.OnClick(l.RemoveLast), `>Last</button>
+				<button `, p.OnClick(l.ClearAll), `>Clear All</button>
+			</div>
 
-			p.Div(p.Class("button-group"),
-				p.H3("Replace All (simulates fetch)"),
-				p.Button("Load Fruits", p.OnClick(l.LoadFruits)),
-				p.Button("Load Numbers", p.OnClick(l.LoadNumbers)),
-			),
+			<div class="button-group">
+				<h3>Replace All (simulates fetch)</h3>
+				<button `, p.OnClick(l.LoadFruits), `>Load Fruits</button>
+				<button `, p.OnClick(l.LoadNumbers), `>Load Numbers</button>
+			</div>
 
-			p.Div(p.Class("list-container"),
-				p.H3("Current Items"),
-				p.If(l.ItemCount.Gt(0),
-					p.Ul(
-						p.Each(l.Items, func(item string, i int) p.Node {
-							return p.Li(
-								p.Span(p.Class("index"), p.Text(itoa(i))),
-								p.Text(" "+item),
-							)
-						}),
-					),
-				).Else(
-					p.P(p.Class("empty"), "No items in list"),
-				),
-			),
+			<div class="list-container">
+				<h3>Current Items</h3>`,
+		p.If(l.ItemCount.Gt(0),
+			p.Html(`<ul>`,
+				p.Each(l.Items, func(item string, i int) p.Node {
+					return p.Html(`<li><span class="index">`, itoa(i), `</span> `, item, `</li>`)
+				}),
+				`</ul>`),
+		).Else(
+			p.Html(`<p class="empty">No items in list</p>`),
 		),
-	)
+		`</div>
+		</section>
+	</div>`)
 }
 
 func (l *Lists) Style() string {
@@ -158,27 +155,4 @@ func (l *Lists) Style() string {
 .index{display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;background:#4caf50;color:#fff;border-radius:50%;font-size:12px;margin-right:10px}
 .empty{color:#999;font-style:italic;text-align:center;padding:20px}
 `
-}
-
-func (l *Lists) HandleEvent(method string, args string) {
-	switch method {
-	case "AddItem":
-		l.AddItem()
-	case "PrependItem":
-		l.PrependItem()
-	case "InsertMiddle":
-		l.InsertMiddle()
-	case "RemoveFirst":
-		l.RemoveFirst()
-	case "RemoveLast":
-		l.RemoveLast()
-	case "RemoveMiddle":
-		l.RemoveMiddle()
-	case "ClearAll":
-		l.ClearAll()
-	case "LoadFruits":
-		l.LoadFruits()
-	case "LoadNumbers":
-		l.LoadNumbers()
-	}
 }

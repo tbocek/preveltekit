@@ -57,9 +57,6 @@ func (b *Bitcoin) FetchPrice() {
 		}
 
 		raw := resp.RAW
-
-		println("DEBUG: PRICE=", raw.PRICE, "SYMBOL=", raw.FROMSYMBOL, "LASTUPDATE=", raw.LASTUPDATE)
-
 		b.Price.Set(raw.TOSYMBOL + " " + formatPrice(raw.PRICE))
 		b.Symbol.Set(raw.FROMSYMBOL)
 
@@ -67,7 +64,6 @@ func (b *Bitcoin) FetchPrice() {
 		secs := raw.LASTUPDATE % 86400
 		h, m, s := secs/3600, (secs%3600)/60, secs%60
 		b.UpdateTime.Set(pad2(h) + ":" + pad2(m) + ":" + pad2(s))
-		println("DEBUG: time=", pad2(h)+":"+pad2(m)+":"+pad2(s))
 
 		b.Loading.Set(false)
 	}()
@@ -112,28 +108,27 @@ func formatPrice(f float64) string {
 }
 
 func (b *Bitcoin) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Bitcoin Price"),
+	return p.Html(`<div class="demo">
+		<h1>Bitcoin Price</h1>
 
-		p.Section(p.Class("bitcoin-card"),
-			p.If(p.IsTrue(b.Loading),
-				p.P(p.Class("loading"), "Loading..."),
-			).ElseIf(b.Error.Ne(""),
-				p.P(p.Class("error"), "Error: ", p.Bind(b.Error)),
-				p.Button("Retry", p.OnClick(b.Retry)),
-			).Else(
-				p.Div(p.Class("price-info"),
-					p.Span(p.Class("symbol"), p.Bind(b.Symbol)),
-					p.Span(p.Class("update-time"), "Updated: ", p.Bind(b.UpdateTime), " UTC"),
-				),
-				p.P(p.Class("price"), p.Bind(b.Price)),
-				p.Small(p.Class("disclaimer"),
-					"Prices are volatile and for reference only.",
-				),
-			),
+		<section class="bitcoin-card">`,
+		p.If(p.IsTrue(b.Loading),
+			p.Html(`<p class="loading">Loading...</p>`),
+		).ElseIf(b.Error.Ne(""),
+			p.Html(`<p class="error">Error: `, p.Bind(b.Error), `</p>
+				<button `, p.OnClick(b.Retry), `>Retry</button>`),
+		).Else(
+			p.Html(`<div class="price-info">
+					<span class="symbol">`, p.Bind(b.Symbol), `</span>
+					<span class="update-time">Updated: `, p.Bind(b.UpdateTime), ` UTC</span>
+				</div>
+				<p class="price">`, p.Bind(b.Price), `</p>
+				<small class="disclaimer">Prices are volatile and for reference only.</small>`),
 		),
+		p.Html(`</section>
 
-		p.P(p.Class("hint"), "Price refreshes automatically every 60 seconds"),
+		<p class="hint">Price refreshes automatically every 60 seconds</p>
+	</div>`),
 	)
 }
 
@@ -149,11 +144,4 @@ func (b *Bitcoin) Style() string {
 .loading{color:#666;font-size:1.1rem}
 .error{color:#e53e3e;margin-bottom:1rem}
 `
-}
-
-func (b *Bitcoin) HandleEvent(method string, args string) {
-	switch method {
-	case "Retry":
-		b.Retry()
-	}
 }

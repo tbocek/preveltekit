@@ -1,5 +1,7 @@
 package preveltekit
 
+import "reflect"
+
 // Node represents a node in the declarative UI tree.
 // Nodes are constructed at build-time and walked to generate:
 // 1. HTML with markers (for SSR)
@@ -53,47 +55,6 @@ func El(tag string, content ...any) *Element {
 	return e
 }
 
-// Common HTML elements
-func Div(content ...any) *Element      { return El("div", content...) }
-func Span(content ...any) *Element     { return El("span", content...) }
-func P(content ...any) *Element        { return El("p", content...) }
-func H1(content ...any) *Element       { return El("h1", content...) }
-func H2(content ...any) *Element       { return El("h2", content...) }
-func H3(content ...any) *Element       { return El("h3", content...) }
-func H4(content ...any) *Element       { return El("h4", content...) }
-func H5(content ...any) *Element       { return El("h5", content...) }
-func H6(content ...any) *Element       { return El("h6", content...) }
-func Strong(content ...any) *Element   { return El("strong", content...) }
-func Em(content ...any) *Element       { return El("em", content...) }
-func Small(content ...any) *Element    { return El("small", content...) }
-func A(content ...any) *Element        { return El("a", content...) }
-func Button(content ...any) *Element   { return El("button", content...) }
-func Input(content ...any) *Element    { return El("input", content...) }
-func Label(content ...any) *Element    { return El("label", content...) }
-func Form(content ...any) *Element     { return El("form", content...) }
-func Ul(content ...any) *Element       { return El("ul", content...) }
-func Ol(content ...any) *Element       { return El("ol", content...) }
-func Li(content ...any) *Element       { return El("li", content...) }
-func Nav(content ...any) *Element      { return El("nav", content...) }
-func Main(content ...any) *Element     { return El("main", content...) }
-func Section(content ...any) *Element  { return El("section", content...) }
-func Article(content ...any) *Element  { return El("article", content...) }
-func Header(content ...any) *Element   { return El("header", content...) }
-func Footer(content ...any) *Element   { return El("footer", content...) }
-func Aside(content ...any) *Element    { return El("aside", content...) }
-func Table(content ...any) *Element    { return El("table", content...) }
-func Thead(content ...any) *Element    { return El("thead", content...) }
-func Tbody(content ...any) *Element    { return El("tbody", content...) }
-func Tr(content ...any) *Element       { return El("tr", content...) }
-func Th(content ...any) *Element       { return El("th", content...) }
-func Td(content ...any) *Element       { return El("td", content...) }
-func Img(content ...any) *Element      { return El("img", content...) }
-func Pre(content ...any) *Element      { return El("pre", content...) }
-func Code(content ...any) *Element     { return El("code", content...) }
-func Br() *Element                     { return El("br") }
-func Hr() *Element                     { return El("hr") }
-func Textarea(content ...any) *Element { return El("textarea", content...) }
-
 // =============================================================================
 // Text Node
 // =============================================================================
@@ -108,6 +69,24 @@ func (t *TextNode) nodeType() string { return "text" }
 // Text creates a text node.
 func Text(content string) *TextNode {
 	return &TextNode{Content: content}
+}
+
+// =============================================================================
+// Raw HTML Node
+// =============================================================================
+
+// HtmlNode represents raw HTML with embedded nodes.
+// It allows mixing raw HTML strings with dynamic nodes like Bind, If, Each.
+type HtmlNode struct {
+	Parts []any // strings, Nodes, or values to stringify
+}
+
+func (h *HtmlNode) nodeType() string { return "html" }
+
+// Html creates a raw HTML node from strings and embedded nodes.
+// Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
+func Html(parts ...any) *HtmlNode {
+	return &HtmlNode{Parts: parts}
 }
 
 // =============================================================================
@@ -241,7 +220,8 @@ func (e *EachNode) Else(children ...Node) *EachNode {
 
 // ComponentNode represents a nested component.
 type ComponentNode struct {
-	Name     string         // Component type name
+	Name     string         // Component type name (derived from instance)
+	Instance any            // The actual component instance
 	Props    map[string]any // Property values
 	Events   map[string]any // Event handlers
 	Children []Node         // Slot content
@@ -249,12 +229,22 @@ type ComponentNode struct {
 
 func (c *ComponentNode) nodeType() string { return "component" }
 
-// Comp creates a nested component node.
-func Comp(name string, content ...any) *ComponentNode {
+// Comp creates a nested component node from a component instance.
+// The component name is derived from the type via reflection.
+// Example: Comp(&Badge{Label: p.New("New")})
+func Comp(instance any, content ...any) *ComponentNode {
+	// Derive name from type
+	t := reflect.TypeOf(instance)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	name := t.Name()
+
 	c := &ComponentNode{
-		Name:   name,
-		Props:  make(map[string]any),
-		Events: make(map[string]any),
+		Name:     name,
+		Instance: instance,
+		Props:    make(map[string]any),
+		Events:   make(map[string]any),
 	}
 	for _, item := range content {
 		switch v := item.(type) {
@@ -291,8 +281,62 @@ type ChildNode struct {
 func (c *ChildNode) nodeType() string { return "child" }
 
 // Child creates a named child component placeholder for SPA routing.
+// Deprecated: Use ChildOf[T]() for type-safe routing.
 func Child(name string) *ChildNode {
 	return &ChildNode{Name: name}
+}
+
+// ChildOf creates a child component placeholder with name derived from type T.
+// Example: ChildOf[Basics]() creates a child named "basics"
+func ChildOf[T any]() *ChildNode {
+	var zero T
+	name := reflect.TypeOf(zero).Name()
+	// Convert first letter to lowercase
+	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
+		b := []byte(name)
+		b[0] = b[0] + 32
+		name = string(b)
+	}
+	return &ChildNode{Name: name}
+}
+
+// PageRouterNode renders all registered children and shows the one matching the current component.
+type PageRouterNode struct {
+	Current  *Store[Component]
+	NotFound Node // Optional node to show when no child matches
+}
+
+func (r *PageRouterNode) nodeType() string { return "router" }
+
+// PageRouter creates a router that shows the current component.
+// All children are pre-rendered at build time; the store controls visibility.
+// Example: PageRouter(app.CurrentComponent)
+func PageRouter(current *Store[Component]) *PageRouterNode {
+	return &PageRouterNode{Current: current}
+}
+
+// Default sets the node to show when no child matches.
+func (r *PageRouterNode) Default(node Node) *PageRouterNode {
+	r.NotFound = node
+	return r
+}
+
+// componentName returns the lowercase type name of a component.
+func componentName(c Component) string {
+	if c == nil {
+		return ""
+	}
+	t := reflect.TypeOf(c)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	name := t.Name()
+	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
+		b := []byte(name)
+		b[0] = b[0] + 32
+		return string(b)
+	}
+	return name
 }
 
 // =============================================================================
@@ -311,7 +355,7 @@ func Class(classes ...string) *ClassAttr {
 	return &ClassAttr{Classes: classes}
 }
 
-// ClassIfAttr represents a conditional class binding.
+// ClassIfAttr represents a conditional class binding (legacy, used with Element).
 type ClassIfAttr struct {
 	ClassName string
 	Cond      Condition
@@ -319,9 +363,43 @@ type ClassIfAttr struct {
 
 func (c *ClassIfAttr) attrType() string { return "classif" }
 
-// ClassIf creates a conditional class that's applied when the condition is true.
-func ClassIf(className string, cond Condition) *ClassIfAttr {
-	return &ClassIfAttr{ClassName: className, Cond: cond}
+// ClassIfNode represents an HTML element with conditional classes.
+// Takes the full opening tag and injects id + merges classes.
+type ClassIfNode struct {
+	HTML       string
+	Conditions []ClassIfCond
+	OnClick    func() // Optional click handler
+}
+
+type ClassIfCond struct {
+	ClassName string
+	Cond      Condition
+}
+
+func (c *ClassIfNode) nodeType() string { return "classif" }
+
+// ClassIf creates a conditional class node.
+// Pass the full opening tag and class/condition pairs.
+// Example: ClassIf(`<div class="step">`, "active", store.Eq(1), "completed", store.Gt(1))
+func ClassIf(html string, pairs ...any) *ClassIfNode {
+	node := &ClassIfNode{HTML: html}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if className, ok := pairs[i].(string); ok {
+			if cond, ok := pairs[i+1].(Condition); ok {
+				node.Conditions = append(node.Conditions, ClassIfCond{
+					ClassName: className,
+					Cond:      cond,
+				})
+			}
+		}
+	}
+	return node
+}
+
+// WithOnClick adds a click handler to a ClassIfNode.
+func (c *ClassIfNode) WithOnClick(handler func()) *ClassIfNode {
+	c.OnClick = handler
+	return c
 }
 
 // ShowIfAttr represents a conditional display binding.
@@ -349,21 +427,6 @@ func StaticAttribute(name, value string) *StaticAttr {
 	return &StaticAttr{Name: name, Value: value}
 }
 
-// Common attribute shortcuts
-func Id(value string) *StaticAttr          { return StaticAttribute("id", value) }
-func Type(value string) *StaticAttr        { return StaticAttribute("type", value) }
-func Href(value string) *StaticAttr        { return StaticAttribute("href", value) }
-func Src(value string) *StaticAttr         { return StaticAttribute("src", value) }
-func Alt(value string) *StaticAttr         { return StaticAttribute("alt", value) }
-func Placeholder(value string) *StaticAttr { return StaticAttribute("placeholder", value) }
-func Name(value string) *StaticAttr        { return StaticAttribute("name", value) }
-func Value(value string) *StaticAttr       { return StaticAttribute("value", value) }
-func Disabled() *StaticAttr                { return StaticAttribute("disabled", "disabled") }
-func Readonly() *StaticAttr                { return StaticAttribute("readonly", "readonly") }
-
-// Attr creates a static attribute with name and value.
-func Attr(name, value string) *StaticAttr { return StaticAttribute(name, value) }
-
 // DynAttrAttr represents a dynamic attribute with store bindings.
 type DynAttrAttr struct {
 	Name     string
@@ -387,37 +450,35 @@ func DynAttr(name, template string, stores ...any) *DynAttrAttr {
 // EventAttr represents an event handler binding.
 type EventAttr struct {
 	Event     string
-	Handler   any      // Method reference
-	HandlerID string   // Go expression for code generation
-	Args      []any    // Arguments to pass
+	Handler   func()   // Handler function (wrap args in closure)
 	Modifiers []string // ["preventDefault", "stopPropagation"]
 }
 
 func (e *EventAttr) attrType() string { return "event" }
 
 // OnClick creates a click event handler.
-func OnClick(handler any, args ...any) *EventAttr {
-	return &EventAttr{Event: "click", Handler: handler, Args: args}
+func OnClick(handler func()) *EventAttr {
+	return &EventAttr{Event: "click", Handler: handler}
 }
 
 // OnSubmit creates a submit event handler.
-func OnSubmit(handler any, args ...any) *EventAttr {
-	return &EventAttr{Event: "submit", Handler: handler, Args: args}
+func OnSubmit(handler func()) *EventAttr {
+	return &EventAttr{Event: "submit", Handler: handler}
 }
 
 // OnInput creates an input event handler.
-func OnInput(handler any, args ...any) *EventAttr {
-	return &EventAttr{Event: "input", Handler: handler, Args: args}
+func OnInput(handler func()) *EventAttr {
+	return &EventAttr{Event: "input", Handler: handler}
 }
 
 // OnChange creates a change event handler.
-func OnChange(handler any, args ...any) *EventAttr {
-	return &EventAttr{Event: "change", Handler: handler, Args: args}
+func OnChange(handler func()) *EventAttr {
+	return &EventAttr{Event: "change", Handler: handler}
 }
 
 // OnEvent creates a custom event handler.
-func OnEvent(event string, handler any, args ...any) *EventAttr {
-	return &EventAttr{Event: event, Handler: handler, Args: args}
+func OnEvent(event string, handler func()) *EventAttr {
+	return &EventAttr{Event: event, Handler: handler}
 }
 
 // PreventDefault adds the preventDefault modifier.
@@ -432,30 +493,36 @@ func (e *EventAttr) StopPropagation() *EventAttr {
 	return e
 }
 
-// BindValueAttr represents two-way binding to an input's value.
-type BindValueAttr struct {
+// BindValueNode represents a two-way binding to an input's value.
+// It wraps a complete HTML element and injects id/value attributes.
+type BindValueNode struct {
+	HTML    string // The HTML element, e.g. `<input type="text">`
 	Store   any    // *Store[string] or *Store[int]
 	StoreID string // Go expression for code generation
 }
 
-func (b *BindValueAttr) attrType() string { return "bindvalue" }
+func (b *BindValueNode) nodeType() string { return "bindvalue" }
 
-// BindValue creates a two-way binding between an input and a store.
-func BindValue[T any](store *Store[T]) *BindValueAttr {
-	return &BindValueAttr{Store: store}
+// BindValue creates a two-way bound input element.
+// Example: BindValue(`<input type="text" placeholder="Name">`, nameStore)
+func BindValue[T any](html string, store *Store[T]) *BindValueNode {
+	return &BindValueNode{HTML: html, Store: store}
 }
 
-// BindCheckedAttr represents two-way binding to a checkbox's checked state.
-type BindCheckedAttr struct {
+// BindCheckedNode represents a two-way binding to a checkbox's checked state.
+// It wraps a complete HTML element and injects id/checked attributes.
+type BindCheckedNode struct {
+	HTML    string // The HTML element, e.g. `<input type="checkbox">`
 	Store   any    // *Store[bool]
 	StoreID string // Go expression for code generation
 }
 
-func (b *BindCheckedAttr) attrType() string { return "bindchecked" }
+func (b *BindCheckedNode) nodeType() string { return "bindchecked" }
 
-// BindChecked creates a two-way binding between a checkbox and a bool store.
-func BindChecked(store *Store[bool]) *BindCheckedAttr {
-	return &BindCheckedAttr{Store: store}
+// BindChecked creates a two-way bound checkbox element.
+// Example: BindChecked(`<input type="checkbox">`, isCheckedStore)
+func BindChecked(html string, store *Store[bool]) *BindCheckedNode {
+	return &BindCheckedNode{HTML: html, Store: store}
 }
 
 // PropAttr represents a property passed to a child component.

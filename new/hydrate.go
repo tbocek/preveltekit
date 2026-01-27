@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 )
 
@@ -37,14 +36,17 @@ type HasOnMount interface {
 	OnMount()
 }
 
+// HasCurrentComponent is implemented by apps that have a CurrentComponent store for routing.
+type HasCurrentComponent interface {
+	GetCurrentComponent() *Store[Component]
+}
+
 // HydrateConfig configures the hydration process.
 type HydrateConfig struct {
 	// OutputDir is the directory where HTML files are written (default: "dist")
 	OutputDir string
 	// Children maps route paths to child components
 	Children map[string]Component
-	// NestedComponents maps component names to factory functions
-	NestedComponents map[string]func() Component
 }
 
 // Hydrate is the main entry point for declarative components.
@@ -52,12 +54,36 @@ type HydrateConfig struct {
 // In WASM mode, it sets up DOM bindings for reactivity.
 func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 	cfg := &HydrateConfig{
-		OutputDir:        "dist",
-		Children:         make(map[string]Component),
-		NestedComponents: make(map[string]func() Component),
+		OutputDir: "dist",
+		Children:  make(map[string]Component),
 	}
 	for _, opt := range opts {
 		opt(cfg)
+	}
+
+	// Initialize app stores first
+	initStores(app)
+
+	// Call OnCreate to let app initialize its children
+	if oc, ok := app.(HasOnCreate); ok {
+		oc.OnCreate()
+	}
+
+	// Auto-discover children from Routes() by calling handlers and reading CurrentComponent
+	if hr, ok := app.(HasRoutes); ok {
+		if hcc, ok := app.(HasCurrentComponent); ok {
+			currentStore := hcc.GetCurrentComponent()
+			for _, route := range hr.Routes() {
+				if route.Handler != nil {
+					// Call handler to set CurrentComponent
+					route.Handler(nil)
+					// Read the component that was set
+					if comp := currentStore.Get(); comp != nil {
+						cfg.Children[route.Path] = comp
+					}
+				}
+			}
+		}
 	}
 
 	// SSR mode - generate HTML and bindings
@@ -78,14 +104,6 @@ func WithChild(path string, comp Component) func(*HydrateConfig) {
 	}
 }
 
-// WithNestedComponent registers a nested component type by name.
-// The factory function should return a new instance with initialized stores.
-func WithNestedComponent(name string, factory func() Component) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		cfg.NestedComponents[name] = factory
-	}
-}
-
 // hydrateSSR handles the SSR phase - generating HTML and collecting bindings.
 func hydrateSSR(app Component, cfg *HydrateConfig) {
 	mode := os.Getenv("HYDRATE_MODE")
@@ -102,19 +120,17 @@ func hydrateSSR(app Component, cfg *HydrateConfig) {
 
 // hydrateGenerateAll generates a single SPA HTML file with all children embedded.
 func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
-	// Initialize stores for all components
-	initStores(app)
+	// Initialize stores and call OnCreate/OnMount for all children
+	// (app was already initialized in Hydrate before Routes() was called)
 	for _, child := range cfg.Children {
 		initStores(child)
-	}
-
-	// Call OnCreate for all components
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
 	}
 	for _, child := range cfg.Children {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
+		}
+		if om, ok := child.(HasOnMount); ok {
+			om.OnMount()
 		}
 	}
 
@@ -141,35 +157,34 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 	// Pre-render all children with unique prefixes
 	childrenContent := make(map[string]string)
 	childrenBindings := make(map[string]*CollectedBindings)
+	allCollectedStyles := make(map[string]string)
 	var childStyles string
 	for path, child := range cfg.Children {
 		name := strings.TrimPrefix(path, "/")
-		// Use prefix to ensure unique IDs across children, and pass nested components
+		// Use prefix to ensure unique IDs across children
 		// Also pass the child's store map so nested components can resolve dynamic props
-		childHTML, childBindings := RenderHTMLWithContext(child.Render(),
+		result := RenderHTMLWithContextFull(child.Render(),
 			WithPrefixCtx(name),
-			WithNestedComponentsCtx(cfg.NestedComponents),
 			WithParentStoreMapCtx(childStoreMaps[name]),
 		)
-		childrenContent[name] = childHTML
+		childrenContent[name] = result.HTML
 
-		// Collect child styles
+		// Collect child styles (from component's Style() method)
 		if hs, ok := child.(HasStyle); ok {
 			childStyles += hs.Style() + "\n"
 		}
 
-		// Resolve child bindings and store them for if-block branch inclusion
-		if childBindings != nil {
-			resolveBindings(childBindings, childStoreMaps[name], name, child)
-			childrenBindings[name] = childBindings
+		// Merge collected styles from nested components
+		for compName, style := range result.CollectedStyles {
+			if _, exists := allCollectedStyles[compName]; !exists {
+				allCollectedStyles[compName] = style
+			}
 		}
-	}
 
-	// Collect nested component styles
-	for _, factory := range cfg.NestedComponents {
-		comp := factory()
-		if hs, ok := comp.(HasStyle); ok {
-			childStyles += hs.Style() + "\n"
+		// Resolve child bindings and store them for if-block branch inclusion
+		if result.Bindings != nil {
+			resolveBindings(result.Bindings, childStoreMaps[name], name, child)
+			childrenBindings[name] = result.Bindings
 		}
 	}
 
@@ -180,8 +195,8 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 	resolveBindings(bindings, appStoreMap, "component", app)
 	mergeBindings(&allBindings, bindings)
 
-	// Build full HTML document with all styles
-	fullHTML := buildHTMLDocument(html, appStyle, childStyles)
+	// Build full HTML document with all styles (including auto-collected nested styles)
+	fullHTML := buildHTMLDocument(html, appStyle, childStyles, allCollectedStyles)
 
 	// Write single index.html
 	htmlPath := filepath.Join(cfg.OutputDir, "index.html")
@@ -279,6 +294,42 @@ func mergeBindings(dst, src *CollectedBindings) {
 			seenShowIf[b.ElementID] = true
 		}
 	}
+
+	// Merge attr bindings
+	seenAttr := make(map[string]bool)
+	for _, b := range dst.AttrBindings {
+		seenAttr[b.ElementID] = true
+	}
+	for _, b := range src.AttrBindings {
+		if !seenAttr[b.ElementID] {
+			dst.AttrBindings = append(dst.AttrBindings, b)
+			seenAttr[b.ElementID] = true
+		}
+	}
+
+	// Merge each blocks
+	seenEach := make(map[string]bool)
+	for _, b := range dst.EachBlocks {
+		seenEach[b.MarkerID] = true
+	}
+	for _, b := range src.EachBlocks {
+		if !seenEach[b.MarkerID] {
+			dst.EachBlocks = append(dst.EachBlocks, b)
+			seenEach[b.MarkerID] = true
+		}
+	}
+
+	// Merge router bindings
+	seenRouter := make(map[string]bool)
+	for _, b := range dst.RouterBindings {
+		seenRouter[b.StoreID] = true
+	}
+	for _, b := range src.RouterBindings {
+		if !seenRouter[b.StoreID] {
+			dst.RouterBindings = append(dst.RouterBindings, b)
+			seenRouter[b.StoreID] = true
+		}
+	}
 }
 
 // hydrateSingleRoute handles rendering a single route (original behavior).
@@ -286,18 +337,11 @@ func hydrateSingleRoute(app Component, cfg *HydrateConfig) {
 	prerenderPath := os.Getenv("PRERENDER_PATH")
 	outputBindings := os.Getenv("OUTPUT_BINDINGS") == "1"
 
-	// Initialize stores for all components
-	initStores(app)
+	// Initialize stores and call OnCreate for all children
+	// (app was already initialized in Hydrate before Routes() was called)
 	for _, child := range cfg.Children {
 		initStores(child)
 	}
-
-	// Call OnCreate if implemented
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
-	}
-
-	// Initialize child components
 	for _, child := range cfg.Children {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
@@ -592,33 +636,8 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		}
 	}
 
-	// Resolve event handlers
-	for i := range bindings.Events {
-		// Skip if already resolved (e.g., from child component bindings)
-		if bindings.Events[i].HandlerID != "" {
-			continue
-		}
-		if bindings.Events[i].HandlerRef != nil {
-			fn := reflect.ValueOf(bindings.Events[i].HandlerRef)
-			if fn.Kind() == reflect.Func {
-				name := runtime.FuncForPC(fn.Pointer()).Name()
-				// Extract method name from "main.(*Counter).Increment-fm"
-				if idx := strings.LastIndex(name, "."); idx >= 0 {
-					name = name[idx+1:]
-				}
-				name = strings.TrimSuffix(name, "-fm")
-				bindings.Events[i].HandlerID = prefix + "." + name
-			}
-		}
-		// Serialize args
-		if len(bindings.Events[i].Args) > 0 {
-			var argStrs []string
-			for _, arg := range bindings.Events[i].Args {
-				argStrs = append(argStrs, fmt.Sprintf("%v", arg))
-			}
-			bindings.Events[i].ArgsStr = strings.Join(argStrs, ", ")
-		}
-	}
+	// Event handlers are resolved directly in WASM via collectHandlers
+	// No need to resolve handler names here anymore
 
 	// Resolve attr bindings
 	for i := range bindings.AttrBindings {
@@ -650,6 +669,20 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 			addr := reflect.ValueOf(bindings.EachBlocks[i].ListRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
 				bindings.EachBlocks[i].ListID = name
+			}
+		}
+	}
+
+	// Resolve router bindings
+	for i := range bindings.RouterBindings {
+		// Skip if already resolved
+		if bindings.RouterBindings[i].StoreID != "" {
+			continue
+		}
+		if bindings.RouterBindings[i].StoreRef != nil {
+			addr := reflect.ValueOf(bindings.RouterBindings[i].StoreRef).Pointer()
+			if name, ok := storeMap[addr]; ok {
+				bindings.RouterBindings[i].StoreID = name
 			}
 		}
 	}
@@ -721,7 +754,7 @@ func GenerateHTMLFiles(app Component, cfg *HydrateConfig, outputDir string) erro
 			}
 		}
 
-		fullHTML := buildHTMLDocument(html, appStyle, childStyle)
+		fullHTML := buildHTMLDocument(html, appStyle, childStyle, nil)
 
 		// Write to file
 		htmlFile := filepath.Join(outputDir, route.HTMLFile)
@@ -736,13 +769,23 @@ func GenerateHTMLFiles(app Component, cfg *HydrateConfig, outputDir string) erro
 	return nil
 }
 
-func buildHTMLDocument(body, appStyle, childStyle string) string {
+func buildHTMLDocument(body, appStyle, childStyle string, collectedStyles map[string]string) string {
 	var styles string
 	if appStyle != "" {
 		styles += "<style>" + appStyle + "</style>\n"
 	}
 	if childStyle != "" {
 		styles += "<style>" + childStyle + "</style>\n"
+	}
+	// Add auto-collected styles from nested components
+	if len(collectedStyles) > 0 {
+		var nestedStyles string
+		for _, style := range collectedStyles {
+			nestedStyles += style + "\n"
+		}
+		if nestedStyles != "" {
+			styles += "<style>" + nestedStyles + "</style>\n"
+		}
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>

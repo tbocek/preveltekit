@@ -61,44 +61,45 @@ func (d *Debounce) Reset() {
 }
 
 func (d *Debounce) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Debounce & Throttle"),
+	return p.Html(`<div class="demo">
+		<h1>Debounce &amp; Throttle</h1>
 
-		p.Section(
-			p.H2("Debounced Search"),
-			p.P("Search triggers 300ms after you stop typing."),
+		<section>
+			<h2>Debounced Search</h2>
+			<p>Search triggers 300ms after you stop typing.</p>
 
-			p.Input(p.Type("text"), p.BindValue(d.SearchInput), p.Placeholder("Type to search...")),
+			`, p.BindValue(`<input type="text" placeholder="Type to search...">`, d.SearchInput), `
 
-			p.Div(p.Class("stats"),
-				p.Span("Status: ", p.Strong(p.Bind(d.Status))),
-				p.Span("API calls: ", p.Strong(p.Bind(d.SearchCount))),
-			),
+			<div class="stats">
+				<span>Status: <strong>`, p.Bind(d.Status), `</strong></span>
+				<span>API calls: <strong>`, p.Bind(d.SearchCount), `</strong></span>
+			</div>`,
 
-			p.If(d.SearchResult.Ne(""),
-				p.Div(p.Class("result"), p.Bind(d.SearchResult)),
-			),
-
-			p.P(p.Class("hint"), "Type quickly - search only fires once you pause."),
+		p.If(d.SearchResult.Ne(""),
+			p.Html(`<div class="result">`, p.Bind(d.SearchResult), `</div>`),
 		),
 
-		p.Section(
-			p.H2("Throttled Clicks"),
-			p.P("Button action throttled to max once per 500ms."),
+		p.Html(`<p class="hint">Type quickly - search only fires once you pause.</p>
+		</section>
 
-			p.Button("Click me rapidly!", p.OnClick(d.OnClick)),
+		<section>
+			<h2>Throttled Clicks</h2>
+			<p>Button action throttled to max once per 500ms.</p>
 
-			p.Div(p.Class("stats"),
-				p.Span("Total clicks: ", p.Strong(p.Bind(d.ClickCount))),
-				p.Span("Throttled actions: ", p.Strong(p.Bind(d.ThrottleCount))),
-			),
+			<button `, p.OnClick(d.OnClick), `>Click me rapidly!</button>
 
-			p.P(p.Class("hint"), "Click fast - throttled count increases slowly."),
-		),
+			<div class="stats">
+				<span>Total clicks: <strong>`, p.Bind(d.ClickCount), `</strong></span>
+				<span>Throttled actions: <strong>`, p.Bind(d.ThrottleCount), `</strong></span>
+			</div>
 
-		p.Section(
-			p.Button("Reset All", p.OnClick(d.Reset)),
-		),
+			<p class="hint">Click fast - throttled count increases slowly.</p>
+		</section>
+
+		<section>
+			<button `, p.OnClick(d.Reset), `>Reset All</button>
+		</section>
+	</div>`),
 	)
 }
 
@@ -109,13 +110,4 @@ func (d *Debounce) Style() string {
 .stats span{color:#1565c0}
 .result{padding:15px;background:#e8f5e9;border-radius:4px;color:#2e7d32;margin-top:10px}
 `
-}
-
-func (d *Debounce) HandleEvent(method string, args string) {
-	switch method {
-	case "OnClick":
-		d.OnClick()
-	case "Reset":
-		d.Reset()
-	}
 }

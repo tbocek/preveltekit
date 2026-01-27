@@ -68,102 +68,78 @@ func (r *Routing) Step4() {
 }
 
 func (r *Routing) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Routing & Navigation"),
+	return p.Html(`<div class="demo">
+		<h1>Routing & Navigation</h1>
 
-		p.Section(
-			p.H2("Tab Navigation"),
-			p.P("Simple tab-based navigation pattern:"),
+		<section>
+			<h2>Tab Navigation</h2>
+			<p>Simple tab-based navigation pattern:</p>
 
-			p.Div(p.Class("tabs"),
-				p.Button("Home", p.OnClick(r.GoHome), p.ClassIf("active", r.CurrentTab.Eq("home"))),
-				p.Button("Profile", p.OnClick(r.GoProfile), p.ClassIf("active", r.CurrentTab.Eq("profile"))),
-				p.Button("Settings", p.OnClick(r.GoSettings), p.ClassIf("active", r.CurrentTab.Eq("settings"))),
-				p.Button("Notifications", p.OnClick(r.GoNotifications), p.ClassIf("active", r.CurrentTab.Eq("notifications"))),
-			),
+			<div class="tabs">`,
+		p.ClassIf(`<button>Home</button>`, "active", r.CurrentTab.Eq("home")).WithOnClick(func() { r.GoHome() }),
+		p.ClassIf(`<button>Profile</button>`, "active", r.CurrentTab.Eq("profile")).WithOnClick(func() { r.GoProfile() }),
+		p.ClassIf(`<button>Settings</button>`, "active", r.CurrentTab.Eq("settings")).WithOnClick(func() { r.GoSettings() }),
+		p.ClassIf(`<button>Notifications</button>`, "active", r.CurrentTab.Eq("notifications")).WithOnClick(func() { r.GoNotifications() }),
+		`</div>
 
-			p.Div(p.Class("tab-content"),
-				p.If(r.CurrentTab.Eq("home"),
-					p.Div(p.Class("tab-panel"),
-						p.H3("Home"),
-						p.P("Welcome to the home tab! This is the default view."),
-					),
-				).ElseIf(r.CurrentTab.Eq("profile"),
-					p.Div(p.Class("tab-panel"),
-						p.H3("Profile"),
-						p.P("View and edit your profile information here."),
-					),
-				).ElseIf(r.CurrentTab.Eq("settings"),
-					p.Div(p.Class("tab-panel"),
-						p.H3("Settings"),
-						p.P("Configure your application settings."),
-					),
-				).ElseIf(r.CurrentTab.Eq("notifications"),
-					p.Div(p.Class("tab-panel"),
-						p.H3("Notifications"),
-						p.P("View your recent notifications."),
-					),
-				),
-			),
+			<div class="tab-content">`,
+		p.If(r.CurrentTab.Eq("home"),
+			p.Html(`<div class="tab-panel"><h3>Home</h3><p>Welcome to the home tab! This is the default view.</p></div>`),
+		).ElseIf(r.CurrentTab.Eq("profile"),
+			p.Html(`<div class="tab-panel"><h3>Profile</h3><p>View and edit your profile information here.</p></div>`),
+		).ElseIf(r.CurrentTab.Eq("settings"),
+			p.Html(`<div class="tab-panel"><h3>Settings</h3><p>Configure your application settings.</p></div>`),
+		).ElseIf(r.CurrentTab.Eq("notifications"),
+			p.Html(`<div class="tab-panel"><h3>Notifications</h3><p>View your recent notifications.</p></div>`),
 		),
+		`</div>
+		</section>
 
-		p.Section(
-			p.H2("Wizard / Stepper"),
-			p.P("Multi-step form navigation:"),
+		<section>
+			<h2>Wizard / Stepper</h2>
+			<p>Multi-step form navigation:</p>
 
-			p.Div(p.Class("stepper"),
-				p.Div(p.Class("step"), p.ClassIf("completed", r.CurrentStep.Gt(1)), p.ClassIf("active", r.CurrentStep.Eq(1)),
-					p.Button("1", p.OnClick(r.Step1)),
-					p.Span("Details"),
-				),
-				p.Div(p.Class("step-line"), p.ClassIf("completed", r.CurrentStep.Gt(1))),
-				p.Div(p.Class("step"), p.ClassIf("completed", r.CurrentStep.Gt(2)), p.ClassIf("active", r.CurrentStep.Eq(2)),
-					p.Button("2", p.OnClick(r.Step2)),
-					p.Span("Address"),
-				),
-				p.Div(p.Class("step-line"), p.ClassIf("completed", r.CurrentStep.Gt(2))),
-				p.Div(p.Class("step"), p.ClassIf("completed", r.CurrentStep.Gt(3)), p.ClassIf("active", r.CurrentStep.Eq(3)),
-					p.Button("3", p.OnClick(r.Step3)),
-					p.Span("Payment"),
-				),
-				p.Div(p.Class("step-line"), p.ClassIf("completed", r.CurrentStep.Gt(3))),
-				p.Div(p.Class("step"), p.ClassIf("active", r.CurrentStep.Eq(4)),
-					p.Button("4", p.OnClick(r.Step4)),
-					p.Span("Confirm"),
-				),
-			),
+			<div class="stepper">`,
+		p.ClassIf(`<div class="step">`, "completed", r.CurrentStep.Gt(1), "active", r.CurrentStep.Eq(1)),
+		`<button `, p.OnClick(func() { r.Step1() }), `>1</button>
+					<span>Details</span>
+				</div>`,
+		p.ClassIf(`<div class="step-line">`, "completed", r.CurrentStep.Gt(1)), `</div>`,
+		p.ClassIf(`<div class="step">`, "completed", r.CurrentStep.Gt(2), "active", r.CurrentStep.Eq(2)),
+		`<button `, p.OnClick(func() { r.Step2() }), `>2</button>
+					<span>Address</span>
+				</div>`,
+		p.ClassIf(`<div class="step-line">`, "completed", r.CurrentStep.Gt(2)), `</div>`,
+		p.ClassIf(`<div class="step">`, "completed", r.CurrentStep.Gt(3), "active", r.CurrentStep.Eq(3)),
+		`<button `, p.OnClick(func() { r.Step3() }), `>3</button>
+					<span>Payment</span>
+				</div>`,
+		p.ClassIf(`<div class="step-line">`, "completed", r.CurrentStep.Gt(3)), `</div>`,
+		p.ClassIf(`<div class="step">`, "active", r.CurrentStep.Eq(4)),
+		`<button `, p.OnClick(func() { r.Step4() }), `>4</button>
+					<span>Confirm</span>
+				</div>
+			</div>
 
-			p.Div(p.Class("step-content"),
-				p.If(r.CurrentStep.Eq(1),
-					p.Div(p.Class("step-panel"),
-						p.H3("Step 1: Personal Details"),
-						p.P("Enter your name and email address."),
-					),
-				).ElseIf(r.CurrentStep.Eq(2),
-					p.Div(p.Class("step-panel"),
-						p.H3("Step 2: Shipping Address"),
-						p.P("Enter your shipping address."),
-					),
-				).ElseIf(r.CurrentStep.Eq(3),
-					p.Div(p.Class("step-panel"),
-						p.H3("Step 3: Payment Method"),
-						p.P("Choose your payment method."),
-					),
-				).ElseIf(r.CurrentStep.Eq(4),
-					p.Div(p.Class("step-panel"),
-						p.H3("Step 4: Confirmation"),
-						p.P("Review and confirm your order."),
-					),
-				),
-			),
-
-			p.Div(p.Class("step-buttons"),
-				p.Button("Previous", p.OnClick(r.PrevStep), p.ClassIf("disabled", r.CurrentStep.Eq(1))),
-				p.Span("Step ", p.Bind(r.CurrentStep), " of 4"),
-				p.Button("Next", p.OnClick(r.NextStep), p.ClassIf("disabled", r.CurrentStep.Eq(4))),
-			),
+			<div class="step-content">`,
+		p.If(r.CurrentStep.Eq(1),
+			p.Html(`<div class="step-panel"><h3>Step 1: Personal Details</h3><p>Enter your name and email address.</p></div>`),
+		).ElseIf(r.CurrentStep.Eq(2),
+			p.Html(`<div class="step-panel"><h3>Step 2: Shipping Address</h3><p>Enter your shipping address.</p></div>`),
+		).ElseIf(r.CurrentStep.Eq(3),
+			p.Html(`<div class="step-panel"><h3>Step 3: Payment Method</h3><p>Choose your payment method.</p></div>`),
+		).ElseIf(r.CurrentStep.Eq(4),
+			p.Html(`<div class="step-panel"><h3>Step 4: Confirmation</h3><p>Review and confirm your order.</p></div>`),
 		),
-	)
+		`</div>
+
+			<div class="step-buttons">
+				<button `, p.OnClick(func() { r.PrevStep() }), ` `, p.ClassIf("disabled", r.CurrentStep.Eq(1)), `>Previous</button>
+				<span>Step `, p.Bind(r.CurrentStep), ` of 4</span>
+				<button `, p.OnClick(func() { r.NextStep() }), ` `, p.ClassIf("disabled", r.CurrentStep.Eq(4)), `>Next</button>
+			</div>
+		</section>
+	</div>`)
 }
 
 func (r *Routing) Style() string {
@@ -190,29 +166,4 @@ func (r *Routing) Style() string {
 .step-panel h3{margin-top:0;color:#004085}
 .step-buttons{display:flex;justify-content:space-between;align-items:center;margin-top:15px;padding-top:15px;border-top:1px solid #eee}
 `
-}
-
-func (r *Routing) HandleEvent(method string, args string) {
-	switch method {
-	case "GoHome":
-		r.GoHome()
-	case "GoProfile":
-		r.GoProfile()
-	case "GoSettings":
-		r.GoSettings()
-	case "GoNotifications":
-		r.GoNotifications()
-	case "NextStep":
-		r.NextStep()
-	case "PrevStep":
-		r.PrevStep()
-	case "Step1":
-		r.Step1()
-	case "Step2":
-		r.Step2()
-	case "Step3":
-		r.Step3()
-	case "Step4":
-		r.Step4()
-	}
 }

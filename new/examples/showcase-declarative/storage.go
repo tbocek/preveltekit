@@ -52,40 +52,37 @@ func (s *Storage) ClearAll() {
 }
 
 func (s *Storage) Render() p.Node {
-	return p.Div(p.Class("demo"),
-		p.H1("Storage"),
+	return p.Html(`<div class="demo">
+		<h1>Storage</h1>
 
-		// Persisted Theme section
-		p.Section(
-			p.H2("Persisted Theme (Auto-sync)"),
-			p.P("Theme preference is automatically saved to localStorage."),
-			p.P("Current theme: ", p.Strong(p.Bind(s.Theme.Store))),
-			p.Div(p.Class("buttons"),
-				p.Button("Light", p.OnClick(s.SetLight)),
-				p.Button("Dark", p.OnClick(s.SetDark)),
-			),
-			p.P(p.Class("hint"), "Refresh the page - theme will persist!"),
-		),
+		<section>
+			<h2>Persisted Theme (Auto-sync)</h2>
+			<p>Theme preference is automatically saved to localStorage.</p>
+			<p>Current theme: <strong>`, p.Bind(s.Theme.Store), `</strong></p>
+			<div class="buttons">
+				<button `, p.OnClick(s.SetLight), `>Light</button>
+				<button `, p.OnClick(s.SetDark), `>Dark</button>
+			</div>
+			<p class="hint">Refresh the page - theme will persist!</p>
+		</section>
 
-		// Manual Storage section
-		p.Section(
-			p.H2("Manual Storage (Notes)"),
-			p.P("Notes are saved manually when you click Save."),
-			p.Textarea(p.BindValue(s.Notes), p.Placeholder("Type your notes here...")),
-			p.Div(p.Class("buttons"),
-				p.Button("Save Notes", p.OnClick(s.SaveNotes)),
-				p.Button("Clear Notes", p.OnClick(s.ClearNotes)),
-			),
-		),
+		<section>
+			<h2>Manual Storage (Notes)</h2>
+			<p>Notes are saved manually when you click Save.</p>
+			`, p.BindValue(`<textarea placeholder="Type your notes here..."></textarea>`, s.Notes), `
+			<div class="buttons">
+				<button `, p.OnClick(s.SaveNotes), `>Save Notes</button>
+				<button `, p.OnClick(s.ClearNotes), `>Clear Notes</button>
+			</div>
+		</section>
 
-		// Clear All section
-		p.Section(
-			p.H2("Clear All Storage"),
-			p.Button(p.Class("danger"), "Clear All Storage", p.OnClick(s.ClearAll)),
-		),
+		<section>
+			<h2>Clear All Storage</h2>
+			<button class="danger" `, p.OnClick(s.ClearAll), `>Clear All Storage</button>
+		</section>
 
-		p.P(p.Class("status"), p.Bind(s.Status)),
-	)
+		<p class="status">`, p.Bind(s.Status), `</p>
+	</div>`)
 }
 
 func (s *Storage) Style() string {
@@ -95,19 +92,4 @@ func (s *Storage) Style() string {
 .demo button.danger:hover{background:#ffcdd2}
 .demo .status{padding:10px;background:#e8f5e9;border-radius:4px;color:#2e7d32}
 `
-}
-
-func (s *Storage) HandleEvent(method string, args string) {
-	switch method {
-	case "SetLight":
-		s.SetLight()
-	case "SetDark":
-		s.SetDark()
-	case "SaveNotes":
-		s.SaveNotes()
-	case "ClearNotes":
-		s.ClearNotes()
-	case "ClearAll":
-		s.ClearAll()
-	}
 }
