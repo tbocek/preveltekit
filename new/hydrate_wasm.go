@@ -10,6 +10,9 @@ import (
 // Track which if-blocks have been set up to avoid duplicates
 var setupIfBlocks = make(map[string]bool)
 
+// Track which each-blocks have been set up to avoid duplicates
+var setupEachBlocks = make(map[string]bool)
+
 // trimPrefix removes prefix from s if present
 func trimPrefix(s, prefix string) string {
 	if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
@@ -380,6 +383,7 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		return
 	}
 	setupIfBlocks[ifb.MarkerID] = true
+	println("bindIfBlock:", ifb.MarkerID)
 
 	// Find the existing SSR content
 	currentEl := FindExistingIfContent(ifb.MarkerID)
@@ -389,15 +393,20 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 
 	// Evaluate which branch is active and update content
 	updateIfBlock := func() {
+		println("updateIfBlock:", ifb.MarkerID, "branches:", len(ifb.Branches))
 		var activeHTML string
 		var activeBindings *HydrateBindings
 		found := false
 
-		for _, branch := range ifb.Branches {
-			if evalCondition(branch, components) {
+		for i := 0; i < len(ifb.Branches); i++ {
+			println("updateIfBlock: eval branch", i)
+			branch := ifb.Branches[i]
+			result := evalCondition(branch, components)
+			if result {
 				activeHTML = branch.HTML
 				activeBindings = branch.Bindings
 				found = true
+				println("updateIfBlock: matched branch", i)
 				break
 			}
 		}
@@ -405,21 +414,23 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		if !found {
 			activeHTML = ifb.ElseHTML
 			activeBindings = ifb.ElseBindings
+			println("updateIfBlock: using else")
 		}
 
-		// Re-find currentEl from DOM in case parent if-block replaced our container
+		println("updateIfBlock: replacing content")
 		currentEl = FindExistingIfContent(ifb.MarkerID)
-		// Replace content
 		currentEl = ReplaceContent(ifb.MarkerID, currentEl, activeHTML)
 
-		// Clean up old bindings
+		println("updateIfBlock: cleanup")
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
 
-		// Apply new bindings
+		println("updateIfBlock: applying")
 		if activeBindings != nil {
+			clearBoundMarkers(activeBindings)
 			applyBindings(activeBindings, components, currentCleanup)
 		}
+		println("updateIfBlock: done", ifb.MarkerID)
 	}
 
 	// Subscribe to store changes for all dependencies (deduplicated)
@@ -438,24 +449,44 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 			}
 		}
 		if store != nil {
+			println("bindIfBlock: subscribing to", dep, "for", ifb.MarkerID)
 			subscribeToStore(store, updateIfBlock)
+		} else {
+			println("bindIfBlock: WARNING - could not resolve dep", dep, "for", ifb.MarkerID)
 		}
 	}
 
-	// Apply initial bindings for the SSR-active branch (don't replace HTML, just wire up bindings)
-	// We do this separately from updateIfBlock to avoid replacing the already-correct SSR HTML
-	var initialBindings *HydrateBindings
-	for _, branch := range ifb.Branches {
-		if evalCondition(branch, components) {
-			initialBindings = branch.Bindings
-			break
+	// Call updateIfBlock to sync DOM with current state
+	// This handles nested if-blocks where state may have changed after SSR
+	// (e.g., Lists page if-block when ItemCount was set in OnMount before navigation)
+	updateIfBlock()
+}
+
+// clearBoundMarkers clears marker tracking for bindings that will be re-applied.
+// This is needed when if-block content is replaced via ReplaceContent.
+func clearBoundMarkers(bindings *HydrateBindings) {
+	if bindings == nil {
+		return
+	}
+	for _, tb := range bindings.TextBindings {
+		ClearBoundMarker(tb.MarkerID)
+	}
+	// Recursively clear nested if-block markers
+	for _, ifb := range bindings.IfBlocks {
+		for _, branch := range ifb.Branches {
+			if branch.Bindings != nil {
+				clearBoundMarkers(branch.Bindings)
+			}
 		}
+		if ifb.ElseBindings != nil {
+			clearBoundMarkers(ifb.ElseBindings)
+		}
+		// Also clear the if-block's own setup status so it can be re-setup
+		delete(setupIfBlocks, ifb.MarkerID)
 	}
-	if initialBindings == nil && ifb.ElseBindings != nil {
-		initialBindings = ifb.ElseBindings
-	}
-	if initialBindings != nil {
-		applyBindings(initialBindings, components, currentCleanup)
+	// Clear each-block setup status
+	for _, eb := range bindings.EachBlocks {
+		delete(setupEachBlocks, eb.MarkerID)
 	}
 }
 
@@ -467,7 +498,6 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 		if store != nil {
 			bindTextDynamic(tb.MarkerID, store, tb.IsHTML)
 		}
-		// Silently skip unresolved stores - they're static props baked into HTML
 	}
 
 	// Input bindings
@@ -476,7 +506,6 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 		if store != nil {
 			bindInputDynamic(cleanup, ib.ElementID, store, ib.BindType)
 		}
-		// Silently skip unresolved stores - they're static props baked into HTML
 	}
 
 	// Event bindings
@@ -485,7 +514,6 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 		if handler != nil {
 			bindEventDynamic(cleanup, ev.ElementID, ev.Event, handler)
 		}
-		// Silently skip unresolved handlers - they may be from nested components
 	}
 
 	// Nested if-blocks
@@ -497,6 +525,226 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	for _, sib := range bindings.ShowIfBindings {
 		bindShowIf(sib, components)
 	}
+
+	// Attr bindings (dynamic attributes like data-type)
+	for _, ab := range bindings.AttrBindings {
+		bindAttr(ab, components)
+	}
+
+	// Each block bindings (list iteration)
+	for _, eb := range bindings.EachBlocks {
+		bindEachBlock(eb, components)
+	}
+}
+
+// bindAttr sets up a dynamic attribute binding.
+func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
+	el := GetEl(ab.ElementID)
+	if !ok(el) {
+		// Try finding by data-attrbind attribute
+		el = Document.Call("querySelector", "[data-attrbind=\""+ab.ElementID+"\"]")
+		if !ok(el) {
+			return
+		}
+	}
+
+	// Collect stores for this binding
+	var stores []any
+	for _, storeID := range ab.StoreIDs {
+		store := resolveStore(storeID, components)
+		if store != nil {
+			stores = append(stores, store)
+		}
+	}
+
+	if len(stores) == 0 {
+		return
+	}
+
+	// Function to update the attribute value
+	updateAttr := func() {
+		value := ab.Template
+		for i, store := range stores {
+			placeholder := "{" + intToStr(i) + "}"
+			var storeVal string
+			switch s := store.(type) {
+			case *Store[string]:
+				storeVal = s.Get()
+			case *Store[int]:
+				storeVal = intToStr(s.Get())
+			case *Store[bool]:
+				if s.Get() {
+					storeVal = "true"
+				} else {
+					storeVal = "false"
+				}
+			}
+			value = replaceAll(value, placeholder, storeVal)
+		}
+		el.Call("setAttribute", ab.AttrName, value)
+	}
+
+	// Initial update
+	updateAttr()
+
+	// Subscribe to changes
+	for _, store := range stores {
+		subscribeToStore(store, updateAttr)
+	}
+}
+
+// bindEachBlock sets up a list iteration binding.
+func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
+	if eb.ListID == "" {
+		return
+	}
+
+	// Check if already setup
+	if setupEachBlocks[eb.MarkerID] {
+		return
+	}
+	setupEachBlocks[eb.MarkerID] = true
+	println("bindEachBlock:", eb.MarkerID, eb.ListID)
+
+	// Find the marker comment
+	marker := FindComment(eb.MarkerID)
+	if marker.IsNull() {
+		return
+	}
+
+	// Resolve the list
+	listAny := resolveStore(eb.ListID, components)
+	if listAny == nil {
+		return
+	}
+
+	// Get the component that owns this list for rendering
+	compName, _, _ := splitFirst(eb.ListID, ".")
+	comp, compOk := components[compName]
+	if !compOk {
+		return
+	}
+
+	// Get the parent element (should be the <ul> or container)
+	parent := marker.Get("previousSibling")
+	if parent.IsNull() || parent.Get("nodeType").Int() != 1 {
+		// Try parent node (the marker is inside the <ul>)
+		parent = marker.Get("parentNode")
+	}
+
+	// Subscribe to list changes and re-render
+	switch list := listAny.(type) {
+	case *List[string]:
+		renderItems := func(items []string) {
+			var html string
+			for i, item := range items {
+				itemID := eb.MarkerID[:len(eb.MarkerID)-1]
+				if len(itemID) > 0 && itemID[len(itemID)-1] == 'e' {
+					itemID = itemID[:len(itemID)-1]
+				}
+				html += `<span id="` + itemID + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + escapeHTMLWasm(item) + `</li></span>`
+			}
+			if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
+				parent.Set("innerHTML", html)
+			}
+		}
+
+		items := list.Get()
+		if len(items) > 0 {
+			renderItems(items)
+		}
+
+		list.OnChange(func(items []string) {
+			renderItems(items)
+		})
+
+	case *List[int]:
+		renderItems := func(items []int) {
+			var html string
+			for i, item := range items {
+				itemID := eb.MarkerID[:len(eb.MarkerID)-1]
+				if len(itemID) > 0 && itemID[len(itemID)-1] == 'e' {
+					itemID = itemID[:len(itemID)-1]
+				}
+				html += `<span id="` + itemID + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + intToStr(item) + `</li></span>`
+			}
+			if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
+				parent.Set("innerHTML", html)
+			}
+		}
+
+		items := list.Get()
+		if len(items) > 0 {
+			renderItems(items)
+		}
+
+		list.OnChange(func(items []int) {
+			renderItems(items)
+		})
+	}
+
+	_ = comp
+}
+
+// escapeHTMLWasm escapes HTML special characters
+func escapeHTMLWasm(s string) string {
+	var result []byte
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '&':
+			result = append(result, []byte("&amp;")...)
+		case '<':
+			result = append(result, []byte("&lt;")...)
+		case '>':
+			result = append(result, []byte("&gt;")...)
+		case '"':
+			result = append(result, []byte("&quot;")...)
+		default:
+			result = append(result, s[i])
+		}
+	}
+	return string(result)
+}
+
+// intToStr converts int to string without fmt
+func intToStr(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}
+
+// replaceAll replaces all occurrences of old with new in s
+func replaceAll(s, old, new string) string {
+	if old == "" {
+		return s
+	}
+	var result []byte
+	for i := 0; i < len(s); {
+		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
+			result = append(result, new...)
+			i += len(old)
+		} else {
+			result = append(result, s[i])
+			i++
+		}
+	}
+	return string(result)
 }
 
 // evalCondition evaluates a branch condition using structured data.
@@ -520,16 +768,11 @@ func evalCondition(branch HydrateIfBranch, components map[string]Component) bool
 	// Compare based on operator
 	switch s := store.(type) {
 	case *Store[int]:
-		val := s.Get()
-		operand := atoiSafe(branch.Operand)
-		return compareInt(val, branch.Op, operand)
+		return compareInt(s.Get(), branch.Op, atoiSafe(branch.Operand))
 	case *Store[string]:
-		val := s.Get()
-		return compareString(val, branch.Op, branch.Operand)
+		return compareString(s.Get(), branch.Op, branch.Operand)
 	case *Store[float64]:
-		val := s.Get()
-		operand := atofSafe(branch.Operand)
-		return compareFloat(val, branch.Op, operand)
+		return compareFloat(s.Get(), branch.Op, atofSafe(branch.Operand))
 	}
 
 	return false
@@ -651,9 +894,11 @@ type HydrateBindings struct {
 	TextBindings   []HydrateTextBinding   `json:"TextBindings"`
 	Events         []HydrateEvent         `json:"Events"`
 	IfBlocks       []HydrateIfBlock       `json:"IfBlocks"`
+	EachBlocks     []HydrateEachBlock     `json:"EachBlocks"`
 	InputBindings  []HydrateInputBinding  `json:"InputBindings"`
 	ClassBindings  []HydrateClassBinding  `json:"ClassBindings"`
 	ShowIfBindings []HydrateShowIfBinding `json:"ShowIfBindings"`
+	AttrBindings   []HydrateAttrBinding   `json:"AttrBindings"`
 }
 
 type HydrateTextBinding struct {
@@ -708,4 +953,18 @@ type HydrateShowIfBinding struct {
 	Operand   string   `json:"operand"`
 	IsBool    bool     `json:"is_bool"`
 	Deps      []string `json:"deps"`
+}
+
+type HydrateAttrBinding struct {
+	ElementID string   `json:"element_id"`
+	AttrName  string   `json:"attr_name"`
+	Template  string   `json:"template"`
+	StoreIDs  []string `json:"store_ids"`
+}
+
+type HydrateEachBlock struct {
+	MarkerID string `json:"MarkerID"`
+	ListID   string `json:"ListID"`
+	ItemVar  string `json:"ItemVar"`
+	IndexVar string `json:"IndexVar"`
 }

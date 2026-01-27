@@ -21,6 +21,13 @@ type Bitcoin struct {
 }
 
 func (b *Bitcoin) OnCreate() {
+	if p.IsBuildTime {
+		// During SSR, show loading state - the actual fetch happens in WASM
+		b.Loading.Set(true)
+		b.Error.Set("")
+		return
+	}
+
 	b.FetchPrice()
 
 	b.stopRefresh = p.SetInterval(60000, func() {
@@ -51,12 +58,16 @@ func (b *Bitcoin) FetchPrice() {
 
 		raw := resp.RAW
 
+		println("DEBUG: PRICE=", raw.PRICE, "SYMBOL=", raw.FROMSYMBOL, "LASTUPDATE=", raw.LASTUPDATE)
+
 		b.Price.Set(raw.TOSYMBOL + " " + formatPrice(raw.PRICE))
 		b.Symbol.Set(raw.FROMSYMBOL)
 
+		// Convert Unix timestamp to UTC time
 		secs := raw.LASTUPDATE % 86400
 		h, m, s := secs/3600, (secs%3600)/60, secs%60
 		b.UpdateTime.Set(pad2(h) + ":" + pad2(m) + ":" + pad2(s))
+		println("DEBUG: time=", pad2(h)+":"+pad2(m)+":"+pad2(s))
 
 		b.Loading.Set(false)
 	}()

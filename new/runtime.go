@@ -19,6 +19,13 @@ var textNodeRefs = make(map[string]js.Value)
 // boundMarkers tracks which markers have had OnChange registered
 var boundMarkers = make(map[string]bool)
 
+// ClearBoundMarker removes a marker from the boundMarkers map.
+// This allows re-binding when if-block content is replaced.
+func ClearBoundMarker(marker string) {
+	delete(boundMarkers, marker)
+	delete(textNodeRefs, marker)
+}
+
 // nodeFilterShowComment is cached for TreeWalker (NodeFilter.SHOW_COMMENT = 128)
 var nodeFilterShowComment = js.ValueOf(128)
 
@@ -126,8 +133,10 @@ func FindComment(marker string) js.Value {
 // isHTML=false: binds to text node (nodeType 3), uses nodeValue
 // isHTML=true: binds to element (nodeType 1), uses innerHTML
 func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
+	println("bindMarker: marker=", marker, "isHTML=", isHTML)
 	// Skip if already bound (comment was removed on first bind)
 	if boundMarkers[marker] {
+		println("bindMarker: already bound, skipping")
 		return
 	}
 	// Mark as bound immediately to prevent duplicate binding attempts
@@ -135,8 +144,10 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 
 	comment := FindComment(marker)
 	if comment.IsNull() {
+		println("bindMarker: comment not found for", marker)
 		return
 	}
+	println("bindMarker: found comment for", marker)
 
 	var node js.Value
 	prevSibling := comment.Get("previousSibling")
@@ -148,9 +159,11 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	}
 	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == nodeType {
 		node = prevSibling
-		// Only set value when reusing existing node (new nodes already have the value)
+		println("bindMarker: reusing existing node")
+		// Set current value in case it changed after SSR (e.g., fetch results)
 		node.Set(prop, toString(store.Get()))
 	} else {
+		println("bindMarker: creating new node, store value=", toString(store.Get()))
 		if isHTML {
 			node = Document.Call("createElement", "span")
 			node.Set("innerHTML", toString(store.Get()))
@@ -161,6 +174,7 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	}
 	// Remove comment marker after hydration (no longer needed)
 	comment.Call("remove")
+	println("bindMarker: removed comment, bound marker", marker)
 	textNodeRefs[marker] = node
 	store.OnChange(func(v T) {
 		if n, ok := textNodeRefs[marker]; ok {
@@ -245,14 +259,32 @@ func ToggleClass(el js.Value, class string, add bool) {
 
 // ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor comment
 func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value {
+	println("ReplaceContent: marker:", anchorMarker, "html length:", len(html))
+	// Print first 200 chars of HTML for debugging
+	preview := html
+	if len(preview) > 200 {
+		preview = preview[:200]
+	}
+	println("ReplaceContent: html preview:", preview)
 	anchor := FindComment(anchorMarker)
+	println("ReplaceContent: anchor found:", ok(anchor))
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
+	// Verify the innerHTML was set correctly
+	actualHTML := newEl.Get("innerHTML").String()
+	println("ReplaceContent: newEl innerHTML length after set:", len(actualHTML))
 	if current.Truthy() {
+		println("ReplaceContent: removing current element")
 		current.Call("remove")
 	}
 	if ok(anchor) {
+		println("ReplaceContent: inserting new element before anchor")
 		anchor.Get("parentNode").Call("insertBefore", newEl, anchor)
+		// Verify it's still there after insertion
+		afterInsert := newEl.Get("innerHTML").String()
+		println("ReplaceContent: newEl innerHTML length after insert:", len(afterInsert))
+	} else {
+		println("ReplaceContent: WARNING - anchor not found!")
 	}
 	return newEl
 }

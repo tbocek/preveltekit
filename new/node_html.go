@@ -115,12 +115,13 @@ type IfBlockBranch struct {
 // EachBlock represents a list iteration block at a comment marker.
 // HTML: <span id="basics_each0_0">item</span><!--basics_e0--> where items update reactively.
 type EachBlock struct {
-	MarkerID string // Comment marker, e.g., "basics_e0"
-	ListID   string // List store path, e.g., "basics.Items"
-	ItemVar  string // Item variable name in template
-	IndexVar string // Index variable name in template
-	BodyHTML string // Template HTML for each item
-	ElseHTML string // HTML when list is empty
+	MarkerID string `json:"MarkerID"`           // Comment marker, e.g., "basics_e0"
+	ListID   string `json:"ListID"`             // List store path, e.g., "basics.Items"
+	ListRef  any    `json:"-"`                  // Actual list pointer (for resolution)
+	ItemVar  string `json:"ItemVar"`            // Item variable name in template
+	IndexVar string `json:"IndexVar"`           // Index variable name in template
+	BodyHTML string `json:"BodyHTML,omitempty"` // Template HTML for each item
+	ElseHTML string `json:"ElseHTML,omitempty"` // HTML when list is empty
 }
 
 // InputBinding_ binds an input element to a store for two-way data binding.
@@ -147,10 +148,11 @@ type ClassBinding_ struct {
 // AttrBinding_ binds a dynamic attribute value to stores.
 // HTML: <div data-attrbind="basics_a0" data-value="{0}"> where {0} is replaced.
 type AttrBinding_ struct {
-	ElementID string   // Element id (via data-attrbind), e.g., "basics_a0"
-	AttrName  string   // Attribute name, e.g., "data-value"
-	Template  string   // Template with placeholders, e.g., "{0}"
-	StoreIDs  []string // Store paths for placeholders
+	ElementID string   `json:"element_id"` // Element id (via data-attrbind), e.g., "basics_a0"
+	AttrName  string   `json:"attr_name"`  // Attribute name, e.g., "data-value"
+	Template  string   `json:"template"`   // Template with placeholders, e.g., "{0}"
+	StoreIDs  []string `json:"store_ids"`  // Store paths for placeholders
+	StoreRefs []any    `json:"-"`          // Actual store pointers (for resolution)
 }
 
 // ComponentBinding_ represents a nested component instance.
@@ -484,18 +486,32 @@ func (e *Element) ToHTML(ctx *BuildContext) string {
 			sb.WriteString(` data-attrbind="`)
 			sb.WriteString(ctx.FullElementID(attrID))
 			sb.WriteString(`"`)
-			// TODO: Evaluate template at SSR time
+			// Evaluate template at SSR time
+			attrValue := a.Template
+			for i, store := range a.Stores {
+				placeholder := "{" + fmt.Sprintf("%d", i) + "}"
+				var storeVal string
+				switch s := store.(type) {
+				case *Store[string]:
+					storeVal = s.Get()
+				case *Store[int]:
+					storeVal = fmt.Sprintf("%d", s.Get())
+				case *Store[bool]:
+					storeVal = fmt.Sprintf("%t", s.Get())
+				}
+				attrValue = strings.ReplaceAll(attrValue, placeholder, storeVal)
+			}
 			sb.WriteString(" ")
 			sb.WriteString(a.Name)
 			sb.WriteString(`="`)
-			sb.WriteString(escapeHTML(a.Template))
+			sb.WriteString(escapeHTML(attrValue))
 			sb.WriteString(`"`)
 			// Record attribute binding (uses element ID via data attribute)
 			ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, AttrBinding_{
 				ElementID: ctx.FullElementID(attrID),
 				AttrName:  a.Name,
 				Template:  a.Template,
-				StoreIDs:  a.StoreIDs,
+				StoreRefs: a.Stores,
 			})
 		}
 	}
@@ -753,9 +769,9 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 	ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, EachBlock{
 		MarkerID: markerID,
 		ListID:   e.ListID,
+		ListRef:  e.ListRef,
 		ItemVar:  e.ItemVar,
 		IndexVar: e.IndexVar,
-		// Body HTML would need to be generated from the Body function
 	})
 
 	return fmt.Sprintf("%s<!--%s-->", itemsHTML.String(), markerID)
@@ -889,10 +905,12 @@ func mergeNestedBindings(parent, child *CollectedBindings) {
 	parent.TextBindings = append(parent.TextBindings, child.TextBindings...)
 	parent.Events = append(parent.Events, child.Events...)
 	parent.IfBlocks = append(parent.IfBlocks, child.IfBlocks...)
+	parent.EachBlocks = append(parent.EachBlocks, child.EachBlocks...)
 	parent.InputBindings = append(parent.InputBindings, child.InputBindings...)
 	parent.ClassBindings = append(parent.ClassBindings, child.ClassBindings...)
 	parent.ShowIfBindings = append(parent.ShowIfBindings, child.ShowIfBindings...)
 	parent.Components = append(parent.Components, child.Components...)
+	parent.AttrBindings = append(parent.AttrBindings, child.AttrBindings...)
 }
 
 // ToHTML generates HTML for a slot node.
@@ -918,7 +936,9 @@ func (c *ChildNode) ToHTML(ctx *BuildContext) string {
 					ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, childBindings.InputBindings...)
 					ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, childBindings.ClassBindings...)
 					ctx.Bindings.IfBlocks = append(ctx.Bindings.IfBlocks, childBindings.IfBlocks...)
+					ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, childBindings.EachBlocks...)
 					ctx.Bindings.ShowIfBindings = append(ctx.Bindings.ShowIfBindings, childBindings.ShowIfBindings...)
+					ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, childBindings.AttrBindings...)
 				}
 			}
 			return content

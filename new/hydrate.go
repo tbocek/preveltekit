@@ -439,6 +439,10 @@ func initStores(comp Component) {
 func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, prefix string, comp Component) {
 	// Resolve text bindings
 	for i := range bindings.TextBindings {
+		// Skip if already resolved (e.g., from child component bindings)
+		if bindings.TextBindings[i].StoreID != "" {
+			continue
+		}
 		if bindings.TextBindings[i].StoreRef != nil {
 			addr := reflect.ValueOf(bindings.TextBindings[i].StoreRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
@@ -449,6 +453,10 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 
 	// Resolve input bindings
 	for i := range bindings.InputBindings {
+		// Skip if already resolved
+		if bindings.InputBindings[i].StoreID != "" {
+			continue
+		}
 		if bindings.InputBindings[i].StoreRef != nil {
 			addr := reflect.ValueOf(bindings.InputBindings[i].StoreRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
@@ -459,6 +467,10 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 
 	// Resolve class bindings
 	for i := range bindings.ClassBindings {
+		// Skip if already resolved
+		if bindings.ClassBindings[i].CondExpr != "" {
+			continue
+		}
 		if bindings.ClassBindings[i].StoreRef != nil {
 			addr := reflect.ValueOf(bindings.ClassBindings[i].StoreRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
@@ -487,63 +499,83 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		}
 	}
 
-	// Resolve if-block conditions
+	// Resolve if-block conditions and recursively resolve nested bindings
 	for i := range bindings.IfBlocks {
 		for j := range bindings.IfBlocks[i].Branches {
-			cond := bindings.IfBlocks[i].Branches[j].CondRef
-			if cond == nil {
+			// Skip if already resolved
+			if bindings.IfBlocks[i].Branches[j].StoreID != "" {
+				// Still need to recursively resolve nested bindings
+				if bindings.IfBlocks[i].Branches[j].Bindings != nil {
+					resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
+				}
 				continue
 			}
+			cond := bindings.IfBlocks[i].Branches[j].CondRef
+			if cond != nil {
+				if sc, ok := cond.(*StoreCondition); ok && sc.Store != nil {
+					addr := reflect.ValueOf(sc.Store).Pointer()
+					if name, ok := storeMap[addr]; ok {
+						// Build expression with proper operand quoting
+						operand := fmt.Sprintf("%v", sc.Operand)
+						if !isNumeric(operand) && operand != "true" && operand != "false" {
+							operand = `"` + operand + `"`
+						}
+						bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get() " + sc.Op + " " + operand
 
-			if sc, ok := cond.(*StoreCondition); ok && sc.Store != nil {
-				addr := reflect.ValueOf(sc.Store).Pointer()
-				if name, ok := storeMap[addr]; ok {
-					// Build expression with proper operand quoting
-					operand := fmt.Sprintf("%v", sc.Operand)
-					if !isNumeric(operand) && operand != "true" && operand != "false" {
-						operand = `"` + operand + `"`
+						// Add structured condition data for WASM evaluation
+						bindings.IfBlocks[i].Branches[j].StoreID = name
+						bindings.IfBlocks[i].Branches[j].Op = sc.Op
+						bindings.IfBlocks[i].Branches[j].Operand = fmt.Sprintf("%v", sc.Operand)
+
+						// Add to deps
+						parts := strings.Split(name, ".")
+						fieldName := parts[len(parts)-1]
+						if prefix == "component" {
+							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
+						} else {
+							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
+						}
 					}
-					bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get() " + sc.Op + " " + operand
+				}
 
-					// Add structured condition data for WASM evaluation
-					bindings.IfBlocks[i].Branches[j].StoreID = name
-					bindings.IfBlocks[i].Branches[j].Op = sc.Op
-					bindings.IfBlocks[i].Branches[j].Operand = fmt.Sprintf("%v", sc.Operand)
+				if bc, ok := cond.(*BoolCondition); ok && bc.Store != nil {
+					addr := reflect.ValueOf(bc.Store).Pointer()
+					if name, ok := storeMap[addr]; ok {
+						bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get()"
 
-					// Add to deps
-					parts := strings.Split(name, ".")
-					fieldName := parts[len(parts)-1]
-					if prefix == "component" {
-						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
-					} else {
-						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
+						// Add structured condition data for WASM evaluation
+						bindings.IfBlocks[i].Branches[j].StoreID = name
+						bindings.IfBlocks[i].Branches[j].IsBool = true
+
+						parts := strings.Split(name, ".")
+						fieldName := parts[len(parts)-1]
+						if prefix == "component" {
+							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
+						} else {
+							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
+						}
 					}
 				}
 			}
 
-			if bc, ok := cond.(*BoolCondition); ok && bc.Store != nil {
-				addr := reflect.ValueOf(bc.Store).Pointer()
-				if name, ok := storeMap[addr]; ok {
-					bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get()"
-
-					// Add structured condition data for WASM evaluation
-					bindings.IfBlocks[i].Branches[j].StoreID = name
-					bindings.IfBlocks[i].Branches[j].IsBool = true
-
-					parts := strings.Split(name, ".")
-					fieldName := parts[len(parts)-1]
-					if prefix == "component" {
-						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
-					} else {
-						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
-					}
-				}
+			// Recursively resolve nested bindings in this branch
+			if bindings.IfBlocks[i].Branches[j].Bindings != nil {
+				resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
 			}
+		}
+
+		// Recursively resolve else branch bindings
+		if bindings.IfBlocks[i].ElseBindings != nil {
+			resolveBindings(bindings.IfBlocks[i].ElseBindings, storeMap, prefix, comp)
 		}
 	}
 
 	// Resolve ShowIf bindings
 	for i := range bindings.ShowIfBindings {
+		// Skip if already resolved
+		if bindings.ShowIfBindings[i].StoreID != "" {
+			continue
+		}
 		if bindings.ShowIfBindings[i].StoreRef != nil {
 			addr := reflect.ValueOf(bindings.ShowIfBindings[i].StoreRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
@@ -562,6 +594,10 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 
 	// Resolve event handlers
 	for i := range bindings.Events {
+		// Skip if already resolved (e.g., from child component bindings)
+		if bindings.Events[i].HandlerID != "" {
+			continue
+		}
 		if bindings.Events[i].HandlerRef != nil {
 			fn := reflect.ValueOf(bindings.Events[i].HandlerRef)
 			if fn.Kind() == reflect.Func {
@@ -581,6 +617,40 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 				argStrs = append(argStrs, fmt.Sprintf("%v", arg))
 			}
 			bindings.Events[i].ArgsStr = strings.Join(argStrs, ", ")
+		}
+	}
+
+	// Resolve attr bindings
+	for i := range bindings.AttrBindings {
+		// Skip if already resolved
+		if len(bindings.AttrBindings[i].StoreIDs) > 0 {
+			continue
+		}
+		if len(bindings.AttrBindings[i].StoreRefs) > 0 {
+			var storeIDs []string
+			for _, storeRef := range bindings.AttrBindings[i].StoreRefs {
+				if storeRef != nil {
+					addr := reflect.ValueOf(storeRef).Pointer()
+					if name, ok := storeMap[addr]; ok {
+						storeIDs = append(storeIDs, name)
+					}
+				}
+			}
+			bindings.AttrBindings[i].StoreIDs = storeIDs
+		}
+	}
+
+	// Resolve each block list references
+	for i := range bindings.EachBlocks {
+		// Skip if already resolved
+		if bindings.EachBlocks[i].ListID != "" {
+			continue
+		}
+		if bindings.EachBlocks[i].ListRef != nil {
+			addr := reflect.ValueOf(bindings.EachBlocks[i].ListRef).Pointer()
+			if name, ok := storeMap[addr]; ok {
+				bindings.EachBlocks[i].ListID = name
+			}
 		}
 	}
 }

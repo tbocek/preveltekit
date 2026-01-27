@@ -46,7 +46,11 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 			b.ClassBindings = p.parseClassBindings()
 		case "ShowIfBindings":
 			b.ShowIfBindings = p.parseShowIfBindings()
-		case "EachBlocks", "AttrBindings", "Components":
+		case "AttrBindings":
+			b.AttrBindings = p.parseAttrBindings()
+		case "EachBlocks":
+			b.EachBlocks = p.parseEachBlocks()
+		case "Components":
 			// Skip these - not needed for hydration yet
 			p.skipValue()
 		default:
@@ -295,9 +299,9 @@ func (p *jsonParser) parseIfBranches() []HydrateIfBranch {
 			p.skipWS()
 
 			switch key {
-			case "CondExpr":
+			case "CondExpr", "cond_expr":
 				br.CondExpr = p.parseString()
-			case "HTML":
+			case "HTML", "html":
 				br.HTML = p.parseString()
 			case "Bindings":
 				if p.peek() == 'n' {
@@ -516,6 +520,132 @@ func (p *jsonParser) parseShowIfBindings() []HydrateShowIfBinding {
 			}
 		}
 		result = append(result, sib)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseAttrBindings() []HydrateAttrBinding {
+	var result []HydrateAttrBinding
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		ab := HydrateAttrBinding{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "element_id", "ElementID":
+				ab.ElementID = p.parseString()
+			case "attr_name", "AttrName":
+				ab.AttrName = p.parseString()
+			case "template", "Template":
+				ab.Template = p.parseString()
+			case "store_ids", "StoreIDs":
+				ab.StoreIDs = p.parseStringArray()
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, ab)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
+	var result []HydrateEachBlock
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		eb := HydrateEachBlock{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "MarkerID":
+				eb.MarkerID = p.parseString()
+			case "ListID":
+				eb.ListID = p.parseString()
+			case "ItemVar":
+				eb.ItemVar = p.parseString()
+			case "IndexVar":
+				eb.IndexVar = p.parseString()
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, eb)
 
 		p.skipWS()
 		if !p.consume(',') {
