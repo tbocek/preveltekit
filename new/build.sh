@@ -2,217 +2,151 @@
 set -e
 
 # =============================================================================
-# PrevelteKit Build Script
+# PrevelteKit Declarative Build Script
 # =============================================================================
-# Builds a PrevelteKit Go/WASM application from source components.
+# Builds a PrevelteKit application using the p.Hydrate() API.
 #
 # Build pipeline:
-#   1. Code generation  - CLI extracts metadata via reflection, generates Go code
-#   2. Pre-rendering    - For each route, renders static HTML (SSR)
-#   3. WASM compilation - Compiles generated code to WebAssembly via TinyGo
-#   4. Optimization     - Tree-shakes JS runtime, minifies, compresses
-#   5. Assembly         - Combines HTML, WASM, and JS into final output files
+#   1. SSR Phase    - Generates HTML files and collects bindings
+#   2. WASM Build   - Compiles Go code to WebAssembly via TinyGo
+#   3. Optimization - Compresses output files (optional)
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# Configuration
-# -----------------------------------------------------------------------------
 
 SKIP_COMPRESS=false
 RELEASE_MODE=false
+OUTPUT_DIR=""
+PROJECT_DIR=""
 
-# -----------------------------------------------------------------------------
-# Usage
-# -----------------------------------------------------------------------------
-
-show_usage() {
-    echo "Usage: $0 [OPTIONS] <main-component.go> [child-component.go ...]"
-    echo ""
-    echo "Builds a PrevelteKit application from Go component files."
-    echo ""
-    echo "Arguments:"
-    echo "  <main-component.go>      The main/root component file"
-    echo "  [child-component.go ...] Optional child components to include"
-    echo ""
-    echo "Options:"
-    echo "  --release         Release build: silent panics, smaller output"
-    echo "  --no-compress     Skip gzip/brotli compression of output files"
-    echo "  -h, --help        Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  $0 myapp/App.go"
-    echo "  $0 myapp/App.go myapp/Header.go myapp/Footer.go"
-}
-
-# -----------------------------------------------------------------------------
-# Argument Parsing
-# -----------------------------------------------------------------------------
-
-COMPONENT_FILES=()
-
+# Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --release)     RELEASE_MODE=true; shift ;;
         --no-compress) SKIP_COMPRESS=true; shift ;;
-        -h|--help)     show_usage; exit 0 ;;
-        -*)            echo "Unknown option: $1"; show_usage; exit 1 ;;
-        *)             COMPONENT_FILES+=("$1"); shift ;;
+        -o|--output)   OUTPUT_DIR="$2"; shift 2 ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS] [project-dir]"
+            echo ""
+            echo "Arguments:"
+            echo "  project-dir    Directory containing main.go (default: current dir)"
+            echo ""
+            echo "Options:"
+            echo "  --release      Release build: smaller WASM, stripped debug info"
+            echo "  --no-compress  Skip gzip/brotli compression"
+            echo "  -o, --output   Output directory (default: project-dir/dist)"
+            echo "  -h, --help     Show this help"
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"; exit 1 ;;
+        *)
+            # First non-option argument is the project directory
+            if [ -z "$PROJECT_DIR" ]; then
+                PROJECT_DIR="$1"
+            fi
+            shift
+            ;;
     esac
 done
 
-if [ ${#COMPONENT_FILES[@]} -eq 0 ]; then
-    echo "Error: No component files specified."
-    echo ""
-    show_usage
-    exit 1
+# Default to current directory if no project specified
+if [ -z "$PROJECT_DIR" ]; then
+    PROJECT_DIR="."
 fi
 
-# -----------------------------------------------------------------------------
-# Helper Functions
-# -----------------------------------------------------------------------------
-
-# Tree-shakes wasm_exec.js by removing unused syscall/js functions.
-wasm_shake() {
-    local SOURCE="$1"
-    local WASM="$2"
-    local OUTPUT="$3"
-
-    local USED
-    USED=$(wasm-objdump -j Import -x "$WASM" 2>/dev/null \
-        | grep 'syscall/js\.' \
-        | sed 's/.*syscall\/js\.\([a-zA-Z]*\).*/\1/' \
-        | sort -u)
-
-    cp "$SOURCE" "$OUTPUT"
-
-    local OPTIONAL_FUNCS=(
-        valueDelete
-        valueSetIndex
-        valueInvoke
-        valueNew
-        valueInstanceOf
-        copyBytesToGo
-        copyBytesToJS
-    )
-
-    for func in "${OPTIONAL_FUNCS[@]}"; do
-        if ! echo "$USED" | grep -q "^${func}$"; then
-            sed -i "/\/\/ func ${func}/,/^[[:space:]]*},$/d" "$OUTPUT"
-            sed -i "/\/\/ ${func}/,/^[[:space:]]*},$/d" "$OUTPUT"
-        fi
-    done
-}
-
-# -----------------------------------------------------------------------------
-# Resolve Paths and Assets
-# -----------------------------------------------------------------------------
-
-MAIN_COMPONENT="${COMPONENT_FILES[0]}"
-PROJECT_DIR=$(dirname "$MAIN_COMPONENT")
-
-if [ -f "$PROJECT_DIR/assets/index.html" ]; then
-    INDEX_HTML="$PROJECT_DIR/assets/index.html"
-else
-    INDEX_HTML="assets/index.html"
+# Handle main.go path - extract directory
+if [[ "$PROJECT_DIR" == *.go ]]; then
+    PROJECT_DIR=$(dirname "$PROJECT_DIR")
 fi
 
-if [ -f "$PROJECT_DIR/assets/wasm_exec.js" ]; then
-    WASM_EXEC="$PROJECT_DIR/assets/wasm_exec.js"
-else
-    WASM_EXEC="assets/wasm_exec.js"
+# Default output dir
+if [ -z "$OUTPUT_DIR" ]; then
+    OUTPUT_DIR="$PROJECT_DIR/dist"
 fi
 
-# -----------------------------------------------------------------------------
-# Generate Code
-# -----------------------------------------------------------------------------
-# The CLI tool uses reflection to extract component metadata and generates:
-#   - build/       Generated Go code ready for compilation
-#   - build/routes.txt  List of routes to pre-render
-#   - dist/        Output directory for final assets
-
-echo "Generating code from components..."
-go run ./cmd/. "${COMPONENT_FILES[@]}"
+# Change to project directory
+cd "$PROJECT_DIR"
 
 # -----------------------------------------------------------------------------
-# Pre-render (Server-Side Rendering)
+# Step 1: SSR - Generate HTML files and collect bindings
 # -----------------------------------------------------------------------------
-# For each route in routes.txt, render the HTML with PRERENDER_PATH set
+echo "Generating HTML files..."
 
-echo "Pre-rendering..."
+mkdir -p "dist"
 
-# Read routes from routes.txt (format: path:filename)
-ROUTES_FILE="$PROJECT_DIR/build/routes.txt"
-if [ -f "$ROUTES_FILE" ]; then
-    while IFS=: read -r path htmlfile; do
-        [ -z "$path" ] && continue
-        [[ "$path" == \#* ]] && continue
-
-        outfile="${htmlfile%.html}_prerendered.html"
-        echo "  $path -> $outfile"
-        (
-            cd "$PROJECT_DIR/build"
-            PRERENDER_PATH="$path" go run -tags '!wasm' . > "../dist/$outfile"
-        ) || { echo "Error pre-rendering $path"; exit 1; }
-    done < "$ROUTES_FILE"
-else
-    # Default: single route
-    echo "  / -> index_prerendered.html"
-    (
-        cd "$PROJECT_DIR/build"
-        PRERENDER_PATH="/" go run -tags '!wasm' . > ../dist/index_prerendered.html
-    )
-fi
+# Run SSR phase - generates HTML files and outputs bindings to stderr
+HYDRATE_MODE=generate-all go run -tags '!wasm' . 2>&1 | while read -r line; do
+    if [[ "$line" == BINDINGS:* ]]; then
+        # Extract bindings JSON
+        echo "${line#BINDINGS:}" > "dist/bindings.json"
+        echo "  Saved bindings.json"
+    elif [[ "$line" == Generated:* ]]; then
+        echo "  ${line#Generated: }"
+    else
+        echo "$line"
+    fi
+done
 
 # -----------------------------------------------------------------------------
-# Build WASM
+# Step 2: Build WASM with TinyGo
 # -----------------------------------------------------------------------------
-
 echo "Building WASM..."
-TINYGO_FLAGS="-target wasm -no-debug -scheduler=asyncify -gc=leaking"
-if [ "$RELEASE_MODE" = true ]; then
-    TINYGO_FLAGS="$TINYGO_FLAGS -panic=trap"
-fi
-(
-    cd "$PROJECT_DIR/build"
-    tinygo build -o ../dist/app.wasm $TINYGO_FLAGS .
-)
 
+TINYGO_FLAGS="-target wasm -scheduler=asyncify -gc=leaking"
 if [ "$RELEASE_MODE" = true ]; then
-    wasm-strip "$PROJECT_DIR/dist/app.wasm"
+    TINYGO_FLAGS="$TINYGO_FLAGS -panic=trap -no-debug"
 fi
 
-# -----------------------------------------------------------------------------
-# Optimize JavaScript Runtime
-# -----------------------------------------------------------------------------
+tinygo build -o "dist/main.wasm" $TINYGO_FLAGS .
 
-echo "Optimizing JS runtime..."
-wasm_shake "$WASM_EXEC" "$PROJECT_DIR/dist/app.wasm" "$PROJECT_DIR/dist/wasm_exec.js"
-
-# -----------------------------------------------------------------------------
-# Assemble Final Output
-# -----------------------------------------------------------------------------
-# Combines prerendered HTML, WASM, and JS into final HTML files
-
-echo "Assembling final output..."
-go run ./cmd/. --assemble "$PROJECT_DIR"
+if [ "$RELEASE_MODE" = true ] && command -v wasm-strip &> /dev/null; then
+    wasm-strip "dist/main.wasm"
+fi
 
 # -----------------------------------------------------------------------------
-# Compress Output Files
+# Step 3: Copy wasm_exec.js
 # -----------------------------------------------------------------------------
+echo "Copying wasm_exec.js..."
 
+WASM_EXEC=$(tinygo env TINYGOROOT)/targets/wasm_exec.js
+if [ -f "$WASM_EXEC" ]; then
+    cp "$WASM_EXEC" "dist/"
+else
+    echo "Warning: Could not find TinyGo wasm_exec.js at $WASM_EXEC"
+fi
+
+# -----------------------------------------------------------------------------
+# Step 4: Compress (optional)
+# -----------------------------------------------------------------------------
 if [ "$SKIP_COMPRESS" = false ]; then
     echo "Compressing output files..."
-    for f in "$PROJECT_DIR/dist"/*.html "$PROJECT_DIR/dist"/*.wasm "$PROJECT_DIR/dist"/*.js; do
+    for f in dist/*.html dist/*.wasm dist/*.js dist/*.json; do
         [ -f "$f" ] || continue
-        zopfli --i10 "$f"
-        brotli -q 11 -k -f "$f"
+        if command -v zopfli &> /dev/null; then
+            zopfli --i10 "$f" 2>/dev/null || gzip -k -f "$f" 2>/dev/null || true
+        else
+            gzip -k -f "$f" 2>/dev/null || true
+        fi
+        if command -v brotli &> /dev/null; then
+            brotli -q 11 -k -f "$f" 2>/dev/null || true
+        fi
     done
 fi
 
 # -----------------------------------------------------------------------------
 # Done
 # -----------------------------------------------------------------------------
-
 echo ""
-echo "Build complete! Output in: $PROJECT_DIR/dist/"
-ls -lh "$PROJECT_DIR/dist/"/*.html 2>/dev/null | awk '{print "  " $NF ": " $5}'
+echo "Build complete! Output in: $(pwd)/dist/"
+echo ""
+
+# Show file sizes
+WASM_SIZE=$(ls -lh "dist/main.wasm" 2>/dev/null | awk '{print $5}')
+WASM_GZ_SIZE=$(ls -lh "dist/main.wasm.gz" 2>/dev/null | awk '{print $5}')
+WASM_BR_SIZE=$(ls -lh "dist/main.wasm.br" 2>/dev/null | awk '{print $5}')
+
+echo "WASM size: $WASM_SIZE"
+[ -n "$WASM_GZ_SIZE" ] && echo "  gzip:   $WASM_GZ_SIZE"
+[ -n "$WASM_BR_SIZE" ] && echo "  brotli: $WASM_BR_SIZE"
+echo ""
+
+ls -lh dist/*.html 2>/dev/null | awk '{printf "  %-30s %s\n", $NF, $5}'

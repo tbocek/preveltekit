@@ -1,6 +1,6 @@
 package main
 
-import "preveltekit"
+import p "preveltekit"
 
 type PriceResponse struct {
 	RAW struct {
@@ -12,25 +12,23 @@ type PriceResponse struct {
 }
 
 type Bitcoin struct {
-	Price       *preveltekit.Store[string]
-	Symbol      *preveltekit.Store[string]
-	UpdateTime  *preveltekit.Store[string]
-	Loading     *preveltekit.Store[bool]
-	Error       *preveltekit.Store[string]
+	Price       *p.Store[string]
+	Symbol      *p.Store[string]
+	UpdateTime  *p.Store[string]
+	Loading     *p.Store[bool]
+	Error       *p.Store[string]
 	stopRefresh func()
 }
 
 func (b *Bitcoin) OnCreate() {
-	// Called once - start the refresh timer
 	b.FetchPrice()
 
-	b.stopRefresh = preveltekit.SetInterval(60000, func() {
+	b.stopRefresh = p.SetInterval(60000, func() {
 		b.FetchPrice()
 	})
 }
 
 func (b *Bitcoin) OnMount() {
-	// Called every navigation - nothing needed here since we cache data
 }
 
 func (b *Bitcoin) OnDestroy() {
@@ -44,7 +42,7 @@ func (b *Bitcoin) FetchPrice() {
 	b.Error.Set("")
 
 	go func() {
-		resp, err := preveltekit.Get[PriceResponse]("https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase")
+		resp, err := p.Get[PriceResponse]("https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase")
 		if err != nil {
 			b.Error.Set("Failed to fetch: " + err.Error())
 			b.Loading.Set(false)
@@ -102,30 +100,30 @@ func formatPrice(f float64) string {
 	return s
 }
 
-func (b *Bitcoin) Template() string {
-	return `<div class="demo">
-	<h1>Bitcoin Price</h1>
+func (b *Bitcoin) Render() p.Node {
+	return p.Div(p.Class("demo"),
+		p.H1("Bitcoin Price"),
 
-	<section class="bitcoin-card">
-		{#if Loading}
-			<p class="loading">Loading...</p>
-		{:else if Error}
-			<p class="error">Error: {Error}</p>
-			<button @click="Retry()">Retry</button>
-		{:else}
-			<div class="price-info">
-				<span class="symbol">{Symbol}</span>
-				<span class="update-time">Updated: {UpdateTime} UTC</span>
-			</div>
-			<p class="price">{Price}</p>
-			<small class="disclaimer">
-				Prices are volatile and for reference only.
-			</small>
-		{/if}
-	</section>
+		p.Section(p.Class("bitcoin-card"),
+			p.If(p.IsTrue(b.Loading),
+				p.P(p.Class("loading"), "Loading..."),
+			).ElseIf(b.Error.Ne(""),
+				p.P(p.Class("error"), "Error: ", p.Bind(b.Error)),
+				p.Button("Retry", p.OnClick(b.Retry)),
+			).Else(
+				p.Div(p.Class("price-info"),
+					p.Span(p.Class("symbol"), p.Bind(b.Symbol)),
+					p.Span(p.Class("update-time"), "Updated: ", p.Bind(b.UpdateTime), " UTC"),
+				),
+				p.P(p.Class("price"), p.Bind(b.Price)),
+				p.Small(p.Class("disclaimer"),
+					"Prices are volatile and for reference only.",
+				),
+			),
+		),
 
-	<p class="hint">Price refreshes automatically every 60 seconds</p>
-</div>`
+		p.P(p.Class("hint"), "Price refreshes automatically every 60 seconds"),
+	)
 }
 
 func (b *Bitcoin) Style() string {
@@ -140,4 +138,11 @@ func (b *Bitcoin) Style() string {
 .loading{color:#666;font-size:1.1rem}
 .error{color:#e53e3e;margin-bottom:1rem}
 `
+}
+
+func (b *Bitcoin) HandleEvent(method string, args string) {
+	switch method {
+	case "Retry":
+		b.Retry()
+	}
 }

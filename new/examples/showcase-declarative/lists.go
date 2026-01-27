@@ -1,15 +1,14 @@
 package main
 
-import "preveltekit"
+import p "preveltekit"
 
 type Lists struct {
-	Items     *preveltekit.List[string]
-	NewItem   *preveltekit.Store[string]
-	ItemCount *preveltekit.Store[int]
+	Items     *p.List[string]
+	NewItem   *p.Store[string]
+	ItemCount *p.Store[int]
 }
 
 func (l *Lists) OnMount() {
-	// Only initialize if empty (preserve state across navigation)
 	if l.Items.Len() == 0 {
 		l.Items.Set([]string{"Apple", "Banana", "Cherry"})
 		l.ItemCount.Set(3)
@@ -96,53 +95,56 @@ func (l *Lists) updateCount() {
 	l.ItemCount.Set(l.Items.Len())
 }
 
-func (l *Lists) Template() string {
-	return `<div class="demo">
-	<h1>Lists</h1>
+func (l *Lists) Render() p.Node {
+	return p.Div(p.Class("demo"),
+		p.H1("Lists"),
 
-	<section>
-		<h2>List Operations</h2>
-		<p>Items: <strong>{ItemCount}</strong></p>
+		p.Section(
+			p.H2("List Operations"),
+			p.P("Items: ", p.Strong(p.Bind(l.ItemCount))),
 
-		<div class="input-row">
-			<input type="text" bind:value="NewItem" placeholder="New item name">
-		</div>
+			p.Div(p.Class("input-row"),
+				p.Input(p.Type("text"), p.BindValue(l.NewItem), p.Placeholder("New item name")),
+			),
 
-		<div class="button-group">
-			<h3>Add</h3>
-			<button @click="PrependItem()">Prepend</button>
-			<button @click="InsertMiddle()">Insert Middle</button>
-			<button @click="AddItem()">Append</button>
-		</div>
+			p.Div(p.Class("button-group"),
+				p.H3("Add"),
+				p.Button("Prepend", p.OnClick(l.PrependItem)),
+				p.Button("Insert Middle", p.OnClick(l.InsertMiddle)),
+				p.Button("Append", p.OnClick(l.AddItem)),
+			),
 
-		<div class="button-group">
-			<h3>Remove</h3>
-			<button @click="RemoveFirst()">First</button>
-			<button @click="RemoveMiddle()">Middle</button>
-			<button @click="RemoveLast()">Last</button>
-			<button @click="ClearAll()">Clear All</button>
-		</div>
+			p.Div(p.Class("button-group"),
+				p.H3("Remove"),
+				p.Button("First", p.OnClick(l.RemoveFirst)),
+				p.Button("Middle", p.OnClick(l.RemoveMiddle)),
+				p.Button("Last", p.OnClick(l.RemoveLast)),
+				p.Button("Clear All", p.OnClick(l.ClearAll)),
+			),
 
-		<div class="button-group">
-			<h3>Replace All (simulates fetch)</h3>
-			<button @click="LoadFruits()">Load Fruits</button>
-			<button @click="LoadNumbers()">Load Numbers</button>
-		</div>
+			p.Div(p.Class("button-group"),
+				p.H3("Replace All (simulates fetch)"),
+				p.Button("Load Fruits", p.OnClick(l.LoadFruits)),
+				p.Button("Load Numbers", p.OnClick(l.LoadNumbers)),
+			),
 
-		<div class="list-container">
-			<h3>Current Items</h3>
-			{#if ItemCount > 0}
-				<ul>
-					{#each Items as item, i}
-						<li><span class="index">{i}</span> {item}</li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="empty">No items in list</p>
-			{/if}
-		</div>
-	</section>
-</div>`
+			p.Div(p.Class("list-container"),
+				p.H3("Current Items"),
+				p.If(l.ItemCount.Gt(0),
+					p.Ul(
+						p.Each(l.Items, func(item string, i int) p.Node {
+							return p.Li(
+								p.Span(p.Class("index"), p.Text(itoa(i))),
+								p.Text(" "+item),
+							)
+						}),
+					),
+				).Else(
+					p.P(p.Class("empty"), "No items in list"),
+				),
+			),
+		),
+	)
 }
 
 func (l *Lists) Style() string {
@@ -156,4 +158,27 @@ func (l *Lists) Style() string {
 .index{display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;background:#4caf50;color:#fff;border-radius:50%;font-size:12px;margin-right:10px}
 .empty{color:#999;font-style:italic;text-align:center;padding:20px}
 `
+}
+
+func (l *Lists) HandleEvent(method string, args string) {
+	switch method {
+	case "AddItem":
+		l.AddItem()
+	case "PrependItem":
+		l.PrependItem()
+	case "InsertMiddle":
+		l.InsertMiddle()
+	case "RemoveFirst":
+		l.RemoveFirst()
+	case "RemoveLast":
+		l.RemoveLast()
+	case "RemoveMiddle":
+		l.RemoveMiddle()
+	case "ClearAll":
+		l.ClearAll()
+	case "LoadFruits":
+		l.LoadFruits()
+	case "LoadNumbers":
+		l.LoadNumbers()
+	}
 }

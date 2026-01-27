@@ -1,6 +1,6 @@
 package main
 
-import "preveltekit"
+import p "preveltekit"
 
 type Todo struct {
 	ID        int    `js:"id"`
@@ -22,12 +22,12 @@ type Post struct {
 }
 
 type Fetch struct {
-	Status  *preveltekit.Store[string]
-	RawData *preveltekit.Store[string]
+	Status  *p.Store[string]
+	RawData *p.Store[string]
 }
 
 func (f *Fetch) OnMount() {
-	if preveltekit.IsBuildTime {
+	if p.IsBuildTime {
 		f.Status.Set("ready")
 		f.RawData.Set("")
 		return
@@ -42,7 +42,7 @@ func (f *Fetch) FetchTodo() {
 	f.RawData.Set("")
 
 	go func() {
-		todo, err := preveltekit.Get[Todo]("https://jsonplaceholder.typicode.com/todos/1")
+		todo, err := p.Get[Todo]("https://jsonplaceholder.typicode.com/todos/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -61,7 +61,7 @@ func (f *Fetch) FetchUser() {
 	f.RawData.Set("")
 
 	go func() {
-		user, err := preveltekit.Get[User]("https://jsonplaceholder.typicode.com/users/1")
+		user, err := p.Get[User]("https://jsonplaceholder.typicode.com/users/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -76,7 +76,7 @@ func (f *Fetch) FetchPost() {
 	f.RawData.Set("")
 
 	go func() {
-		post, err := preveltekit.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
+		post, err := p.Get[Post]("https://jsonplaceholder.typicode.com/posts/1")
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -91,14 +91,13 @@ func (f *Fetch) CreatePost() {
 	f.RawData.Set("")
 
 	go func() {
-		// Send a new post via POST request with JSON body
 		newPost := Post{
 			UserID: 1,
 			Title:  "Hello from Go WASM",
 			Body:   "This post was created using preveltekit.Post[T]",
 		}
 
-		created, err := preveltekit.Post[Post]("https://jsonplaceholder.typicode.com/posts", newPost)
+		created, err := p.Post[Post]("https://jsonplaceholder.typicode.com/posts", newPost)
 		if err != nil {
 			f.Status.Set("error: " + err.Error())
 			return
@@ -120,43 +119,43 @@ func itoa(n int) string {
 	return s
 }
 
-func (f *Fetch) Template() string {
-	return `<div class="demo">
-	<h1>Fetch</h1>
+func (f *Fetch) Render() p.Node {
+	return p.Div(p.Class("demo"),
+		p.H1("Fetch"),
 
-	<section>
-		<h2>Typed Fetch</h2>
-		<p>Fetch data with automatic JSON decoding into Go structs:</p>
+		p.Section(
+			p.H2("Typed Fetch"),
+			p.P("Fetch data with automatic JSON decoding into Go structs:"),
 
-		<div class="buttons">
-			<button @click="FetchTodo()">Fetch Todo</button>
-			<button @click="FetchUser()">Fetch User</button>
-			<button @click="FetchPost()">Fetch Post</button>
-			<button @click="CreatePost()">Create Post (POST)</button>
-		</div>
+			p.Div(p.Class("buttons"),
+				p.Button("Fetch Todo", p.OnClick(f.FetchTodo)),
+				p.Button("Fetch User", p.OnClick(f.FetchUser)),
+				p.Button("Fetch Post", p.OnClick(f.FetchPost)),
+				p.Button("Create Post (POST)", p.OnClick(f.CreatePost)),
+			),
 
-		{#if RawData != ""}
-			<pre>{RawData}</pre>
-		{:else}
-			<pre>Click a button to fetch data</pre>
-		{/if}
-		<p class="status">Status: {Status}</p>
-	</section>
+			p.If(f.RawData.Ne(""),
+				p.Pre(p.Bind(f.RawData)),
+			).Else(
+				p.Pre("Click a button to fetch data"),
+			),
+			p.P(p.Class("status"), "Status: ", p.Bind(f.Status)),
+		),
 
-	<section>
-		<h2>Usage</h2>
-		<pre class="code">type User struct {
-    ID   int    ` + "`js:\"id\"`" + `
-    Name string ` + "`js:\"name\"`" + `
+		p.Section(
+			p.H2("Usage"),
+			p.Pre(p.Class("code"), `type User struct {
+    ID   int    `+"`js:\"id\"`"+`
+    Name string `+"`js:\"name\"`"+`
 }
 
 go func() {
     user, err := preveltekit.Get[User](url)
     if err != nil { ... }
     // use user
-}()</pre>
-	</section>
-</div>`
+}()`),
+		),
+	)
 }
 
 func (f *Fetch) Style() string {
@@ -165,4 +164,17 @@ func (f *Fetch) Style() string {
 .demo pre.code{background:#1a1a2e;color:#e0e0e0}
 .demo .status{color:#666;font-size:.9em;margin-top:10px}
 `
+}
+
+func (f *Fetch) HandleEvent(method string, args string) {
+	switch method {
+	case "FetchTodo":
+		f.FetchTodo()
+	case "FetchUser":
+		f.FetchUser()
+	case "FetchPost":
+		f.FetchPost()
+	case "CreatePost":
+		f.CreatePost()
+	}
 }

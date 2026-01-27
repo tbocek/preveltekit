@@ -426,3 +426,9 @@ This approach followed a "convention over configuration" pattern where you only 
 ### Why the Rewrite?
 
 PrevelteKit 1.0 moves from TypeScript/Svelte to Go/WebAssembly while keeping the same philosophy: minimal framework, static output, clear separation of concerns. The Go version compiles to WASM for client-side execution while still supporting build-time pre-rendering.
+
+### Inspiration
+https://github.com/serge-hulne/Golid
+https://github.com/maxence-charriere/go-app
+https://github.com/hexops/vecty
+https://github.com/vugu/vugu

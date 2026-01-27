@@ -5,7 +5,7 @@
 
 #https://caddyserver.com/docs/caddyfile/patterns#single-page-apps-spas
 :8080 {
-    root * examples/showcase/dist/
+    root * examples/showcase-declarative/dist/
     try_files {path} {path}.html /index.html
     file_server {
         #https://caddyserver.com/docs/caddyfile/directives/file_server#precompressed

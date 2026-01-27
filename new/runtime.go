@@ -126,10 +126,18 @@ func FindComment(marker string) js.Value {
 // isHTML=false: binds to text node (nodeType 3), uses nodeValue
 // isHTML=true: binds to element (nodeType 1), uses innerHTML
 func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
+	// Skip if already bound (comment was removed on first bind)
+	if boundMarkers[marker] {
+		return
+	}
+	// Mark as bound immediately to prevent duplicate binding attempts
+	boundMarkers[marker] = true
+
 	comment := FindComment(marker)
 	if comment.IsNull() {
 		return
 	}
+
 	var node js.Value
 	prevSibling := comment.Get("previousSibling")
 	nodeType := 3
@@ -154,14 +162,11 @@ func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
 	// Remove comment marker after hydration (no longer needed)
 	comment.Call("remove")
 	textNodeRefs[marker] = node
-	if !boundMarkers[marker] {
-		boundMarkers[marker] = true
-		store.OnChange(func(v T) {
-			if n, ok := textNodeRefs[marker]; ok {
-				n.Set(prop, toString(v))
-			}
-		})
-	}
+	store.OnChange(func(v T) {
+		if n, ok := textNodeRefs[marker]; ok {
+			n.Set(prop, toString(v))
+		}
+	})
 }
 
 // BindText binds a store to a text node, using a comment marker for hydration.
