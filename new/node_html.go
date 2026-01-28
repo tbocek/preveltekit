@@ -28,6 +28,9 @@ type BuildContext struct {
 	// ChildrenBindings maps child names to their bindings for SPA routing
 	ChildrenBindings map[string]*CollectedBindings
 
+	// ActiveChildName specifies which child to render (for per-route HTML generation)
+	ActiveChildName string
+
 	// ParentStoreMap maps store pointers to their IDs in the parent component
 	// Used to resolve dynamic props that share parent stores
 	ParentStoreMap map[uintptr]string
@@ -46,7 +49,7 @@ type CollectedBindings struct {
 	AttrBindings     []AttrBinding      `json:"AttrBindings"`
 	AttrCondBindings []AttrCondBinding  `json:"AttrCondBindings"`
 	Components       []ComponentBinding `json:"Components"`
-	RouterBindings   []RouterBinding    `json:"RouterBindings"`
+	ComponentStore   *Store[Component]  `json:"-"` // For WASM to subscribe to navigation
 }
 
 // =============================================================================
@@ -155,12 +158,6 @@ type ComponentBinding struct {
 	Props     map[string]string // Static prop values
 	Events    map[string]string // Event handler mappings
 	SlotHTML  string            // Slot content HTML
-}
-
-// RouterBinding binds a router to a store for page switching.
-type RouterBinding struct {
-	StoreID  string `json:"store_id"` // Store path, e.g., "component.CurrentPage"
-	StoreRef any    `json:"-"`        // Store pointer for resolution
 }
 
 // NewBuildContext creates a new build context for HTML generation.
@@ -295,6 +292,47 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 		case *Store[float64]:
 			bindNode := &BindNode{StoreRef: v, IsHTML: false}
 			sb.WriteString(bindNode.ToHTML(ctx))
+		case *Store[Component]:
+			// Render current component with marker for WASM to update on navigation
+			comp := v.Get()
+			if comp != nil {
+				// Use ActiveChildName if specified (for per-route HTML generation),
+				// otherwise use the component's actual name
+				name := ctx.ActiveChildName
+				if name == "" {
+					name = componentName(comp)
+				}
+				sb.WriteString(`<div id="component-root">`)
+
+				// Check if we have pre-rendered content for this child
+				if ctx.ChildrenContent != nil {
+					if content, ok := ctx.ChildrenContent[name]; ok {
+						sb.WriteString(content)
+						// Merge pre-resolved bindings
+						if ctx.ChildrenBindings != nil {
+							if bindings, ok := ctx.ChildrenBindings[name]; ok {
+								mergeNestedBindings(ctx.Bindings, bindings)
+							}
+						}
+					} else {
+						// Fallback: render directly (bindings won't be resolved)
+						childCtx := ctx.Child(name)
+						html := nodeToHTML(comp.Render(), childCtx)
+						sb.WriteString(html)
+						mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
+					}
+				} else {
+					// No pre-rendered content, render directly
+					childCtx := ctx.Child(name)
+					html := nodeToHTML(comp.Render(), childCtx)
+					sb.WriteString(html)
+					mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
+				}
+
+				sb.WriteString(`</div>`)
+				// Record component binding for WASM
+				ctx.Bindings.ComponentStore = v
+			}
 		default:
 			// Convert other values to string and escape
 			sb.WriteString(escapeHTML(fmt.Sprintf("%v", v)))
@@ -379,7 +417,7 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 	}
 
 	// Inject id and merge attributes into first tag
-	return injectIDAndMergeAttrsMap(html, fullID, attrValues, extraAttrs)
+	return injectIDAndMergeAttrs(html, fullID, attrValues, extraAttrs)
 }
 
 // evalAttrValue extracts string value and store reference from an AttrCond value.
@@ -405,19 +443,11 @@ func evalAttrValue(v any) (string, any) {
 	}
 }
 
-// injectIDAndMergeAttrsMap injects id and merges attribute values into the first HTML tag.
+// injectIDAndMergeAttrs injects id and merges attribute values into the first HTML tag.
 // For "class", merges with existing class attribute. For others, values are space-joined.
-func injectIDAndMergeAttrsMap(html, id string, attrValues map[string][]string, extraAttrs string) string {
-	// Find the first '>' to locate end of opening tag
-	tagEnd := -1
-	for i := 0; i < len(html); i++ {
-		if html[i] == '>' {
-			tagEnd = i
-			break
-		}
-	}
+func injectIDAndMergeAttrs(html, id string, attrValues map[string][]string, extraAttrs string) string {
+	tagEnd := findTagEnd(html)
 	if tagEnd == -1 {
-		// No tag found, return as-is
 		return html
 	}
 
@@ -425,8 +455,7 @@ func injectIDAndMergeAttrsMap(html, id string, attrValues map[string][]string, e
 	rest := html[tagEnd:]
 
 	// Check for self-closing tag
-	isSelfClosing := tagEnd > 0 && html[tagEnd-1] == '/'
-	if isSelfClosing {
+	if tagEnd > 0 && html[tagEnd-1] == '/' {
 		openingTag = html[:tagEnd-1]
 		rest = html[tagEnd-1:]
 	}
@@ -660,35 +689,11 @@ func (b *BindValueNode) ToHTML(ctx *BuildContext) string {
 
 	// Check if it's a textarea (value goes as content, not attribute)
 	if strings.HasPrefix(strings.TrimSpace(strings.ToLower(b.HTML)), "<textarea") {
-		return injectTextareaValue(b.HTML, fullID, value)
+		return injectTextareaContent(b.HTML, fullID, value)
 	}
 
 	// Inject id and value into the HTML element
 	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s" value="%s"`, fullID, escapeAttr(value)))
-}
-
-// injectTextareaValue handles textarea elements where value is content, not an attribute.
-// Example: <textarea placeholder="..."></textarea> -> <textarea id="x" placeholder="...">value</textarea>
-func injectTextareaValue(html, id, value string) string {
-	// Find the closing > of the opening tag
-	closeIdx := strings.Index(html, ">")
-	if closeIdx == -1 {
-		return html
-	}
-
-	// Insert id attribute before the >
-	openTag := html[:closeIdx]
-	rest := html[closeIdx+1:]
-
-	// Find the closing </textarea>
-	closeTagIdx := strings.Index(strings.ToLower(rest), "</textarea>")
-	if closeTagIdx == -1 {
-		// Self-closing or malformed, just inject id
-		return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + rest
-	}
-
-	// Replace content between tags with escaped value
-	return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + escapeHTML(value) + rest[closeTagIdx:]
 }
 
 // ToHTML generates HTML for a BindChecked node (checkbox binding).
@@ -714,22 +719,53 @@ func (b *BindCheckedNode) ToHTML(ctx *BuildContext) string {
 	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s"%s`, fullID, checked))
 }
 
+// =============================================================================
+// HTML Attribute Injection
+// =============================================================================
+
 // injectAttrs injects attributes into an HTML element string.
 // Finds the first > and inserts the attrs just before it.
 // Example: injectAttrs(`<input type="text">`, `id="foo"`) -> `<input type="text" id="foo">`
 func injectAttrs(html, attrs string) string {
-	// Find the closing > of the opening tag
+	tagEnd := findTagEnd(html)
+	if tagEnd == -1 {
+		return html + " " + attrs
+	}
+	// Check if it's a self-closing tag />
+	if tagEnd > 0 && html[tagEnd-1] == '/' {
+		return html[:tagEnd-1] + " " + attrs + " />" + html[tagEnd+1:]
+	}
+	return html[:tagEnd] + " " + attrs + html[tagEnd:]
+}
+
+// injectTextareaContent injects id attribute and replaces textarea content.
+// Example: <textarea></textarea> -> <textarea id="x">value</textarea>
+func injectTextareaContent(html, id, value string) string {
+	tagEnd := findTagEnd(html)
+	if tagEnd == -1 {
+		return html
+	}
+
+	openTag := html[:tagEnd]
+	rest := html[tagEnd+1:]
+
+	// Find the closing </textarea>
+	closeTagIdx := strings.Index(strings.ToLower(rest), "</textarea>")
+	if closeTagIdx == -1 {
+		return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + rest
+	}
+
+	return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + escapeHTML(value) + rest[closeTagIdx:]
+}
+
+// findTagEnd returns the index of the first '>' in html, or -1 if not found.
+func findTagEnd(html string) int {
 	for i := 0; i < len(html); i++ {
 		if html[i] == '>' {
-			// Check if it's a self-closing tag />
-			if i > 0 && html[i-1] == '/' {
-				return html[:i-1] + " " + attrs + " />"
-			}
-			return html[:i] + " " + attrs + html[i:]
+			return i
 		}
 	}
-	// No > found, just append
-	return html + " " + attrs
+	return -1
 }
 
 // ToHTML generates HTML for an if node (conditional rendering).
@@ -1007,91 +1043,6 @@ func (s *SlotNode) ToHTML(ctx *BuildContext) string {
 	return ""
 }
 
-// ToHTML generates HTML for a child node (named child component placeholder).
-func (c *ChildNode) ToHTML(ctx *BuildContext) string {
-	// Look up the child component content from context
-	if ctx.ChildrenContent != nil {
-		if content, ok := ctx.ChildrenContent[c.Name]; ok {
-			// Also merge the child's bindings into the current context
-			if ctx.ChildrenBindings != nil {
-				if childBindings, ok := ctx.ChildrenBindings[c.Name]; ok && childBindings != nil {
-					ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, childBindings.TextBindings...)
-					ctx.Bindings.Events = append(ctx.Bindings.Events, childBindings.Events...)
-					ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, childBindings.InputBindings...)
-					ctx.Bindings.IfBlocks = append(ctx.Bindings.IfBlocks, childBindings.IfBlocks...)
-					ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, childBindings.EachBlocks...)
-					ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, childBindings.AttrBindings...)
-				}
-			}
-			return content
-		}
-	}
-	return ""
-}
-
-// ToHTML generates HTML for a page router node.
-// Renders all children wrapped in divs, showing only the current one.
-func (r *PageRouterNode) ToHTML(ctx *BuildContext) string {
-	if ctx.ChildrenContent == nil {
-		return ""
-	}
-
-	currentName := componentName(r.Current.Get())
-	var sb strings.Builder
-
-	// Render each child in a wrapper div with show/hide based on current component
-	for name, content := range ctx.ChildrenContent {
-		// Determine visibility
-		visible := name == currentName
-		style := ""
-		if !visible {
-			style = ` style="display:none"`
-		}
-
-		// Write wrapper div with ID for WASM to toggle
-		sb.WriteString(`<div id="page-`)
-		sb.WriteString(name)
-		sb.WriteString(`"`)
-		sb.WriteString(style)
-		sb.WriteString(`>`)
-		sb.WriteString(content)
-		sb.WriteString(`</div>`)
-
-		// Merge child bindings
-		if ctx.ChildrenBindings != nil {
-			if childBindings, ok := ctx.ChildrenBindings[name]; ok && childBindings != nil {
-				ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, childBindings.TextBindings...)
-				ctx.Bindings.Events = append(ctx.Bindings.Events, childBindings.Events...)
-				ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, childBindings.InputBindings...)
-				ctx.Bindings.IfBlocks = append(ctx.Bindings.IfBlocks, childBindings.IfBlocks...)
-				ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, childBindings.EachBlocks...)
-				ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, childBindings.AttrBindings...)
-			}
-		}
-	}
-
-	// Render NotFound div (hidden unless no match)
-	if r.NotFound != nil {
-		notFoundVisible := ctx.ChildrenContent[currentName] == ""
-		style := ""
-		if !notFoundVisible {
-			style = ` style="display:none"`
-		}
-		sb.WriteString(`<div id="page-notfound"`)
-		sb.WriteString(style)
-		sb.WriteString(`>`)
-		sb.WriteString(nodeToHTML(r.NotFound, ctx))
-		sb.WriteString(`</div>`)
-	}
-
-	// Record router binding for WASM
-	ctx.Bindings.RouterBindings = append(ctx.Bindings.RouterBindings, RouterBinding{
-		StoreRef: r.Current,
-	})
-
-	return sb.String()
-}
-
 // nodeToHTML dispatches to the appropriate ToHTML method.
 func nodeToHTML(n Node, ctx *BuildContext) string {
 	switch node := n.(type) {
@@ -1114,10 +1065,6 @@ func nodeToHTML(n Node, ctx *BuildContext) string {
 	case *ComponentNode:
 		return node.ToHTML(ctx)
 	case *SlotNode:
-		return node.ToHTML(ctx)
-	case *ChildNode:
-		return node.ToHTML(ctx)
-	case *PageRouterNode:
 		return node.ToHTML(ctx)
 	default:
 		return ""
@@ -1196,6 +1143,20 @@ func RenderHTMLWithChildren(root Node, childrenContent map[string]string, childr
 	ctx := NewBuildContext()
 	ctx.ChildrenContent = childrenContent
 	ctx.ChildrenBindings = childrenBindings
+	html := nodeToHTML(root, ctx)
+	return html, ctx.Bindings
+}
+
+// RenderHTMLWithChildContent renders HTML with a specific child's content for per-route HTML generation.
+func RenderHTMLWithChildContent(root Node, childName string, allContent map[string]string, allBindings map[string]*CollectedBindings) (string, *CollectedBindings) {
+	ctx := NewBuildContext()
+	// Only include the specific child's content
+	ctx.ChildrenContent = map[string]string{childName: allContent[childName]}
+	if allBindings[childName] != nil {
+		ctx.ChildrenBindings = map[string]*CollectedBindings{childName: allBindings[childName]}
+	}
+	// Set active child name so Store[Component] rendering knows which child to render
+	ctx.ActiveChildName = childName
 	html := nodeToHTML(root, ctx)
 	return html, ctx.Bindings
 }

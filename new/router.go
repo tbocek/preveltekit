@@ -176,8 +176,9 @@ func (r *Router) Replace(path string) {
 		return
 	}
 
+	// Use replaceState then navigate to avoid adding to history
 	js.Global().Get("history").Call("replaceState", nil, "", path)
-	r.handleRoute(path)
+	js.Global().Get("location").Call("replace", path)
 }
 
 func (r *Router) handleRoute(path string) {

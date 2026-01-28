@@ -1,10 +1,15 @@
 {
     admin off
     auto_https off
+    #debug
 }
 
 #https://caddyserver.com/docs/caddyfile/patterns#single-page-apps-spas
 :8080 {
+    #log {
+    #    output stdout
+    #    level DEBUG
+    #}
     root * examples/showcase-declarative/dist/
     try_files {path} {path}.html /index.html
     file_server {

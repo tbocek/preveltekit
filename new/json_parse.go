@@ -44,10 +44,10 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 			b.InputBindings = p.parseInputBindings()
 		case "AttrBindings":
 			b.AttrBindings = p.parseAttrBindings()
+		case "AttrCondBindings":
+			b.AttrCondBindings = p.parseAttrCondBindings()
 		case "EachBlocks":
 			b.EachBlocks = p.parseEachBlocks()
-		case "RouterBindings":
-			b.RouterBindings = p.parseRouterBindings()
 		case "Components":
 			// Skip these - not needed for hydration yet
 			p.skipValue()
@@ -458,6 +458,81 @@ func (p *jsonParser) parseAttrBindings() []HydrateAttrBinding {
 	return result
 }
 
+func (p *jsonParser) parseAttrCondBindings() []HydrateAttrCondBinding {
+	var result []HydrateAttrCondBinding
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		acb := HydrateAttrCondBinding{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "element_id":
+				acb.ElementID = p.parseString()
+			case "attr_name":
+				acb.AttrName = p.parseString()
+			case "true_value":
+				acb.TrueValue = p.parseString()
+			case "false_value":
+				acb.FalseValue = p.parseString()
+			case "true_store_id":
+				acb.TrueStoreID = p.parseString()
+			case "false_store_id":
+				acb.FalseStoreID = p.parseString()
+			case "op":
+				acb.Op = p.parseString()
+			case "operand":
+				acb.Operand = p.parseString()
+			case "is_bool":
+				acb.IsBool = p.parseBool()
+			case "deps":
+				acb.Deps = p.parseStringArray()
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, acb)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
 func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
 	var result []HydrateEachBlock
 	p.skipWS()
@@ -510,63 +585,6 @@ func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
 			}
 		}
 		result = append(result, eb)
-
-		p.skipWS()
-		if !p.consume(',') {
-			p.skipWS()
-			p.consume(']')
-			break
-		}
-	}
-	return result
-}
-
-func (p *jsonParser) parseRouterBindings() []HydrateRouterBinding {
-	var result []HydrateRouterBinding
-	p.skipWS()
-	if p.peek() == 'n' {
-		p.pos += 4 // skip null
-		return result
-	}
-	if !p.consume('[') {
-		return result
-	}
-
-	for {
-		p.skipWS()
-		if p.peek() == ']' {
-			p.pos++
-			break
-		}
-
-		rb := HydrateRouterBinding{}
-		p.consume('{')
-		for {
-			p.skipWS()
-			if p.peek() == '}' {
-				p.pos++
-				break
-			}
-			key := p.parseString()
-			p.skipWS()
-			p.consume(':')
-			p.skipWS()
-
-			switch key {
-			case "store_id":
-				rb.StoreID = p.parseString()
-			default:
-				p.skipValue()
-			}
-
-			p.skipWS()
-			if !p.consume(',') {
-				p.skipWS()
-				p.consume('}')
-				break
-			}
-		}
-		result = append(result, rb)
 
 		p.skipWS()
 		if !p.consume(',') {

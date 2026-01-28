@@ -24,16 +24,16 @@ func (a *App) OnCreate() {
 
 	// Build routes - framework discovers components by calling handlers
 	a.routes = []p.StaticRoute{
-		{Path: "/", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
-		{Path: "/basics", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
-		{Path: "/components", Handler: func(params map[string]string) { a.CurrentComponent.Set(components) }},
-		{Path: "/lists", Handler: func(params map[string]string) { a.CurrentComponent.Set(lists) }},
-		{Path: "/routing", Handler: func(params map[string]string) { a.CurrentComponent.Set(routing) }},
-		{Path: "/links", Handler: func(params map[string]string) { a.CurrentComponent.Set(links) }},
-		{Path: "/fetch", Handler: func(params map[string]string) { a.CurrentComponent.Set(fetch) }},
-		{Path: "/storage", Handler: func(params map[string]string) { a.CurrentComponent.Set(storage) }},
-		{Path: "/debounce", Handler: func(params map[string]string) { a.CurrentComponent.Set(debounce) }},
-		{Path: "/bitcoin", Handler: func(params map[string]string) { a.CurrentComponent.Set(bitcoin) }},
+		{Path: "/", HTMLFile: "index.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
+		{Path: "/basics", HTMLFile: "basics.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
+		{Path: "/components", HTMLFile: "components.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(components) }},
+		{Path: "/lists", HTMLFile: "lists.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(lists) }},
+		{Path: "/routing", HTMLFile: "routing.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(routing) }},
+		{Path: "/links", HTMLFile: "links.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(links) }},
+		{Path: "/fetch", HTMLFile: "fetch.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(fetch) }},
+		{Path: "/storage", HTMLFile: "storage.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(storage) }},
+		{Path: "/debounce", HTMLFile: "debounce.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(debounce) }},
+		{Path: "/bitcoin", HTMLFile: "bitcoin.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(bitcoin) }},
 	}
 }
 
@@ -70,8 +70,8 @@ func (a *App) Render() p.Node {
 				<li><a href="/bitcoin">Bitcoin</a></li>
 			</ul>
 		</nav>
-		<main class="content">`,
-		p.PageRouter(a.CurrentComponent).Default(p.Html(`<p>Page not found</p>`)),
+		<main id="content" class="content">`,
+		a.CurrentComponent,
 		`</main>
 	</div>`)
 }

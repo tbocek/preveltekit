@@ -251,14 +251,16 @@ func ToggleClass(el js.Value, class string, add bool) {
 // ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor comment
 func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value {
 	anchor := FindComment(anchorMarker)
+	if !ok(anchor) {
+		return js.Null()
+	}
+	parentNode := anchor.Get("parentNode")
 	newEl := Document.Call("createElement", "span")
 	newEl.Set("innerHTML", html)
 	if current.Truthy() {
 		current.Call("remove")
 	}
-	if ok(anchor) {
-		anchor.Get("parentNode").Call("insertBefore", newEl, anchor)
-	}
+	parentNode.Call("insertBefore", newEl, anchor)
 	return newEl
 }
 
@@ -291,11 +293,15 @@ type Evt struct {
 // Pass a Cleanup to collect js.Func references for later release.
 func BindEvents(c *Cleanup, events []Evt) {
 	for _, e := range events {
+		e := e // Capture loop variable for closure
 		el := GetEl(e.ID)
 		if !ok(el) {
+			js.Global().Get("console").Call("log", "[BindEvents] element NOT found:", e.ID)
 			continue
 		}
+		js.Global().Get("console").Call("log", "[BindEvents] binding:", e.ID, e.Event)
 		fn := js.FuncOf(func(this js.Value, args []js.Value) any {
+			js.Global().Get("console").Call("log", "[BindEvents] event fired:", e.ID, e.Event)
 			e.Fn()
 			return nil
 		})

@@ -319,54 +319,6 @@ func Slot() *SlotNode {
 	return &SlotNode{}
 }
 
-// ChildNode represents a named child component placeholder.
-type ChildNode struct {
-	Name string
-}
-
-func (c *ChildNode) nodeType() string { return "child" }
-
-// Child creates a named child component placeholder for SPA routing.
-// Deprecated: Use ChildOf[T]() for type-safe routing.
-func Child(name string) *ChildNode {
-	return &ChildNode{Name: name}
-}
-
-// ChildOf creates a child component placeholder with name derived from type T.
-// Example: ChildOf[Basics]() creates a child named "basics"
-func ChildOf[T any]() *ChildNode {
-	var zero T
-	name := reflect.TypeOf(zero).Name()
-	// Convert first letter to lowercase
-	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
-		b := []byte(name)
-		b[0] = b[0] + 32
-		name = string(b)
-	}
-	return &ChildNode{Name: name}
-}
-
-// PageRouterNode renders all registered children and shows the one matching the current component.
-type PageRouterNode struct {
-	Current  *Store[Component]
-	NotFound Node // Optional node to show when no child matches
-}
-
-func (r *PageRouterNode) nodeType() string { return "router" }
-
-// PageRouter creates a router that shows the current component.
-// All children are pre-rendered at build time; the store controls visibility.
-// Example: PageRouter(app.CurrentComponent)
-func PageRouter(current *Store[Component]) *PageRouterNode {
-	return &PageRouterNode{Current: current}
-}
-
-// Default sets the node to show when no child matches.
-func (r *PageRouterNode) Default(node Node) *PageRouterNode {
-	r.NotFound = node
-	return r
-}
-
 // componentName returns the lowercase type name of a component.
 func componentName(c Component) string {
 	if c == nil {

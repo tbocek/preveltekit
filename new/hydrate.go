@@ -73,7 +73,8 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 	if hr, ok := app.(HasRoutes); ok {
 		if hcc, ok := app.(HasCurrentComponent); ok {
 			currentStore := hcc.GetCurrentComponent()
-			for _, route := range hr.Routes() {
+			routes := hr.Routes()
+			for _, route := range routes {
 				if route.Handler != nil {
 					// Call handler to set CurrentComponent
 					route.Handler(nil)
@@ -82,6 +83,11 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 						cfg.Children[route.Path] = comp
 					}
 				}
+			}
+			// Reset CurrentComponent to the default route (first route, typically "/" or "/basics")
+			// so that SSR renders the correct initial component
+			if len(routes) > 0 && routes[0].Handler != nil {
+				routes[0].Handler(nil)
 			}
 		}
 	}
@@ -118,14 +124,26 @@ func hydrateSSR(app Component, cfg *HydrateConfig) {
 	}
 }
 
-// hydrateGenerateAll generates a single SPA HTML file with all children embedded.
+// hydrateGenerateAll generates HTML files for all routes.
 func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
-	// Initialize stores and call OnCreate/OnMount for all children
-	// (app was already initialized in Hydrate before Routes() was called)
+	// Deduplicate children (multiple routes may point to same component, e.g., "/" and "/basics")
+	// Use pointer address to detect duplicates
+	seenChildren := make(map[uintptr]bool)
+	uniqueChildren := make([]Component, 0)
 	for _, child := range cfg.Children {
+		ptr := reflect.ValueOf(child).Pointer()
+		if !seenChildren[ptr] {
+			seenChildren[ptr] = true
+			uniqueChildren = append(uniqueChildren, child)
+		}
+	}
+
+	// Initialize stores and call OnCreate/OnMount for unique children only
+	// (app was already initialized in Hydrate before Routes() was called)
+	for _, child := range uniqueChildren {
 		initStores(child)
 	}
-	for _, child := range cfg.Children {
+	for _, child := range uniqueChildren {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
 		}
@@ -148,7 +166,7 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 		childStoreMaps[name] = buildStoreMap(child, name)
 	}
 
-	// Collect all bindings
+	// Collect all bindings (merged from all routes for single bindings.json)
 	var allBindings CollectedBindings
 
 	// Create output directory
@@ -188,39 +206,40 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 		}
 	}
 
-	// Render app with all children content and bindings available
-	html, bindings := RenderHTMLWithChildren(app.Render(), childrenContent, childrenBindings)
+	// Get routes from app
+	var routes []StaticRoute
+	if hr, ok := app.(HasRoutes); ok {
+		routes = hr.Routes()
+	}
 
-	// Resolve app bindings
-	resolveBindings(bindings, appStoreMap, "component", app)
-	mergeBindings(&allBindings, bindings)
+	// Generate HTML file for each route
+	for _, route := range routes {
+		// Get the child name for this route
+		childName := strings.TrimPrefix(route.Path, "/")
+		if childName == "" {
+			childName = "basics" // Default for "/" route
+		}
 
-	// Build full HTML document with all styles (including auto-collected nested styles)
-	fullHTML := buildHTMLDocument(html, appStyle, childStyles, allCollectedStyles)
+		// Render app with this specific child's content
+		html, bindings := RenderHTMLWithChildContent(app.Render(), childName, childrenContent, childrenBindings)
 
-	// Write single index.html
-	htmlPath := filepath.Join(cfg.OutputDir, "index.html")
-	os.WriteFile(htmlPath, []byte(fullHTML), 0644)
-	fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
+		// Resolve app bindings
+		resolveBindings(bindings, appStoreMap, "component", app)
+
+		// Build full HTML document
+		fullHTML := buildHTMLDocument(html, appStyle, childStyles, allCollectedStyles)
+
+		// Write HTML file
+		htmlPath := filepath.Join(cfg.OutputDir, route.HTMLFile)
+		os.WriteFile(htmlPath, []byte(fullHTML), 0644)
+		fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
+
+		// Merge bindings for this route into allBindings
+		mergeBindings(&allBindings, bindings)
+	}
 
 	// Output merged bindings as JSON
 	bindingsJSON, _ := json.Marshal(allBindings)
-	fmt.Fprintf(os.Stderr, "DEBUG: allBindings has %d text, %d events, %d if-blocks\n",
-		len(allBindings.TextBindings), len(allBindings.Events), len(allBindings.IfBlocks))
-	if len(allBindings.IfBlocks) > 0 {
-		for i, ifb := range allBindings.IfBlocks {
-			fmt.Fprintf(os.Stderr, "DEBUG: IfBlock[%d] marker=%s branches=%d\n", i, ifb.MarkerID, len(ifb.Branches))
-			for j, br := range ifb.Branches {
-				textCount := 0
-				eventCount := 0
-				if br.Bindings != nil {
-					textCount = len(br.Bindings.TextBindings)
-					eventCount = len(br.Bindings.Events)
-				}
-				fmt.Fprintf(os.Stderr, "DEBUG:   Branch[%d] text=%d events=%d\n", j, textCount, eventCount)
-			}
-		}
-	}
 	fmt.Fprintf(os.Stderr, "BINDINGS:%s\n", bindingsJSON)
 }
 
@@ -296,17 +315,19 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	// Merge router bindings
-	seenRouter := make(map[string]bool)
-	for _, b := range dst.RouterBindings {
-		seenRouter[b.StoreID] = true
+	// Merge attr cond bindings
+	seenAttrCond := make(map[string]bool)
+	for _, b := range dst.AttrCondBindings {
+		seenAttrCond[b.ElementID+":"+b.AttrName] = true
 	}
-	for _, b := range src.RouterBindings {
-		if !seenRouter[b.StoreID] {
-			dst.RouterBindings = append(dst.RouterBindings, b)
-			seenRouter[b.StoreID] = true
+	for _, b := range src.AttrCondBindings {
+		key := b.ElementID + ":" + b.AttrName
+		if !seenAttrCond[key] {
+			dst.AttrCondBindings = append(dst.AttrCondBindings, b)
+			seenAttrCond[key] = true
 		}
 	}
+
 }
 
 // hydrateSingleRoute handles rendering a single route (original behavior).
@@ -589,20 +610,6 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 			addr := reflect.ValueOf(bindings.EachBlocks[i].ListRef).Pointer()
 			if name, ok := storeMap[addr]; ok {
 				bindings.EachBlocks[i].ListID = name
-			}
-		}
-	}
-
-	// Resolve router bindings
-	for i := range bindings.RouterBindings {
-		// Skip if already resolved
-		if bindings.RouterBindings[i].StoreID != "" {
-			continue
-		}
-		if bindings.RouterBindings[i].StoreRef != nil {
-			addr := reflect.ValueOf(bindings.RouterBindings[i].StoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.RouterBindings[i].StoreID = name
 			}
 		}
 	}

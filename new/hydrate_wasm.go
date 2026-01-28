@@ -101,6 +101,8 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 		if hcc, ok := app.(HasCurrentComponent); ok {
 			currentStore := hcc.GetCurrentComponent()
 			if currentStore != nil {
+				// Save the original component before discovery loop
+				originalComp := currentStore.Get()
 				for _, route := range hr.Routes() {
 					if route.Handler != nil {
 						// Call handler to set CurrentComponent
@@ -110,6 +112,10 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 							cfg.Children[route.Path] = comp
 						}
 					}
+				}
+				// Restore original component after discovery
+				if originalComp != nil {
+					currentStore.Set(originalComp)
 				}
 			}
 		}
@@ -134,6 +140,7 @@ func WithChild(path string, comp Component) func(*HydrateConfig) {
 
 // hydrateWASM sets up DOM bindings from the embedded bindings JSON.
 func hydrateWASM(app Component, cfg *HydrateConfig) {
+
 	// Get bindings from global variable (set by CLI-generated code)
 	bindingsJS := js.Global().Get("_preveltekit_bindings")
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
@@ -143,6 +150,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 	}
 
 	bindingsJSON := bindingsJS.String()
+
 	bindings := parseBindings(bindingsJSON)
 	if bindings == nil {
 		runLifecycle(app, cfg)
@@ -164,17 +172,85 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 
 	// Collect event handlers from component Render() trees
 	collectHandlers(app, "")
+	// Deduplicate children by pointer to avoid collecting same component twice
+	// (e.g., "/" and "/basics" may both point to the same Basics component)
+	// We need to use the non-empty name for collection
+	collected := make(map[uintptr]string) // maps pointer to the name used for collection
 	for path, child := range cfg.Children {
+		ptr := reflect.ValueOf(child).Pointer()
 		name := trimPrefix(path, "/")
+
+		// If already collected with a non-empty name, skip
+		if existingName, exists := collected[ptr]; exists && existingName != "" {
+			continue
+		}
+
+		// If this is the root path ("/"), record it but don't collect yet
+		// (we prefer the named path like "/basics" for the prefix)
+		if name == "" {
+			if _, exists := collected[ptr]; !exists {
+				collected[ptr] = "" // Mark as seen, but with empty name
+			}
+			continue
+		}
+
+		// Collect with this name
+		collected[ptr] = name
 		collectHandlers(child, name)
+	}
+
+	// Now collect any that were only registered with empty name (shouldn't happen normally)
+	for path, child := range cfg.Children {
+		ptr := reflect.ValueOf(child).Pointer()
+		if collected[ptr] == "" {
+			name := trimPrefix(path, "/")
+			if name != "" {
+				collected[ptr] = name
+				collectHandlers(child, name)
+			}
+		}
 	}
 
 	// Apply all bindings
 	cleanup := &Cleanup{}
 	applyBindings(bindings, components, cleanup)
 
-	// Run OnMount phase
-	runOnMount(app, cfg)
+	// Determine the pre-rendered component from the current URL path
+	// This is more reliable than reading from CurrentComponent store, which may have
+	// been modified during route discovery
+	var initialPrerenderedName string
+	currentPath := js.Global().Get("location").Get("pathname").String()
+	js.Global().Get("console").Call("log", "[hydrateWASM] currentPath:", currentPath)
+
+	// Find the component for this path from cfg.Children
+	if comp, ok := cfg.Children[currentPath]; ok && comp != nil {
+		initialPrerenderedName = componentNameWasm(comp)
+	} else if currentPath == "/" || currentPath == "" {
+		// Root path - check for "/" in children
+		if comp, ok := cfg.Children["/"]; ok && comp != nil {
+			initialPrerenderedName = componentNameWasm(comp)
+		}
+	}
+	js.Global().Get("console").Call("log", "[hydrateWASM] captured initialPrerenderedName:", initialPrerenderedName)
+
+	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
+	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
+	for _, child := range cfg.Children {
+		if om, ok := child.(HasOnMount); ok {
+			om.OnMount()
+		}
+	}
+
+	// Set up component store binding for SPA navigation
+	if hcc, ok := app.(HasCurrentComponent); ok {
+		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", cfg, initialPrerenderedName)
+	} else {
+	}
+
+	// NOW run app's OnMount which starts the router
+	if om, ok := app.(HasOnMount); ok {
+		om.OnMount()
+	}
 
 	// Keep WASM running
 	select {}
@@ -246,9 +322,11 @@ var handlerMap = make(map[string]func())
 // collectHandlers walks a component's Render() tree and extracts event handlers.
 // It uses the same ID generation logic as SSR to ensure IDs match.
 func collectHandlers(comp Component, prefix string) {
+	js.Global().Get("console").Call("log", "[collectHandlers] prefix:", prefix)
 	node := comp.Render()
 	ctx := &handlerCollectCtx{IDCounter: IDCounter{Prefix: prefix}}
 	collectHandlersFromNode(node, ctx)
+	js.Global().Get("console").Call("log", "[collectHandlers] done, handlerMap size:", len(handlerMap))
 }
 
 // handlerCollectCtx tracks state while collecting handlers.
@@ -267,27 +345,39 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 	case *HtmlNode:
 		// Html nodes can have events via WithOn() stored in Events field
 		// or embedded eventAttr in Parts (legacy)
+		// SSR generates IDs in injectChainedAttrs: NextEventID if Events, NextClassID if only AttrConds
 		if len(node.Events) > 0 {
 			// New style: events attached via WithOn()
 			localID := ctx.NextEventID()
 			fullID := ctx.FullElementID(localID)
+			js.Global().Get("console").Call("log", "[collectHandlersFromNode] WithOn events, fullID:", fullID)
 			// All events on this node share one element ID
 			for _, ev := range node.Events {
 				handlerMap[fullID] = ev.Handler
 			}
+		} else if len(node.AttrConds) > 0 {
+			// SSR calls NextClassID for AttrConds without Events - must stay in sync
+			js.Global().Get("console").Call("log", "[collectHandlersFromNode] AttrConds only, incrementing ClassID")
+			ctx.NextClassID()
 		}
 		// Also check Parts for embedded nodes, legacy eventAttr, and stores
-		for _, part := range node.Parts {
+		js.Global().Get("console").Call("log", "[collectHandlersFromNode] checking", len(node.Parts), "parts")
+		for i, part := range node.Parts {
 			if ev, ok := part.(*eventAttr); ok {
 				localID := ctx.NextEventID()
 				fullID := ctx.FullElementID(localID)
+				js.Global().Get("console").Call("log", "[collectHandlersFromNode] part", i, "eventAttr, fullID:", fullID)
 				handlerMap[fullID] = ev.Handler
 			} else if childNode, ok := part.(Node); ok {
+				js.Global().Get("console").Call("log", "[collectHandlersFromNode] part", i, "is Node, type:", childNode.nodeType())
 				collectHandlersFromNode(childNode, ctx)
 			} else if isStore(part) {
 				// Store values are auto-bound by SSR, which increments text counter
 				// We need to increment here too to stay in sync
+				js.Global().Get("console").Call("log", "[collectHandlersFromNode] part", i, "is Store, incrementing Text")
 				ctx.Text++
+			} else {
+				js.Global().Get("console").Call("log", "[collectHandlersFromNode] part", i, "is other type")
 			}
 		}
 
@@ -338,6 +428,7 @@ func bindTextDynamic(markerID string, store any, isHTML bool) {
 		bindText(markerID, s, isHTML)
 	case *Store[float64]:
 		bindText(markerID, s, isHTML)
+	default:
 	}
 }
 
@@ -385,26 +476,36 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 	// Track current cleanup for bindings
 	currentCleanup := &Cleanup{}
 
+	// Track which branch is currently active (-1 = else, 0+ = branch index)
+	currentBranchIdx := -2 // -2 = not yet determined
+
 	// Evaluate which branch is active and update content
 	updateIfBlock := func() {
 		var activeHTML string
 		var activeBindings *HydrateBindings
-		found := false
+		activeBranchIdx := -1 // -1 = else branch
 
 		for i := 0; i < len(ifb.Branches); i++ {
 			branch := ifb.Branches[i]
 			if evalCondition(branch, components) {
 				activeHTML = branch.HTML
 				activeBindings = branch.Bindings
-				found = true
+				activeBranchIdx = i
 				break
 			}
 		}
 
-		if !found {
+		if activeBranchIdx == -1 {
 			activeHTML = ifb.ElseHTML
 			activeBindings = ifb.ElseBindings
 		}
+
+		// Skip re-rendering if the active branch hasn't changed
+		// This prevents overwriting list content when only the list items changed
+		if currentBranchIdx == activeBranchIdx && currentBranchIdx != -2 {
+			return
+		}
+		currentBranchIdx = activeBranchIdx
 
 		currentEl = FindExistingIfContent(ifb.MarkerID)
 		currentEl = ReplaceContent(ifb.MarkerID, currentEl, activeHTML)
@@ -465,19 +566,110 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 		// Also clear the if-block's own setup status so it can be re-setup
 		delete(setupIfBlocks, ifb.MarkerID)
 	}
-	// Clear each-block setup status
-	for _, eb := range bindings.EachBlocks {
-		delete(setupEachBlocks, eb.MarkerID)
+	// NOTE: Do NOT clear setupEachBlocks here. Each-blocks subscribe to list.OnChange
+	// which persists across if-block changes. Clearing would cause duplicate subscriptions.
+	// The list callbacks will re-find the marker when needed.
+}
+
+// bindComponentStore subscribes to a Store[Component] and re-renders on change.
+// This enables SPA navigation where clicking a link updates the component store
+// and WASM re-renders the new component into the container.
+func bindComponentStore(store *Store[Component], containerID string, cfg *HydrateConfig) {
+	initialCompName := ""
+	if initialComp := store.Get(); initialComp != nil {
+		initialCompName = componentNameWasm(initialComp)
 	}
+	bindComponentStoreWithInitial(store, containerID, cfg, initialCompName)
+}
+
+// bindComponentStoreWithInitial is like bindComponentStore but takes the pre-rendered component name.
+func bindComponentStoreWithInitial(store *Store[Component], containerID string, cfg *HydrateConfig, initialPrerenderedName string) {
+	js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] initialPrerenderedName:", initialPrerenderedName)
+
+	if store == nil {
+		js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] store is nil, returning")
+		return
+	}
+
+	// Track current cleanup for the rendered component
+	currentCleanup := &Cleanup{}
+
+	// Get the container element
+	container := GetEl(containerID)
+	if !ok(container) {
+		js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] container not found:", containerID)
+		return
+	}
+
+	// Use the pre-rendered component name passed in (captured before router started)
+
+	// Track if this is the first change
+	firstChange := true
+
+	// Subscribe to component changes
+	store.OnChange(func(comp Component) {
+		compName := ""
+		if comp != nil {
+			compName = componentNameWasm(comp)
+		}
+		js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] OnChange fired, comp:", compName, "firstChange:", firstChange, "initialPrerenderedName:", initialPrerenderedName)
+
+		// On first change, only skip if we're staying on the same component that was pre-rendered
+		if firstChange {
+			firstChange = false
+			if comp != nil && componentNameWasm(comp) == initialPrerenderedName {
+				js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] skipping first change - same component")
+				return
+			}
+			js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] NOT skipping first change - different component")
+		}
+		if comp == nil {
+			js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] comp is nil, clearing container")
+			container.Set("innerHTML", "")
+			currentCleanup.Release()
+			return
+		}
+
+		// Get component name for prefix
+		name := componentNameWasm(comp)
+		js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] REPLACING DOM for component:", name)
+
+		// NOTE: Do NOT call initStores/OnCreate/OnMount here!
+		// These were already called during initial hydration (runOnCreate/runOnMount).
+		// The component stores already have their proper values.
+		// We just need to re-render with current state.
+
+		// Inject component styles (idempotent - won't duplicate)
+		if hs, ok := comp.(HasStyle); ok {
+			InjectStyle(name, hs.Style())
+		}
+
+		// Render with current store values
+		html, ctx := RenderComponentWasm(comp, name)
+
+		// Replace container content
+		js.Global().Get("console").Call("log", "[bindComponentStoreWithInitial] setting innerHTML, length:", len(html))
+		container.Set("innerHTML", html)
+
+		// Release old bindings and create new cleanup
+		currentCleanup.Release()
+		currentCleanup = &Cleanup{}
+
+		// Apply collected bindings to make it reactive
+		ApplyWasmBindings(ctx.Bindings, currentCleanup)
+	})
+
 }
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.
 func applyBindings(bindings *HydrateBindings, components map[string]Component, cleanup *Cleanup) {
+
 	// Text bindings
 	for _, tb := range bindings.TextBindings {
 		store := resolveStore(tb.StoreID, components)
 		if store != nil {
 			bindTextDynamic(tb.MarkerID, store, tb.IsHTML)
+		} else {
 		}
 	}
 
@@ -490,12 +682,18 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	}
 
 	// Event bindings
+	js.Global().Get("console").Call("log", "[applyBindings] handlerMap size:", len(handlerMap))
+	for k := range handlerMap {
+		js.Global().Get("console").Call("log", "[applyBindings] handlerMap key:", k)
+	}
 	for _, ev := range bindings.Events {
 		handler := getHandler(ev.ElementID)
+		js.Global().Get("console").Call("log", "[applyBindings] event:", ev.ElementID, "handler found:", handler != nil)
 		if handler != nil {
 			bindEventDynamic(cleanup, ev.ElementID, ev.Event, handler)
 		}
 	}
+	js.Global().Get("console").Call("log", "[applyBindings] event bindings complete")
 
 	// Nested if-blocks
 	for _, ifb := range bindings.IfBlocks {
@@ -517,10 +715,6 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 		bindEachBlock(eb, components)
 	}
 
-	// Router bindings
-	for _, rb := range bindings.RouterBindings {
-		bindRouter(rb, components)
-	}
 }
 
 // bindAttr sets up a dynamic attribute binding.
@@ -670,12 +864,15 @@ func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Compo
 
 // bindEachBlock sets up a list iteration binding.
 func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
+	js.Global().Get("console").Call("log", "[bindEachBlock] MarkerID:", eb.MarkerID, "ListID:", eb.ListID)
 	if eb.ListID == "" {
+		js.Global().Get("console").Call("log", "[bindEachBlock] ListID is empty, returning")
 		return
 	}
 
 	// Check if already setup
 	if setupEachBlocks[eb.MarkerID] {
+		js.Global().Get("console").Call("log", "[bindEachBlock] already setup, returning")
 		return
 	}
 	setupEachBlocks[eb.MarkerID] = true
@@ -683,14 +880,18 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 	// Find the marker comment
 	marker := FindComment(eb.MarkerID)
 	if marker.IsNull() {
+		js.Global().Get("console").Call("log", "[bindEachBlock] marker not found:", eb.MarkerID)
 		return
 	}
+	js.Global().Get("console").Call("log", "[bindEachBlock] marker found")
 
 	// Resolve the list
 	listAny := resolveStore(eb.ListID, components)
 	if listAny == nil {
+		js.Global().Get("console").Call("log", "[bindEachBlock] list not resolved:", eb.ListID)
 		return
 	}
+	js.Global().Get("console").Call("log", "[bindEachBlock] list resolved")
 
 	// Get the component that owns this list for rendering
 	compName, _, _ := splitFirst(eb.ListID, ".")
@@ -699,10 +900,6 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 		return
 	}
 
-	// Get the parent element (the <ul> or container that holds the list items)
-	// The marker comment is placed after all the <span> wrappers, inside the container
-	parent := marker.Get("parentNode")
-
 	// Extract item ID prefix from marker (e.g., "lists_e0" -> "lists_")
 	itemIDPrefix := eb.MarkerID[:len(eb.MarkerID)-1]
 	if len(itemIDPrefix) > 0 && itemIDPrefix[len(itemIDPrefix)-1] == 'e' {
@@ -710,81 +907,48 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 	}
 
 	// Subscribe to list changes and re-render
+	// Pass markerID so we can re-acquire the parent each time (handles DOM replacement from if-blocks)
 	switch list := listAny.(type) {
 	case *List[string]:
-		bindListItems(list, parent, itemIDPrefix, escapeHTMLWasm)
+		bindListItems(list, eb.MarkerID, itemIDPrefix, escapeHTMLWasm)
 	case *List[int]:
-		bindListItems(list, parent, itemIDPrefix, intToStr)
+		bindListItems(list, eb.MarkerID, itemIDPrefix, intToStr)
 	}
 
 	_ = comp
 }
 
 // bindListItems sets up list rendering and subscribes to changes.
-func bindListItems[T comparable](list *List[T], parent js.Value, itemIDPrefix string, format func(T) string) {
+func bindListItems[T comparable](list *List[T], markerID string, itemIDPrefix string, format func(T) string) {
+	js.Global().Get("console").Call("log", "[bindListItems] itemIDPrefix:", itemIDPrefix, "markerID:", markerID)
 	renderItems := func(items []T) {
+		js.Global().Get("console").Call("log", "[bindListItems] renderItems called, count:", len(items))
 		var html string
 		for i, item := range items {
 			html += `<span id="` + itemIDPrefix + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + format(item) + `</li></span>`
 		}
+		// Add marker comment at the end so it survives innerHTML replacement
+		html += `<!--` + markerID + `-->`
+		js.Global().Get("console").Call("log", "[bindListItems] html length:", len(html))
+		// Re-acquire parent from marker each time to handle DOM replacement (e.g., from if-blocks)
+		marker := FindComment(markerID)
+		if marker.IsNull() {
+			js.Global().Get("console").Call("log", "[bindListItems] marker not found:", markerID)
+			return
+		}
+		parent := marker.Get("parentNode")
 		if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
+			js.Global().Get("console").Call("log", "[bindListItems] setting innerHTML on parent")
 			parent.Set("innerHTML", html)
+		} else {
+			js.Global().Get("console").Call("log", "[bindListItems] parent is null or not element")
 		}
 	}
 
 	// Don't render initially - SSR already rendered the items
 	// Just subscribe to changes for future updates
 	list.OnChange(renderItems)
-}
-
-// bindRouter sets up page switching based on a component store.
-func bindRouter(rb HydrateRouterBinding, components map[string]Component) {
-	store := resolveStore(rb.StoreID, components)
-	if store == nil {
-		return
-	}
-
-	compStore, isCompStore := store.(*Store[Component])
-	if !isCompStore {
-		return
-	}
-
-	// Track currently visible page
-	var currentPage string
-
-	updateVisibility := func(comp Component) {
-		newPage := componentNameWasm(comp)
-
-		// Hide old page
-		if currentPage != "" && currentPage != newPage {
-			if oldEl := GetEl("page-" + currentPage); ok(oldEl) {
-				oldEl.Get("style").Set("display", "none")
-			}
-		}
-		// Hide notfound
-		if notFoundEl := GetEl("page-notfound"); ok(notFoundEl) {
-			notFoundEl.Get("style").Set("display", "none")
-		}
-
-		// Show new page
-		newEl := GetEl("page-" + newPage)
-		if ok(newEl) {
-			newEl.Get("style").Call("removeProperty", "display")
-			currentPage = newPage
-		} else {
-			// Show notfound if page doesn't exist
-			if notFoundEl := GetEl("page-notfound"); ok(notFoundEl) {
-				notFoundEl.Get("style").Call("removeProperty", "display")
-			}
-			currentPage = ""
-		}
-	}
-
-	// Initial state - don't call updateVisibility since SSR already rendered correctly
-	currentPage = componentNameWasm(compStore.Get())
-
-	// Subscribe to changes
-	compStore.OnChange(updateVisibility)
+	js.Global().Get("console").Call("log", "[bindListItems] subscribed to OnChange")
 }
 
 // componentNameWasm returns the lowercase type name of a component.
@@ -1147,7 +1311,6 @@ type HydrateBindings struct {
 	InputBindings    []HydrateInputBinding    `json:"InputBindings"`
 	AttrBindings     []HydrateAttrBinding     `json:"AttrBindings"`
 	AttrCondBindings []HydrateAttrCondBinding `json:"AttrCondBindings"`
-	RouterBindings   []HydrateRouterBinding   `json:"RouterBindings"`
 }
 
 type HydrateTextBinding struct {
@@ -1213,8 +1376,4 @@ type HydrateEachBlock struct {
 	ListID   string `json:"ListID"`
 	ItemVar  string `json:"ItemVar"`
 	IndexVar string `json:"IndexVar"`
-}
-
-type HydrateRouterBinding struct {
-	StoreID string `json:"store_id"`
 }
