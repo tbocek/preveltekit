@@ -272,29 +272,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	seenClass := make(map[string]bool)
-	for _, b := range dst.ClassBindings {
-		seenClass[b.ElementID+":"+b.ClassName] = true
-	}
-	for _, b := range src.ClassBindings {
-		key := b.ElementID + ":" + b.ClassName
-		if !seenClass[key] {
-			dst.ClassBindings = append(dst.ClassBindings, b)
-			seenClass[key] = true
-		}
-	}
-
-	seenShowIf := make(map[string]bool)
-	for _, b := range dst.ShowIfBindings {
-		seenShowIf[b.ElementID] = true
-	}
-	for _, b := range src.ShowIfBindings {
-		if !seenShowIf[b.ElementID] {
-			dst.ShowIfBindings = append(dst.ShowIfBindings, b)
-			seenShowIf[b.ElementID] = true
-		}
-	}
-
 	// Merge attr bindings
 	seenAttr := make(map[string]bool)
 	for _, b := range dst.AttrBindings {
@@ -410,7 +387,6 @@ func hydrateSingleRoute(app Component, cfg *HydrateConfig) {
 		bindings.InputBindings = append(bindings.InputBindings, childBindings.InputBindings...)
 		bindings.Events = append(bindings.Events, childBindings.Events...)
 		bindings.IfBlocks = append(bindings.IfBlocks, childBindings.IfBlocks...)
-		bindings.ClassBindings = append(bindings.ClassBindings, childBindings.ClassBindings...)
 	}
 
 	// Output HTML
@@ -509,40 +485,6 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		}
 	}
 
-	// Resolve class bindings
-	for i := range bindings.ClassBindings {
-		// Skip if already resolved
-		if bindings.ClassBindings[i].CondExpr != "" {
-			continue
-		}
-		if bindings.ClassBindings[i].StoreRef != nil {
-			addr := reflect.ValueOf(bindings.ClassBindings[i].StoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				// Build expression based on whether it's a comparison or simple bool
-				if bindings.ClassBindings[i].Op != "" {
-					// StoreCondition with comparison
-					operand := bindings.ClassBindings[i].Operand
-					// Quote string operands
-					if !isNumeric(operand) && operand != "true" && operand != "false" {
-						operand = `"` + operand + `"`
-					}
-					bindings.ClassBindings[i].CondExpr = name + ".Get() " + bindings.ClassBindings[i].Op + " " + operand
-				} else {
-					// BoolCondition
-					bindings.ClassBindings[i].CondExpr = name + ".Get()"
-				}
-				// Extract just the field name for deps
-				parts := strings.Split(name, ".")
-				fieldName := parts[len(parts)-1]
-				if prefix == "component" {
-					bindings.ClassBindings[i].Deps = []string{fieldName}
-				} else {
-					bindings.ClassBindings[i].Deps = []string{name}
-				}
-			}
-		}
-	}
-
 	// Resolve if-block conditions and recursively resolve nested bindings
 	for i := range bindings.IfBlocks {
 		for j := range bindings.IfBlocks[i].Branches {
@@ -614,28 +556,6 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		}
 	}
 
-	// Resolve ShowIf bindings
-	for i := range bindings.ShowIfBindings {
-		// Skip if already resolved
-		if bindings.ShowIfBindings[i].StoreID != "" {
-			continue
-		}
-		if bindings.ShowIfBindings[i].StoreRef != nil {
-			addr := reflect.ValueOf(bindings.ShowIfBindings[i].StoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.ShowIfBindings[i].StoreID = name
-				// Extract just the field name for deps
-				parts := strings.Split(name, ".")
-				fieldName := parts[len(parts)-1]
-				if prefix == "component" {
-					bindings.ShowIfBindings[i].Deps = []string{fieldName}
-				} else {
-					bindings.ShowIfBindings[i].Deps = []string{name}
-				}
-			}
-		}
-	}
-
 	// Event handlers are resolved directly in WASM via collectHandlers
 	// No need to resolve handler names here anymore
 
@@ -685,6 +605,44 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 				bindings.RouterBindings[i].StoreID = name
 			}
 		}
+	}
+
+	// Resolve AttrCond bindings (from HtmlNode.AttrIf())
+	for i := range bindings.AttrCondBindings {
+		// Skip if already resolved
+		if len(bindings.AttrCondBindings[i].Deps) > 0 {
+			continue
+		}
+
+		var deps []string
+
+		// Resolve condition store
+		if bindings.AttrCondBindings[i].CondStoreRef != nil {
+			addr := reflect.ValueOf(bindings.AttrCondBindings[i].CondStoreRef).Pointer()
+			if name, ok := storeMap[addr]; ok {
+				deps = append(deps, name)
+			}
+		}
+
+		// Resolve true value store (if dynamic)
+		if bindings.AttrCondBindings[i].TrueStoreRef != nil {
+			addr := reflect.ValueOf(bindings.AttrCondBindings[i].TrueStoreRef).Pointer()
+			if name, ok := storeMap[addr]; ok {
+				bindings.AttrCondBindings[i].TrueStoreID = name
+				deps = append(deps, name)
+			}
+		}
+
+		// Resolve false value store (if dynamic)
+		if bindings.AttrCondBindings[i].FalseStoreRef != nil {
+			addr := reflect.ValueOf(bindings.AttrCondBindings[i].FalseStoreRef).Pointer()
+			if name, ok := storeMap[addr]; ok {
+				bindings.AttrCondBindings[i].FalseStoreID = name
+				deps = append(deps, name)
+			}
+		}
+
+		bindings.AttrCondBindings[i].Deps = deps
 	}
 }
 

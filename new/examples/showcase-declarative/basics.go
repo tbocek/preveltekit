@@ -61,17 +61,17 @@ func (b *Basics) Render() p.Node {
 
 		<section>
 			<h2>Counter</h2>
-			<p>Count: <strong>`, p.Bind(b.Count), `</strong></p>
-			<button `, p.OnClick(b.Decrement), `>-1</button>
-			<button `, p.OnClick(b.Increment), `>+1</button>
-			<button `, p.OnClick(func() { b.Add(5) }), `>+5</button>
-			<button `, p.OnClick(b.Double), `>Double</button>
-			<button `, p.OnClick(b.Reset), `>Reset</button>
+			<p>Count: <strong>`, b.Count, `</strong></p>
+			`, p.Html(`<button>-1</button>`).WithOn("click", b.Decrement), `
+			`, p.Html(`<button>+1</button>`).WithOn("click", b.Increment), `
+			`, p.Html(`<button>+5</button>`).WithOn("click", func() { b.Add(5) }), `
+			`, p.Html(`<button>Double</button>`).WithOn("click", b.Double), `
+			`, p.Html(`<button>Reset</button>`).WithOn("click", b.Reset), `
 		</section>
 
 		<section>
 			<h2>Conditionals</h2>
-			<p>Score: `, p.Bind(b.Score), `</p>
+			<p>Score: `, b.Score, `</p>
 			`, p.If(b.Score.Ge(90),
 		p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
 	).ElseIf(b.Score.Ge(80),
@@ -84,11 +84,11 @@ func (b *Basics) Render() p.Node {
 		p.Html(`<p class="grade f">Grade: F - Failing</p>`),
 	), `
 			<div class="buttons">
-				<button `, p.OnClick(func() { b.SetScore(95) }), `>A</button>
-				<button `, p.OnClick(func() { b.SetScore(85) }), `>B</button>
-				<button `, p.OnClick(func() { b.SetScore(75) }), `>C</button>
-				<button `, p.OnClick(func() { b.SetScore(65) }), `>D</button>
-				<button `, p.OnClick(func() { b.SetScore(50) }), `>F</button>
+				`, p.Html(`<button>A</button>`).WithOn("click", func() { b.SetScore(95) }), `
+				`, p.Html(`<button>B</button>`).WithOn("click", func() { b.SetScore(85) }), `
+				`, p.Html(`<button>C</button>`).WithOn("click", func() { b.SetScore(75) }), `
+				`, p.Html(`<button>D</button>`).WithOn("click", func() { b.SetScore(65) }), `
+				`, p.Html(`<button>F</button>`).WithOn("click", func() { b.SetScore(50) }), `
 			</div>
 		</section>
 
@@ -101,18 +101,16 @@ func (b *Basics) Render() p.Node {
 		<section>
 			<h2>Checkbox Binding</h2>
 			<label>`, p.BindChecked(`<input type="checkbox">`, b.DarkMode), ` Dark Mode</label>
-			<div `, p.ClassIf("dark", p.IsTrue(b.DarkMode)), `>
-				This box uses dark mode styling when checked.
-			</div>
+			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", p.IsTrue(b.DarkMode), "dark"), `
 		</section>
 
 		<section>
 			<h2>Form</h2>
-			<form `, p.OnSubmit(b.Submit).PreventDefault(), `>
+			`, p.Html(`<form>
 				<label>Name: `, p.BindValue(`<input type="text" placeholder="Your name">`, b.Name), `</label>
 				<label>`, p.BindChecked(`<input type="checkbox">`, b.Agreed), ` I agree to the terms</label>
 				<button type="submit">Submit</button>
-			</form>
+			</form>`).WithOn("submit", b.Submit).PreventDefault(), `
 			<p class="message">`, p.Bind(b.Message), `</p>
 		</section>
 	</div>`)

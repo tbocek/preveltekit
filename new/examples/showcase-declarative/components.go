@@ -85,10 +85,10 @@ func (c *Components) Render() p.Node {
 			<h2>Conditional Styling Component</h2>
 			<p>Components with dynamic classes based on props:</p>
 			<div class="alert-buttons">
-				<button `, p.OnClick(c.SetAlertInfo), `>Info</button>
-				<button `, p.OnClick(c.SetAlertSuccess), `>Success</button>
-				<button `, p.OnClick(c.SetAlertWarning), `>Warning</button>
-				<button `, p.OnClick(c.SetAlertError), `>Error</button>
+				`, p.Html(`<button>Info</button>`).WithOn("click", c.SetAlertInfo), `
+				`, p.Html(`<button>Success</button>`).WithOn("click", c.SetAlertSuccess), `
+				`, p.Html(`<button>Warning</button>`).WithOn("click", c.SetAlertWarning), `
+				`, p.Html(`<button>Error</button>`).WithOn("click", c.SetAlertError), `
 			</div>`,
 		p.Comp(&Alert{Type: c.AlertType, Message: c.AlertMessage}),
 		`</section>
@@ -140,7 +140,7 @@ type Button struct {
 
 func (b *Button) Render() p.Node {
 	if b.OnClick != nil {
-		return p.Html(`<button class="btn" `, p.OnClick(b.OnClick), `>`, p.Bind(b.Label), `</button>`)
+		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).WithOn("click", b.OnClick)
 	}
 	return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`)
 }

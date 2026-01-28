@@ -247,37 +247,14 @@ var handlerMap = make(map[string]func())
 // It uses the same ID generation logic as SSR to ensure IDs match.
 func collectHandlers(comp Component, prefix string) {
 	node := comp.Render()
-	ctx := &handlerCollectCtx{prefix: prefix}
+	ctx := &handlerCollectCtx{IDCounter: IDCounter{Prefix: prefix}}
 	collectHandlersFromNode(node, ctx)
 }
 
-// handlerCollectCtx tracks state while collecting handlers (mirrors BuildContext counters)
+// handlerCollectCtx tracks state while collecting handlers.
+// Embeds IDCounter to share ID generation logic with SSR (BuildContext).
 type handlerCollectCtx struct {
-	prefix       string
-	eventCounter int
-	bindCounter  int
-	classCounter int
-	attrCounter  int
-	compCounter  int
-}
-
-func (ctx *handlerCollectCtx) nextEventID() string {
-	id := "ev" + intToStr(ctx.eventCounter)
-	ctx.eventCounter++
-	return id
-}
-
-func (ctx *handlerCollectCtx) nextClassID() string {
-	id := "cl" + intToStr(ctx.classCounter)
-	ctx.classCounter++
-	return id
-}
-
-func (ctx *handlerCollectCtx) fullElementID(localID string) string {
-	if ctx.prefix == "" {
-		return localID
-	}
-	return ctx.prefix + "_" + localID
+	IDCounter // Shared ID generation logic from id.go
 }
 
 // collectHandlersFromNode recursively walks a node tree collecting event handlers.
@@ -287,30 +264,30 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 	}
 
 	switch node := n.(type) {
-	case *Element:
-		// Check for event attributes
-		for _, attr := range node.Attrs {
-			if ev, ok := attr.(*EventAttr); ok {
-				localID := ctx.nextEventID()
-				fullID := ctx.fullElementID(localID)
-				// Store the handler function directly
+	case *HtmlNode:
+		// Html nodes can have events via WithOn() stored in Events field
+		// or embedded eventAttr in Parts (legacy)
+		if len(node.Events) > 0 {
+			// New style: events attached via WithOn()
+			localID := ctx.NextEventID()
+			fullID := ctx.FullElementID(localID)
+			// All events on this node share one element ID
+			for _, ev := range node.Events {
 				handlerMap[fullID] = ev.Handler
 			}
 		}
-		// Recurse into children
-		for _, child := range node.Children {
-			collectHandlersFromNode(child, ctx)
-		}
-
-	case *HtmlNode:
-		// Html nodes can contain embedded EventAttr
+		// Also check Parts for embedded nodes, legacy eventAttr, and stores
 		for _, part := range node.Parts {
-			if ev, ok := part.(*EventAttr); ok {
-				localID := ctx.nextEventID()
-				fullID := ctx.fullElementID(localID)
+			if ev, ok := part.(*eventAttr); ok {
+				localID := ctx.NextEventID()
+				fullID := ctx.FullElementID(localID)
 				handlerMap[fullID] = ev.Handler
 			} else if childNode, ok := part.(Node); ok {
 				collectHandlersFromNode(childNode, ctx)
+			} else if isStore(part) {
+				// Store values are auto-bound by SSR, which increments text counter
+				// We need to increment here too to stay in sync
+				ctx.Text++
 			}
 		}
 
@@ -334,22 +311,11 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 		// Each nodes have a body function - we can't easily extract handlers from it
 		// since it requires an item. For now, skip (each items are re-rendered anyway)
 
-	case *ClassIfNode:
-		// ClassIfNode can have an OnClick handler attached via WithOnClick()
-		if node.OnClick != nil {
-			localID := ctx.nextEventID()
-			fullID := ctx.fullElementID(localID)
-			handlerMap[fullID] = node.OnClick
-		} else {
-			// No OnClick - still need to increment class counter to stay in sync with SSR
-			ctx.nextClassID()
-		}
-
 	case *ComponentNode:
 		// Nested component - recurse with new prefix
-		compMarker := "comp" + intToStr(ctx.compCounter)
-		ctx.compCounter++
-		fullPrefix := ctx.fullElementID(compMarker)
+		compMarker := "comp" + intToStr(ctx.Comp)
+		ctx.Comp++
+		fullPrefix := ctx.FullElementID(compMarker)
 		if comp, ok := node.Instance.(Component); ok {
 			collectHandlers(comp, fullPrefix)
 		}
@@ -403,51 +369,6 @@ func bindInputDynamic(cleanup *Cleanup, elementID string, store any, bindType st
 // bindEventDynamic sets up an event binding.
 func bindEventDynamic(cleanup *Cleanup, elementID, event string, handler func()) {
 	BindEvents(cleanup, []Evt{{elementID, event, handler}})
-}
-
-// bindShowIf sets up a show/hide binding based on condition.
-func bindShowIf(sib HydrateShowIfBinding, components map[string]Component) {
-	el := GetEl(sib.ElementID)
-	if !ok(el) {
-		return
-	}
-
-	store := resolveStore(sib.StoreID, components)
-	if store == nil {
-		return
-	}
-
-	// Function to evaluate the condition and update visibility
-	updateVisibility := func() {
-		var visible bool
-		if sib.IsBool {
-			if s, ok := store.(*Store[bool]); ok {
-				visible = s.Get()
-			}
-		} else {
-			// Comparison condition
-			switch s := store.(type) {
-			case *Store[int]:
-				visible = compare(s.Get(), sib.Op, atoiSafe(sib.Operand))
-			case *Store[string]:
-				visible = compare(s.Get(), sib.Op, sib.Operand)
-			case *Store[float64]:
-				visible = compare(s.Get(), sib.Op, atofSafe(sib.Operand))
-			}
-		}
-
-		if visible {
-			el.Get("style").Call("removeProperty", "display")
-		} else {
-			el.Get("style").Set("display", "none")
-		}
-	}
-
-	// Initial update
-	updateVisibility()
-
-	// Subscribe to changes
-	subscribeToStore(store, updateVisibility)
 }
 
 // bindIfBlock sets up an if-block with reactive condition evaluation.
@@ -576,24 +497,19 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 		}
 	}
 
-	// Class bindings
-	for _, cb := range bindings.ClassBindings {
-		bindClassBinding(cb, components)
-	}
-
 	// Nested if-blocks
 	for _, ifb := range bindings.IfBlocks {
 		bindIfBlock(ifb, components)
 	}
 
-	// ShowIf bindings
-	for _, sib := range bindings.ShowIfBindings {
-		bindShowIf(sib, components)
-	}
-
 	// Attr bindings (dynamic attributes like data-type)
 	for _, ab := range bindings.AttrBindings {
 		bindAttr(ab, components)
+	}
+
+	// AttrCond bindings (conditional attributes from HtmlNode.AttrIf())
+	for _, acb := range bindings.AttrCondBindings {
+		bindAttrCondBinding(acb, components)
 	}
 
 	// Each block bindings (list iteration)
@@ -604,71 +520,6 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	// Router bindings
 	for _, rb := range bindings.RouterBindings {
 		bindRouter(rb, components)
-	}
-}
-
-// bindClassBinding sets up a class toggle binding based on condition.
-func bindClassBinding(cb HydrateClassBinding, components map[string]Component) {
-	el := GetEl(cb.ElementID)
-	if !ok(el) {
-		return
-	}
-
-	// Resolve stores from dependencies
-	var stores []any
-	for _, dep := range cb.Deps {
-		store := resolveStore(dep, components)
-		if store != nil {
-			stores = append(stores, store)
-		}
-	}
-
-	if len(stores) == 0 {
-		return
-	}
-
-	// Use first store for condition evaluation
-	store := stores[0]
-
-	// Function to evaluate the condition and toggle class
-	updateClass := func() {
-		var active bool
-
-		// Check if it's a boolean store with no operator
-		if cb.Op == "" {
-			if s, ok := store.(*Store[bool]); ok {
-				active = s.Get()
-			}
-		} else {
-			// Comparison condition
-			switch s := store.(type) {
-			case *Store[int]:
-				active = compare(s.Get(), cb.Op, atoiSafe(cb.Operand))
-			case *Store[string]:
-				active = compare(s.Get(), cb.Op, cb.Operand)
-			case *Store[float64]:
-				active = compare(s.Get(), cb.Op, atofSafe(cb.Operand))
-			case *Store[bool]:
-				// Boolean with operator (e.g., "== true")
-				operandBool := cb.Operand == "true"
-				active = compareBool(s.Get(), cb.Op, operandBool)
-			}
-		}
-
-		classList := el.Get("classList")
-		if active {
-			classList.Call("add", cb.ClassName)
-		} else {
-			classList.Call("remove", cb.ClassName)
-		}
-	}
-
-	// Initial update
-	updateClass()
-
-	// Subscribe to changes for all dependencies
-	for _, s := range stores {
-		subscribeToStore(s, updateClass)
 	}
 }
 
@@ -712,6 +563,108 @@ func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
 	// Subscribe to changes
 	for _, store := range stores {
 		subscribeToStore(store, updateAttr)
+	}
+}
+
+// bindAttrCondBinding sets up a conditional attribute binding from HtmlNode.AttrIf().
+func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Component) {
+	el := GetEl(acb.ElementID)
+	if !ok(el) {
+		return
+	}
+
+	if len(acb.Deps) == 0 {
+		return
+	}
+
+	// Resolve the condition store (first dep is always the condition)
+	condStore := resolveStore(acb.Deps[0], components)
+	if condStore == nil {
+		return
+	}
+
+	// Resolve true/false value stores if they're dynamic
+	var trueStore, falseStore any
+	if acb.TrueStoreID != "" {
+		trueStore = resolveStore(acb.TrueStoreID, components)
+	}
+	if acb.FalseStoreID != "" {
+		falseStore = resolveStore(acb.FalseStoreID, components)
+	}
+
+	// Function to evaluate condition and update attribute
+	updateAttr := func() {
+		// Evaluate condition
+		var active bool
+		if acb.IsBool {
+			if s, ok := condStore.(*Store[bool]); ok {
+				active = s.Get()
+			}
+		} else if acb.Op != "" {
+			switch s := condStore.(type) {
+			case *Store[int]:
+				active = compare(s.Get(), acb.Op, atoiSafe(acb.Operand))
+			case *Store[string]:
+				active = compare(s.Get(), acb.Op, acb.Operand)
+			case *Store[float64]:
+				active = compare(s.Get(), acb.Op, atofSafe(acb.Operand))
+			case *Store[bool]:
+				operandBool := acb.Operand == "true"
+				active = compareBool(s.Get(), acb.Op, operandBool)
+			}
+		}
+
+		// Determine value to use
+		var value string
+		if active {
+			if trueStore != nil {
+				value = storeToString(trueStore)
+			} else {
+				value = acb.TrueValue
+			}
+		} else {
+			if falseStore != nil {
+				value = storeToString(falseStore)
+			} else {
+				value = acb.FalseValue
+			}
+		}
+
+		// Special handling for class attribute - toggle instead of replace
+		if acb.AttrName == "class" {
+			classList := el.Get("classList")
+			if active && acb.TrueValue != "" {
+				classList.Call("add", acb.TrueValue)
+			} else if acb.TrueValue != "" {
+				classList.Call("remove", acb.TrueValue)
+			}
+			if !active && acb.FalseValue != "" {
+				classList.Call("add", acb.FalseValue)
+			} else if acb.FalseValue != "" {
+				classList.Call("remove", acb.FalseValue)
+			}
+		} else {
+			// For other attributes, set the value directly
+			if value != "" {
+				el.Call("setAttribute", acb.AttrName, value)
+			} else {
+				el.Call("removeAttribute", acb.AttrName)
+			}
+		}
+	}
+
+	// Initial update
+	updateAttr()
+
+	// Subscribe to condition store changes
+	subscribeToStore(condStore, updateAttr)
+
+	// Subscribe to value store changes if dynamic
+	if trueStore != nil {
+		subscribeToStore(trueStore, updateAttr)
+	}
+	if falseStore != nil {
+		subscribeToStore(falseStore, updateAttr)
 	}
 }
 
@@ -893,6 +846,15 @@ func intToStr(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// isStore checks if a value is a Store type (used for counter synchronization).
+func isStore(v any) bool {
+	switch v.(type) {
+	case *Store[string], *Store[int], *Store[bool], *Store[float64]:
+		return true
+	}
+	return false
 }
 
 // initStores initializes all nil store fields in a component with default values.
@@ -1178,15 +1140,14 @@ func floatToStr(f float64) string {
 
 // HydrateBindings is the JSON representation of bindings for WASM.
 type HydrateBindings struct {
-	TextBindings   []HydrateTextBinding   `json:"TextBindings"`
-	Events         []HydrateEvent         `json:"Events"`
-	IfBlocks       []HydrateIfBlock       `json:"IfBlocks"`
-	EachBlocks     []HydrateEachBlock     `json:"EachBlocks"`
-	InputBindings  []HydrateInputBinding  `json:"InputBindings"`
-	ClassBindings  []HydrateClassBinding  `json:"ClassBindings"`
-	ShowIfBindings []HydrateShowIfBinding `json:"ShowIfBindings"`
-	AttrBindings   []HydrateAttrBinding   `json:"AttrBindings"`
-	RouterBindings []HydrateRouterBinding `json:"RouterBindings"`
+	TextBindings     []HydrateTextBinding     `json:"TextBindings"`
+	Events           []HydrateEvent           `json:"Events"`
+	IfBlocks         []HydrateIfBlock         `json:"IfBlocks"`
+	EachBlocks       []HydrateEachBlock       `json:"EachBlocks"`
+	InputBindings    []HydrateInputBinding    `json:"InputBindings"`
+	AttrBindings     []HydrateAttrBinding     `json:"AttrBindings"`
+	AttrCondBindings []HydrateAttrCondBinding `json:"AttrCondBindings"`
+	RouterBindings   []HydrateRouterBinding   `json:"RouterBindings"`
 }
 
 type HydrateTextBinding struct {
@@ -1225,29 +1186,26 @@ type HydrateInputBinding struct {
 	BindType  string `json:"bind_type"`
 }
 
-type HydrateClassBinding struct {
-	ElementID string   `json:"element_id"`
-	ClassName string   `json:"class_name"`
-	CondExpr  string   `json:"cond_expr"`
-	Op        string   `json:"op"`
-	Operand   string   `json:"operand"`
-	Deps      []string `json:"deps"`
-}
-
-type HydrateShowIfBinding struct {
-	ElementID string   `json:"element_id"`
-	StoreID   string   `json:"store_id"`
-	Op        string   `json:"op"`
-	Operand   string   `json:"operand"`
-	IsBool    bool     `json:"is_bool"`
-	Deps      []string `json:"deps"`
-}
-
 type HydrateAttrBinding struct {
 	ElementID string   `json:"element_id"`
 	AttrName  string   `json:"attr_name"`
 	Template  string   `json:"template"`
 	StoreIDs  []string `json:"store_ids"`
+}
+
+// HydrateAttrCondBinding represents a conditional attribute binding for WASM.
+// Used by HtmlNode.AttrIf() for conditional attribute values.
+type HydrateAttrCondBinding struct {
+	ElementID    string   `json:"element_id"`
+	AttrName     string   `json:"attr_name"`
+	TrueValue    string   `json:"true_value"`
+	FalseValue   string   `json:"false_value,omitempty"`
+	TrueStoreID  string   `json:"true_store_id,omitempty"`
+	FalseStoreID string   `json:"false_store_id,omitempty"`
+	Op           string   `json:"op,omitempty"`
+	Operand      string   `json:"operand,omitempty"`
+	IsBool       bool     `json:"is_bool,omitempty"`
+	Deps         []string `json:"deps,omitempty"`
 }
 
 type HydrateEachBlock struct {

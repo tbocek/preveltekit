@@ -10,18 +10,8 @@ import (
 
 // BuildContext holds state during HTML and wiring code generation.
 type BuildContext struct {
-	// Counters for generating unique IDs
-	TextCounter  int
-	IfCounter    int
-	EachCounter  int
-	EventCounter int
-	BindCounter  int
-	ClassCounter int
-	AttrCounter  int
-	CompCounter  int
-
-	// Component prefix for nested components (e.g., "comp0_comp1")
-	Prefix string
+	// Embed shared ID counter logic (used by both SSR and WASM)
+	IDCounter
 
 	// Parent context for nested components
 	Parent *BuildContext
@@ -48,16 +38,15 @@ type BuildContext struct {
 
 // CollectedBindings stores all bindings found during tree walking.
 type CollectedBindings struct {
-	TextBindings   []TextBinding       `json:"TextBindings"`
-	Events         []EventBinding_     `json:"Events"`
-	IfBlocks       []IfBlock           `json:"IfBlocks"`
-	EachBlocks     []EachBlock         `json:"EachBlocks"`
-	InputBindings  []InputBinding_     `json:"InputBindings"`
-	ClassBindings  []ClassBinding_     `json:"ClassBindings"`
-	AttrBindings   []AttrBinding_      `json:"AttrBindings"`
-	Components     []ComponentBinding_ `json:"Components"`
-	ShowIfBindings []ShowIfBinding_    `json:"ShowIfBindings"`
-	RouterBindings []RouterBinding_    `json:"RouterBindings"`
+	TextBindings     []TextBinding      `json:"TextBindings"`
+	Events           []EventBinding     `json:"Events"`
+	IfBlocks         []IfBlock          `json:"IfBlocks"`
+	EachBlocks       []EachBlock        `json:"EachBlocks"`
+	InputBindings    []InputBinding     `json:"InputBindings"`
+	AttrBindings     []AttrBinding      `json:"AttrBindings"`
+	AttrCondBindings []AttrCondBinding  `json:"AttrCondBindings"`
+	Components       []ComponentBinding `json:"Components"`
+	RouterBindings   []RouterBinding    `json:"RouterBindings"`
 }
 
 // =============================================================================
@@ -78,9 +67,9 @@ type TextBinding struct {
 	IsHTML   bool   `json:"is_html"`   // If true, render as HTML not text
 }
 
-// EventBinding_ binds an event handler to a DOM element by its id attribute.
+// EventBinding binds an event handler to a DOM element by its id attribute.
 // HTML: <button id="basics_ev0"> triggers the handler on click.
-type EventBinding_ struct {
+type EventBinding struct {
 	ElementID string   // Element id attribute, e.g., "basics_ev0"
 	Event     string   // Event name, e.g., "click"
 	Modifiers []string // Event modifiers, e.g., ["preventDefault"]
@@ -121,30 +110,18 @@ type EachBlock struct {
 	ElseHTML string `json:"ElseHTML,omitempty"` // HTML when list is empty
 }
 
-// InputBinding_ binds an input element to a store for two-way data binding.
+// InputBinding binds an input element to a store for two-way data binding.
 // HTML: <input id="basics_b0"> syncs value with store.
-type InputBinding_ struct {
+type InputBinding struct {
 	ElementID string `json:"element_id"` // Element id attribute, e.g., "basics_b0"
 	StoreID   string `json:"store_id"`   // Store path, e.g., "basics.Name"
 	StoreRef  any    `json:"-"`          // Actual store pointer (for resolution)
 	BindType  string `json:"bind_type"`  // Binding type: "value" or "checked"
 }
 
-// ClassBinding_ binds a CSS class to a condition on a DOM element.
-// HTML: <div id="basics_cl0" class="active"> where "active" toggles reactively.
-type ClassBinding_ struct {
-	ElementID string   `json:"element_id"` // Element id attribute, e.g., "basics_cl0"
-	ClassName string   `json:"class_name"` // CSS class to toggle
-	CondExpr  string   `json:"cond_expr"`  // Condition expression for display
-	StoreRef  any      `json:"-"`          // Store pointer for condition evaluation
-	Op        string   `json:"op"`         // Comparison operator (for StoreCondition)
-	Operand   string   `json:"operand"`    // Comparison operand (for StoreCondition)
-	Deps      []string `json:"deps"`       // Store dependencies for reactivity
-}
-
-// AttrBinding_ binds a dynamic attribute value to stores.
+// AttrBinding binds a dynamic attribute value to stores.
 // HTML: <div data-attrbind="basics_a0" data-value="{0}"> where {0} is replaced.
-type AttrBinding_ struct {
+type AttrBinding struct {
 	ElementID string   `json:"element_id"` // Element id (via data-attrbind), e.g., "basics_a0"
 	AttrName  string   `json:"attr_name"`  // Attribute name, e.g., "data-value"
 	Template  string   `json:"template"`   // Template with placeholders, e.g., "{0}"
@@ -152,8 +129,27 @@ type AttrBinding_ struct {
 	StoreRefs []any    `json:"-"`          // Actual store pointers (for resolution)
 }
 
-// ComponentBinding_ represents a nested component instance.
-type ComponentBinding_ struct {
+// AttrCondBinding binds a conditional attribute value to a condition.
+// Used by HtmlNode.AttrIf() for conditional attribute rendering.
+// HTML: <div id="basics_cl0" class="active"> where attribute value changes reactively.
+type AttrCondBinding struct {
+	ElementID     string   `json:"element_id"`               // Element id attribute
+	AttrName      string   `json:"attr_name"`                // Attribute name (e.g., "class", "href")
+	TrueValue     string   `json:"true_value"`               // Value when condition is true
+	FalseValue    string   `json:"false_value,omitempty"`    // Value when condition is false
+	TrueStoreRef  any      `json:"-"`                        // Store for true value (if dynamic)
+	FalseStoreRef any      `json:"-"`                        // Store for false value (if dynamic)
+	TrueStoreID   string   `json:"true_store_id,omitempty"`  // Store path for true value
+	FalseStoreID  string   `json:"false_store_id,omitempty"` // Store path for false value
+	CondStoreRef  any      `json:"-"`                        // Store for condition evaluation
+	Op            string   `json:"op,omitempty"`             // Comparison operator
+	Operand       string   `json:"operand,omitempty"`        // Comparison operand
+	IsBool        bool     `json:"is_bool,omitempty"`        // True if simple boolean condition
+	Deps          []string `json:"deps,omitempty"`           // Store dependencies for reactivity
+}
+
+// ComponentBinding represents a nested component instance.
+type ComponentBinding struct {
 	ElementID string            // Component prefix, e.g., "basics_comp0"
 	Name      string            // Component type name, e.g., "Button"
 	Props     map[string]string // Static prop values
@@ -161,20 +157,8 @@ type ComponentBinding_ struct {
 	SlotHTML  string            // Slot content HTML
 }
 
-// ShowIfBinding_ binds element visibility to a condition.
-// HTML: <div id="page-basics" style="display:none"> toggles visibility reactively.
-type ShowIfBinding_ struct {
-	ElementID string   `json:"element_id"` // Element id attribute, e.g., "page-basics"
-	StoreID   string   `json:"store_id"`   // Store path for condition
-	StoreRef  any      `json:"-"`          // Store pointer for resolution
-	Op        string   `json:"op"`         // Comparison operator
-	Operand   string   `json:"operand"`    // Comparison operand
-	IsBool    bool     `json:"is_bool"`    // True if simple boolean condition
-	Deps      []string `json:"deps"`       // Store dependencies for reactivity
-}
-
-// RouterBinding_ binds a router to a store for page switching.
-type RouterBinding_ struct {
+// RouterBinding binds a router to a store for page switching.
+type RouterBinding struct {
 	StoreID  string `json:"store_id"` // Store path, e.g., "component.CurrentPage"
 	StoreRef any    `json:"-"`        // Store pointer for resolution
 }
@@ -194,7 +178,7 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 		prefix = ctx.Prefix + "_" + compID
 	}
 	return &BuildContext{
-		Prefix:         prefix,
+		IDCounter:      IDCounter{Prefix: prefix},
 		Parent:         ctx,
 		Bindings:       &CollectedBindings{},
 		ParentStoreMap: ctx.ParentStoreMap,
@@ -210,7 +194,7 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 // 1. ELEMENT IDs - Used in HTML id="..." attributes for DOM element lookup
 //    - Generated by: NextEventID, NextBindID, NextClassID, NextAttrID
 //    - Format: Full prefix + local ID (e.g., "components_ev0", "basics_b0")
-//    - Used by: Events, InputBindings, ClassBindings, AttrBindings, ShowIfBindings
+//    - Used by: Events, InputBindings, AttrBindings, AttrCondBindings
 //    - These IDs appear in the actual HTML element's id attribute
 //
 // 2. MARKER IDs - Used in HTML comments <!--marker--> for text/block insertion points
@@ -224,332 +208,14 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 //   "components_comp3_t0" -> "components_c3_t0" (component name "components" preserved)
 // =============================================================================
 
-// --- Element ID generators (for HTML id="..." attributes) ---
-
-// NextEventID returns the next element ID for event bindings.
-// Used in: <button id="basics_ev0">
-func (ctx *BuildContext) NextEventID() string {
-	id := fmt.Sprintf("ev%d", ctx.EventCounter)
-	ctx.EventCounter++
-	return id
-}
-
-// NextBindID returns the next element ID for input bindings.
-// Used in: <input id="basics_b0">
-func (ctx *BuildContext) NextBindID() string {
-	id := fmt.Sprintf("b%d", ctx.BindCounter)
-	ctx.BindCounter++
-	return id
-}
-
-// NextClassID returns the next element ID for class bindings.
-// Used in: <div id="basics_cl0">
-func (ctx *BuildContext) NextClassID() string {
-	id := fmt.Sprintf("cl%d", ctx.ClassCounter)
-	ctx.ClassCounter++
-	return id
-}
-
-// NextAttrID returns the next element ID for attribute bindings.
-// Used in: <div data-attrbind="basics_a0">
-func (ctx *BuildContext) NextAttrID() string {
-	id := fmt.Sprintf("a%d", ctx.AttrCounter)
-	ctx.AttrCounter++
-	return id
-}
-
-// --- Marker ID generators (for HTML comments <!--marker-->) ---
-
-// NextTextMarker returns the next marker ID for text bindings.
-// Used in: <!--basics_t0--> (comment marker for text insertion point)
-func (ctx *BuildContext) NextTextMarker() string {
-	id := fmt.Sprintf("t%d", ctx.TextCounter)
-	ctx.TextCounter++
-	return id
-}
-
-// NextIfMarker returns the next marker ID for if-blocks.
-// Used in: <!--basics_i0--> (comment marker for if-block boundary)
-func (ctx *BuildContext) NextIfMarker() string {
-	id := fmt.Sprintf("if%d", ctx.IfCounter)
-	ctx.IfCounter++
-	return id
-}
-
-// NextEachMarker returns the next marker ID for each-blocks.
-// Used in: <!--basics_e0--> (comment marker for each-block boundary)
-func (ctx *BuildContext) NextEachMarker() string {
-	id := fmt.Sprintf("each%d", ctx.EachCounter)
-	ctx.EachCounter++
-	return id
-}
-
-// NextCompMarker returns the next marker ID for nested components.
-// Used internally for component prefixing (e.g., "comp0" in "components_comp0_t0")
-func (ctx *BuildContext) NextCompMarker() string {
-	id := fmt.Sprintf("comp%d", ctx.CompCounter)
-	ctx.CompCounter++
-	return id
-}
-
-// --- ID formatting functions ---
-
-// FullElementID returns the full element ID with prefix for use in HTML id="..." attributes.
-// Example: FullElementID("ev0") with prefix "basics" returns "basics_ev0"
-func (ctx *BuildContext) FullElementID(localID string) string {
-	if ctx.Prefix == "" {
-		return localID
-	}
-	return ctx.Prefix + "_" + localID
-}
-
-// FullMarkerID returns the shortened marker ID for use in HTML comments.
-// Example: FullMarkerID("t0") with prefix "components_comp3" returns "components_c3_t0"
-// The marker parts (comp, if, each) are shortened but component names are preserved.
-func (ctx *BuildContext) FullMarkerID(localID string) string {
-	fullID := ctx.Prefix
-	if fullID == "" {
-		return shortenMarkerPart(localID)
-	}
-	return shortenMarkerParts(fullID) + "_" + shortenMarkerPart(localID)
-}
-
-// shortenMarkerParts shortens all marker parts in a prefixed ID.
-// Example: "components_comp3" -> "components_c3"
-func shortenMarkerParts(id string) string {
-	parts := strings.Split(id, "_")
-	for i, part := range parts {
-		parts[i] = shortenMarkerPart(part)
-	}
-	return strings.Join(parts, "_")
-}
-
-// shortenMarkerPart shortens a single marker part if it matches a known pattern.
-// Only shortens generated marker IDs (comp0, if0, each0), not component names.
-// Example: "comp3" -> "c3", "if0" -> "i0", "components" -> "components" (unchanged)
-func shortenMarkerPart(part string) string {
-	// comp0 -> c0 (but not "components" which doesn't end in digits)
-	if len(part) > 4 && part[:4] == "comp" && isDigits(part[4:]) {
-		return "c" + part[4:]
-	}
-	// each0 -> e0
-	if len(part) > 4 && part[:4] == "each" && isDigits(part[4:]) {
-		return "e" + part[4:]
-	}
-	// if0 -> i0
-	if len(part) > 2 && part[:2] == "if" && isDigits(part[2:]) {
-		return "i" + part[2:]
-	}
-	// ev0 -> v0 (for markers, though events typically use element IDs)
-	if len(part) > 2 && part[:2] == "ev" && isDigits(part[2:]) {
-		return "v" + part[2:]
-	}
-	// cl0 -> l0 (for markers, though classes typically use element IDs)
-	if len(part) > 2 && part[:2] == "cl" && isDigits(part[2:]) {
-		return "l" + part[2:]
-	}
-	return part
-}
-
-// isDigits returns true if s contains only ASCII digits.
-func isDigits(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
+// ID generation methods are inherited from embedded IDCounter.
+// See id.go for: NextEventID, NextBindID, NextClassID, NextAttrID,
+// NextTextMarker, NextIfMarker, NextEachMarker, NextCompMarker,
+// FullElementID, FullMarkerID
 
 // =============================================================================
 // ToHTML implementations
 // =============================================================================
-
-// ToHTML generates HTML for an element node.
-func (e *Element) ToHTML(ctx *BuildContext) string {
-	var sb strings.Builder
-
-	// Check for special attributes that need element IDs
-	var elementID string
-	var existingID string
-	var hasEvent, hasClassIf, hasShowIf bool
-	var classIfAttrs []*ClassIfAttr
-	var showIfAttr *ShowIfAttr
-
-	for _, attr := range e.Attrs {
-		switch a := attr.(type) {
-		case *EventAttr:
-			hasEvent = true
-		case *ClassIfAttr:
-			hasClassIf = true
-			classIfAttrs = append(classIfAttrs, a)
-		case *ShowIfAttr:
-			hasShowIf = true
-			showIfAttr = a
-		case *StaticAttr:
-			if a.Name == "id" {
-				existingID = a.Value
-			}
-		}
-	}
-
-	// Use existing ID if present, otherwise assign new ID if needed
-	if existingID != "" {
-		elementID = existingID
-	} else if hasEvent {
-		elementID = ctx.NextEventID()
-	} else if hasClassIf || hasShowIf {
-		elementID = ctx.NextClassID()
-	}
-
-	// Build opening tag
-	sb.WriteString("<")
-	sb.WriteString(e.Tag)
-
-	// Add element ID if assigned (and not already in attrs)
-	if elementID != "" && existingID == "" {
-		sb.WriteString(` id="`)
-		sb.WriteString(ctx.FullElementID(elementID))
-		sb.WriteString(`"`)
-	}
-
-	// Process attributes
-	var classes []string
-	for _, attr := range e.Attrs {
-		switch a := attr.(type) {
-		case *ClassAttr:
-			classes = append(classes, a.Classes...)
-		case *ClassIfAttr:
-			// Evaluated at SSR time
-			if a.Cond.Eval() {
-				classes = append(classes, a.ClassName)
-			}
-			// Record for wiring - try to get StoreRef from condition
-			var storeRef any
-			var op, operand string
-			if bc, ok := a.Cond.(*BoolCondition); ok {
-				storeRef = bc.Store
-			} else if sc, ok := a.Cond.(*StoreCondition); ok {
-				storeRef = sc.Store
-				op = sc.Op
-				operand = fmt.Sprintf("%v", sc.Operand)
-			}
-			ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, ClassBinding_{
-				ElementID: ctx.FullElementID(elementID),
-				ClassName: a.ClassName,
-				CondExpr:  a.Cond.Expr(),
-				StoreRef:  storeRef,
-				Op:        op,
-				Operand:   operand,
-				Deps:      a.Cond.Deps(),
-			})
-		case *StaticAttr:
-			sb.WriteString(" ")
-			sb.WriteString(a.Name)
-			sb.WriteString(`="`)
-			sb.WriteString(escapeHTML(a.Value))
-			sb.WriteString(`"`)
-		case *EventAttr:
-			// Record event binding (no HTML output, uses element ID)
-			ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding_{
-				ElementID: ctx.FullElementID(elementID),
-				Event:     a.Event,
-				Modifiers: a.Modifiers,
-			})
-
-		case *DynAttrAttr:
-			attrID := ctx.NextAttrID()
-			sb.WriteString(` data-attrbind="`)
-			sb.WriteString(ctx.FullElementID(attrID))
-			sb.WriteString(`"`)
-			// Evaluate template at SSR time
-			attrValue := a.Template
-			for i, store := range a.Stores {
-				placeholder := "{" + fmt.Sprintf("%d", i) + "}"
-				var storeVal string
-				switch s := store.(type) {
-				case *Store[string]:
-					storeVal = s.Get()
-				case *Store[int]:
-					storeVal = fmt.Sprintf("%d", s.Get())
-				case *Store[bool]:
-					storeVal = fmt.Sprintf("%t", s.Get())
-				}
-				attrValue = strings.ReplaceAll(attrValue, placeholder, storeVal)
-			}
-			sb.WriteString(" ")
-			sb.WriteString(a.Name)
-			sb.WriteString(`="`)
-			sb.WriteString(escapeHTML(attrValue))
-			sb.WriteString(`"`)
-			// Record attribute binding (uses element ID via data attribute)
-			ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, AttrBinding_{
-				ElementID: ctx.FullElementID(attrID),
-				AttrName:  a.Name,
-				Template:  a.Template,
-				StoreRefs: a.Stores,
-			})
-		}
-	}
-
-	// Handle ShowIf - add inline style for SSR and record binding
-	if hasShowIf && showIfAttr != nil {
-		// Evaluate condition at SSR time
-		if !showIfAttr.Cond.Eval() {
-			sb.WriteString(` style="display:none"`)
-		}
-		// Record binding for WASM
-		var storeRef any
-		var op, operand string
-		var isBool bool
-		if bc, ok := showIfAttr.Cond.(*BoolCondition); ok {
-			storeRef = bc.Store
-			isBool = true
-		} else if sc, ok := showIfAttr.Cond.(*StoreCondition); ok {
-			storeRef = sc.Store
-			op = sc.Op
-			operand = fmt.Sprintf("%v", sc.Operand)
-		}
-		ctx.Bindings.ShowIfBindings = append(ctx.Bindings.ShowIfBindings, ShowIfBinding_{
-			ElementID: elementID, // Use the explicit ID from the element
-			StoreRef:  storeRef,
-			Op:        op,
-			Operand:   operand,
-			IsBool:    isBool,
-			Deps:      showIfAttr.Cond.Deps(),
-		})
-	}
-
-	// Output classes
-	if len(classes) > 0 {
-		sb.WriteString(` class="`)
-		sb.WriteString(strings.Join(classes, " "))
-		sb.WriteString(`"`)
-	}
-
-	// Self-closing tags
-	if isSelfClosing(e.Tag) {
-		sb.WriteString(">")
-		return sb.String()
-	}
-
-	sb.WriteString(">")
-
-	// Children
-	for _, child := range e.Children {
-		sb.WriteString(nodeToHTML(child, ctx))
-	}
-
-	// Closing tag
-	sb.WriteString("</")
-	sb.WriteString(e.Tag)
-	sb.WriteString(">")
-
-	return sb.String()
-}
 
 // ToHTML generates HTML for a text node.
 func (t *TextNode) ToHTML(ctx *BuildContext) string {
@@ -558,9 +224,22 @@ func (t *TextNode) ToHTML(ctx *BuildContext) string {
 
 // ToHTML generates HTML for a raw HTML node with embedded nodes.
 func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
+	// First, render parts to get base HTML
+	html := h.renderParts(ctx)
+
+	// If we have AttrConds or Events from chained methods, inject into first tag
+	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
+		html = h.injectChainedAttrs(html, ctx)
+	}
+
+	return html
+}
+
+// renderParts renders the Parts slice to HTML string.
+func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 	var sb strings.Builder
 
-	// Process parts, combining consecutive EventAttr/ClassIfAttr to share one ID
+	// Process parts, combining consecutive eventAttrs to share one ID
 	for i := 0; i < len(h.Parts); i++ {
 		part := h.Parts[i]
 		switch v := part.(type) {
@@ -571,8 +250,7 @@ func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 			// Embedded node - render it
 			sb.WriteString(nodeToHTML(v, ctx))
 		case NodeAttr:
-			// Check if we have consecutive NodeAttrs that need to share an ID
-			// Collect all consecutive EventAttr and ClassIfAttr (with whitespace between)
+			// Check if we have consecutive eventAttrs that need to share an ID
 			attrs := []NodeAttr{v}
 			j := i + 1
 			for j < len(h.Parts) {
@@ -585,14 +263,9 @@ func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 					}
 					break
 				}
-				// Collect EventAttr or ClassIfAttr
+				// Collect consecutive eventAttrs
 				if attr, ok := h.Parts[j].(NodeAttr); ok {
-					if _, isEvent := attr.(*EventAttr); isEvent {
-						attrs = append(attrs, attr)
-						j++
-						continue
-					}
-					if _, isClassIf := attr.(*ClassIfAttr); isClassIf {
+					if _, isEvent := attr.(*eventAttr); isEvent {
 						attrs = append(attrs, attr)
 						j++
 						continue
@@ -609,6 +282,19 @@ func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 				// Single attr - render normally
 				sb.WriteString(attrToHTMLString(v, ctx))
 			}
+		case *Store[string]:
+			// Auto-bind stores for reactivity
+			bindNode := &BindNode{StoreRef: v, IsHTML: false}
+			sb.WriteString(bindNode.ToHTML(ctx))
+		case *Store[int]:
+			bindNode := &BindNode{StoreRef: v, IsHTML: false}
+			sb.WriteString(bindNode.ToHTML(ctx))
+		case *Store[bool]:
+			bindNode := &BindNode{StoreRef: v, IsHTML: false}
+			sb.WriteString(bindNode.ToHTML(ctx))
+		case *Store[float64]:
+			bindNode := &BindNode{StoreRef: v, IsHTML: false}
+			sb.WriteString(bindNode.ToHTML(ctx))
 		default:
 			// Convert other values to string and escape
 			sb.WriteString(escapeHTML(fmt.Sprintf("%v", v)))
@@ -617,79 +303,243 @@ func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 	return sb.String()
 }
 
-// attrsToHTMLStringShared renders multiple NodeAttrs sharing a single element ID.
-// Used when OnClick and ClassIf are on the same element.
-// Note: ClassIf classes are output via data-class attribute to avoid conflicts
-// with existing class attributes in the HTML. WASM will apply them on hydration.
-func attrsToHTMLStringShared(attrs []NodeAttr, ctx *BuildContext) string {
-	// Determine what ID type we need
-	hasEvent := false
-	hasClassIf := false
-	for _, attr := range attrs {
-		if _, ok := attr.(*EventAttr); ok {
-			hasEvent = true
+// injectChainedAttrs injects AttrConds and Events into the first HTML tag.
+func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
+	// Generate element ID - use event ID if we have events, otherwise class ID
+	var localID string
+	if len(h.Events) > 0 {
+		localID = ctx.NextEventID()
+	} else {
+		localID = ctx.NextClassID()
+	}
+	fullID := ctx.FullElementID(localID)
+
+	// Collect active values for each attribute (for SSR rendering)
+	// Map: attr name -> list of values to add
+	attrValues := make(map[string][]string)
+
+	// Process AttrConds
+	for _, ac := range h.AttrConds {
+		// Extract condition info
+		var condStoreRef any
+		var op, operand string
+		var isBool bool
+		if sc, ok := ac.Cond.(*StoreCondition); ok {
+			condStoreRef = sc.Store
+			op = sc.Op
+			operand = fmt.Sprintf("%v", sc.Operand)
+		} else if bc, ok := ac.Cond.(*BoolCondition); ok {
+			condStoreRef = bc.Store
+			isBool = true
 		}
-		if _, ok := attr.(*ClassIfAttr); ok {
-			hasClassIf = true
+
+		// Determine true/false values and store refs
+		trueVal, trueStoreRef := evalAttrValue(ac.TrueValue)
+		falseVal, falseStoreRef := evalAttrValue(ac.FalseValue)
+
+		// Record binding for WASM hydration
+		ctx.Bindings.AttrCondBindings = append(ctx.Bindings.AttrCondBindings, AttrCondBinding{
+			ElementID:     fullID,
+			AttrName:      ac.Name,
+			TrueValue:     trueVal,
+			FalseValue:    falseVal,
+			TrueStoreRef:  trueStoreRef,
+			FalseStoreRef: falseStoreRef,
+			CondStoreRef:  condStoreRef,
+			Op:            op,
+			Operand:       operand,
+			IsBool:        isBool,
+		})
+
+		// Evaluate for SSR
+		if ac.Cond.Eval() {
+			if trueVal != "" {
+				attrValues[ac.Name] = append(attrValues[ac.Name], trueVal)
+			}
+		} else if falseVal != "" {
+			attrValues[ac.Name] = append(attrValues[ac.Name], falseVal)
 		}
 	}
 
-	// Generate a single shared ID
-	var localID string
-	if hasEvent {
-		localID = ctx.NextEventID()
-	} else if hasClassIf {
-		localID = ctx.NextClassID()
+	// Process Events
+	var eventNames []string
+	for _, ev := range h.Events {
+		ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
+			ElementID: fullID,
+			Event:     ev.Event,
+			Modifiers: ev.Modifiers,
+		})
+		eventNames = append(eventNames, ev.Event)
 	}
+
+	// Build extra attributes string
+	var extraAttrs string
+	if len(eventNames) > 0 {
+		extraAttrs = fmt.Sprintf(` data-event="%s"`, strings.Join(eventNames, ","))
+	}
+
+	// Inject id and merge attributes into first tag
+	return injectIDAndMergeAttrsMap(html, fullID, attrValues, extraAttrs)
+}
+
+// evalAttrValue extracts string value and store reference from an AttrCond value.
+// Returns (stringValue, storeRef). If value is a store, stringValue is the current value.
+func evalAttrValue(v any) (string, any) {
+	if v == nil {
+		return "", nil
+	}
+	switch val := v.(type) {
+	case string:
+		return val, nil
+	case *Store[string]:
+		return val.Get(), val
+	case *Store[int]:
+		return itoa(val.Get()), val
+	case *Store[bool]:
+		if val.Get() {
+			return "true", val
+		}
+		return "false", val
+	default:
+		return "", nil
+	}
+}
+
+// injectIDAndMergeAttrsMap injects id and merges attribute values into the first HTML tag.
+// For "class", merges with existing class attribute. For others, values are space-joined.
+func injectIDAndMergeAttrsMap(html, id string, attrValues map[string][]string, extraAttrs string) string {
+	// Find the first '>' to locate end of opening tag
+	tagEnd := -1
+	for i := 0; i < len(html); i++ {
+		if html[i] == '>' {
+			tagEnd = i
+			break
+		}
+	}
+	if tagEnd == -1 {
+		// No tag found, return as-is
+		return html
+	}
+
+	openingTag := html[:tagEnd]
+	rest := html[tagEnd:]
+
+	// Check for self-closing tag
+	isSelfClosing := tagEnd > 0 && html[tagEnd-1] == '/'
+	if isSelfClosing {
+		openingTag = html[:tagEnd-1]
+		rest = html[tagEnd-1:]
+	}
+
+	// Build new attributes to inject
+	var newAttrs strings.Builder
+	newAttrs.WriteString(fmt.Sprintf(`id="%s"`, id))
+
+	// Handle class attribute specially - merge with existing
+	if classes, ok := attrValues["class"]; ok && len(classes) > 0 {
+		classIdx := strings.Index(openingTag, `class="`)
+		if classIdx != -1 {
+			// Find existing class value
+			classStart := classIdx + 7
+			classEnd := strings.Index(openingTag[classStart:], `"`)
+			if classEnd != -1 {
+				classEnd += classStart
+				existingClasses := openingTag[classStart:classEnd]
+				// Merge: existing + new classes
+				mergedClasses := existingClasses
+				for _, c := range classes {
+					if c != "" {
+						mergedClasses += " " + c
+					}
+				}
+				// Rebuild opening tag without old class attr
+				openingTag = openingTag[:classIdx] + openingTag[classEnd+1:]
+				newAttrs.WriteString(fmt.Sprintf(` class="%s"`, strings.TrimSpace(mergedClasses)))
+			}
+		} else {
+			// No existing class, add new one
+			newAttrs.WriteString(fmt.Sprintf(` class="%s"`, strings.Join(classes, " ")))
+		}
+		delete(attrValues, "class")
+	}
+
+	// Handle other attributes
+	for name, values := range attrValues {
+		if len(values) > 0 {
+			// Check if attribute already exists
+			attrPattern := name + `="`
+			attrIdx := strings.Index(openingTag, attrPattern)
+			if attrIdx != -1 {
+				// Find existing value
+				attrStart := attrIdx + len(attrPattern)
+				attrEnd := strings.Index(openingTag[attrStart:], `"`)
+				if attrEnd != -1 {
+					attrEnd += attrStart
+					existingValue := openingTag[attrStart:attrEnd]
+					// Merge values
+					mergedValue := existingValue
+					for _, v := range values {
+						if v != "" {
+							mergedValue += " " + v
+						}
+					}
+					// Remove old attr from opening tag
+					openingTag = openingTag[:attrIdx] + openingTag[attrEnd+1:]
+					newAttrs.WriteString(fmt.Sprintf(` %s="%s"`, name, strings.TrimSpace(mergedValue)))
+				}
+			} else {
+				// No existing attr, add new one
+				newAttrs.WriteString(fmt.Sprintf(` %s="%s"`, name, strings.Join(values, " ")))
+			}
+		}
+	}
+
+	// Add extra attrs (like data-event)
+	newAttrs.WriteString(extraAttrs)
+
+	// Find insertion point (after tag name and before existing attrs or >)
+	// Look for first space or end of tag name
+	insertIdx := 0
+	for i := 1; i < len(openingTag); i++ { // Start after '<'
+		if openingTag[i] == ' ' || openingTag[i] == '/' {
+			insertIdx = i
+			break
+		}
+	}
+	if insertIdx == 0 {
+		insertIdx = len(openingTag)
+	}
+
+	// Rebuild: <tagname + new attrs + existing attrs + rest
+	return openingTag[:insertIdx] + " " + newAttrs.String() + openingTag[insertIdx:] + rest
+}
+
+// attrsToHTMLStringShared renders multiple NodeAttrs sharing a single element ID.
+// Used when multiple eventAttrs are on the same element.
+func attrsToHTMLStringShared(attrs []NodeAttr, ctx *BuildContext) string {
+	// Generate a single shared ID for events
+	localID := ctx.NextEventID()
 	fullID := ctx.FullElementID(localID)
 
 	var result strings.Builder
 	result.WriteString(fmt.Sprintf(`id="%s"`, fullID))
 
-	var activeClasses []string
-	var eventName string
+	var eventNames []string
 
 	for _, attr := range attrs {
 		switch a := attr.(type) {
-		case *EventAttr:
-			eventName = a.Event
-			ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding_{
+		case *eventAttr:
+			eventNames = append(eventNames, a.Event)
+			ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
 				ElementID: fullID,
 				Event:     a.Event,
 				Modifiers: a.Modifiers,
 			})
-		case *ClassIfAttr:
-			var storeRef any
-			var op, operand string
-			if sc, ok := a.Cond.(*StoreCondition); ok {
-				storeRef = sc.Store
-				op = sc.Op
-				operand = fmt.Sprintf("%v", sc.Operand)
-			} else if bc, ok := a.Cond.(*BoolCondition); ok {
-				storeRef = bc.Store
-			}
-			ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, ClassBinding_{
-				ElementID: fullID,
-				ClassName: a.ClassName,
-				CondExpr:  a.Cond.Expr(),
-				StoreRef:  storeRef,
-				Op:        op,
-				Operand:   operand,
-				Deps:      a.Cond.Deps(),
-			})
-			if a.Cond.Eval() {
-				activeClasses = append(activeClasses, a.ClassName)
-			}
 		}
 	}
 
-	if eventName != "" {
-		result.WriteString(fmt.Sprintf(` data-event="%s"`, eventName))
-	}
-	// Output active classes via data-class so they don't conflict with existing class attr
-	// WASM will read this and apply to classList on hydration
-	if len(activeClasses) > 0 {
-		result.WriteString(fmt.Sprintf(` data-class="%s"`, strings.Join(activeClasses, " ")))
+	if len(eventNames) > 0 {
+		result.WriteString(fmt.Sprintf(` data-event="%s"`, strings.Join(eventNames, ",")))
 	}
 
 	return result.String()
@@ -699,11 +549,11 @@ func attrsToHTMLStringShared(attrs []NodeAttr, ctx *BuildContext) string {
 // Used when attributes are embedded directly in Html() nodes.
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	switch a := attr.(type) {
-	case *EventAttr:
+	case *eventAttr:
 		// Generate id and data-event attributes for event binding
 		localID := ctx.NextEventID()
 		fullID := ctx.FullElementID(localID)
-		ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding_{
+		ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
 			ElementID: fullID,
 			Event:     a.Event,
 			Modifiers: a.Modifiers,
@@ -711,35 +561,6 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 		return fmt.Sprintf(`id="%s" data-event="%s"`, fullID, a.Event)
 	case *ClassAttr:
 		return fmt.Sprintf(`class="%s"`, strings.Join(a.Classes, " "))
-	case *ClassIfAttr:
-		// Generate id for class binding
-		localID := ctx.NextClassID()
-		fullID := ctx.FullElementID(localID)
-		// Extract store reference from condition
-		var storeRef any
-		var op, operand string
-		if sc, ok := a.Cond.(*StoreCondition); ok {
-			storeRef = sc.Store
-			op = sc.Op
-			operand = fmt.Sprintf("%v", sc.Operand)
-		} else if bc, ok := a.Cond.(*BoolCondition); ok {
-			storeRef = bc.Store
-		}
-		ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, ClassBinding_{
-			ElementID: fullID,
-			ClassName: a.ClassName,
-			StoreRef:  storeRef,
-			Op:        op,
-			Operand:   operand,
-			Deps:      a.Cond.Deps(),
-		})
-		// Use data-class to avoid conflicts with existing class attribute
-		// WASM will apply this to classList on hydration
-		classAttr := ""
-		if a.Cond.Eval() {
-			classAttr = fmt.Sprintf(` data-class="%s"`, a.ClassName)
-		}
-		return fmt.Sprintf(`id="%s"%s`, fullID, classAttr)
 	case *StaticAttr:
 		return fmt.Sprintf(`%s="%s"`, a.Name, escapeAttr(a.Value))
 
@@ -760,7 +581,7 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 			attrValue = strings.ReplaceAll(attrValue, placeholder, storeVal)
 		}
 		// Record attribute binding
-		ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, AttrBinding_{
+		ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, AttrBinding{
 			ElementID: fullID,
 			AttrName:  a.Name,
 			Template:  a.Template,
@@ -831,7 +652,7 @@ func (b *BindValueNode) ToHTML(ctx *BuildContext) string {
 	}
 
 	// Record input binding
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding_{
+	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
 		ElementID: fullID,
 		StoreRef:  b.Store,
 		BindType:  "value",
@@ -877,7 +698,7 @@ func (b *BindCheckedNode) ToHTML(ctx *BuildContext) string {
 	fullID := ctx.FullElementID(localID)
 
 	// Record input binding
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding_{
+	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
 		ElementID: fullID,
 		StoreRef:  b.Store,
 		BindType:  "checked",
@@ -891,90 +712,6 @@ func (b *BindCheckedNode) ToHTML(ctx *BuildContext) string {
 
 	// Inject id and checked into the HTML element
 	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s"%s`, fullID, checked))
-}
-
-// ToHTML generates HTML for a ClassIfNode (conditional class binding).
-// Injects id and merges conditional classes with existing class attribute.
-func (c *ClassIfNode) ToHTML(ctx *BuildContext) string {
-	// Use event ID if we have OnClick, otherwise class ID
-	var localID string
-	if c.OnClick != nil {
-		localID = ctx.NextEventID()
-	} else {
-		localID = ctx.NextClassID()
-	}
-	fullID := ctx.FullElementID(localID)
-
-	// Collect active classes and record bindings
-	var activeClasses []string
-	for _, cond := range c.Conditions {
-		var storeRef any
-		var op, operand string
-		if sc, ok := cond.Cond.(*StoreCondition); ok {
-			storeRef = sc.Store
-			op = sc.Op
-			operand = fmt.Sprintf("%v", sc.Operand)
-		} else if bc, ok := cond.Cond.(*BoolCondition); ok {
-			storeRef = bc.Store
-		}
-
-		ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, ClassBinding_{
-			ElementID: fullID,
-			ClassName: cond.ClassName,
-			// CondExpr and Deps will be resolved by resolveBindings based on StoreRef
-			StoreRef: storeRef,
-			Op:       op,
-			Operand:  operand,
-		})
-
-		if cond.Cond.Eval() {
-			activeClasses = append(activeClasses, cond.ClassName)
-		}
-	}
-
-	// Record event binding if OnClick is set
-	var eventAttr string
-	if c.OnClick != nil {
-		ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding_{
-			ElementID: fullID,
-			Event:     "click",
-		})
-		eventAttr = ` data-event="click"`
-	}
-
-	return injectIDAndMergeClasses(c.HTML, fullID, activeClasses, eventAttr)
-}
-
-// injectIDAndMergeClasses injects id and merges classes into an HTML opening tag.
-// If element has class="...", appends new classes. Otherwise adds new class attr.
-// extraAttrs are appended as-is (e.g., ` data-event="click"`).
-func injectIDAndMergeClasses(html, id string, classes []string, extraAttrs string) string {
-	// Find existing class attribute
-	classIdx := strings.Index(html, `class="`)
-	if classIdx != -1 {
-		// Find the closing quote
-		classStart := classIdx + 7 // len(`class="`)
-		classEnd := strings.Index(html[classStart:], `"`)
-		if classEnd != -1 {
-			classEnd += classStart
-			existingClasses := html[classStart:classEnd]
-			// Merge classes
-			newClasses := existingClasses
-			if len(classes) > 0 {
-				newClasses = existingClasses + " " + strings.Join(classes, " ")
-			}
-			// Rebuild: inject id before class, update class value, add extra attrs
-			return html[:classIdx] + fmt.Sprintf(`id="%s" class="%s"`, id, newClasses) + extraAttrs + html[classEnd+1:]
-		}
-	}
-
-	// No existing class - inject id and class if any
-	attrs := fmt.Sprintf(`id="%s"`, id)
-	if len(classes) > 0 {
-		attrs += fmt.Sprintf(` class="%s"`, strings.Join(classes, " "))
-	}
-	attrs += extraAttrs
-	return injectAttrs(html, attrs)
 }
 
 // injectAttrs injects attributes into an HTML element string.
@@ -1018,15 +755,7 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	for _, branch := range i.Branches {
 		// Create a child context to capture this branch's bindings
 		branchCtx := &BuildContext{
-			TextCounter:      ctx.TextCounter,
-			IfCounter:        ctx.IfCounter,
-			EachCounter:      ctx.EachCounter,
-			EventCounter:     ctx.EventCounter,
-			BindCounter:      ctx.BindCounter,
-			ClassCounter:     ctx.ClassCounter,
-			AttrCounter:      ctx.AttrCounter,
-			CompCounter:      ctx.CompCounter,
-			Prefix:           ctx.Prefix,
+			IDCounter:        ctx.IDCounter, // Copy all counters
 			Bindings:         &CollectedBindings{},
 			ChildrenContent:  ctx.ChildrenContent,
 			ChildrenBindings: ctx.ChildrenBindings,
@@ -1035,14 +764,7 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 		branchHTML := childrenToHTML(branch.Children, branchCtx)
 
 		// Update parent counters
-		ctx.TextCounter = branchCtx.TextCounter
-		ctx.IfCounter = branchCtx.IfCounter
-		ctx.EachCounter = branchCtx.EachCounter
-		ctx.EventCounter = branchCtx.EventCounter
-		ctx.BindCounter = branchCtx.BindCounter
-		ctx.ClassCounter = branchCtx.ClassCounter
-		ctx.AttrCounter = branchCtx.AttrCounter
-		ctx.CompCounter = branchCtx.CompCounter
+		ctx.IDCounter = branchCtx.IDCounter
 
 		ifBlock.Branches = append(ifBlock.Branches, IfBlockBranch{
 			CondExpr: branch.Cond.Expr(),
@@ -1059,15 +781,7 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// Else branch
 	if len(i.ElseNode) > 0 {
 		elseCtx := &BuildContext{
-			TextCounter:      ctx.TextCounter,
-			IfCounter:        ctx.IfCounter,
-			EachCounter:      ctx.EachCounter,
-			EventCounter:     ctx.EventCounter,
-			BindCounter:      ctx.BindCounter,
-			ClassCounter:     ctx.ClassCounter,
-			AttrCounter:      ctx.AttrCounter,
-			CompCounter:      ctx.CompCounter,
-			Prefix:           ctx.Prefix,
+			IDCounter:        ctx.IDCounter, // Copy all counters
 			Bindings:         &CollectedBindings{},
 			ChildrenContent:  ctx.ChildrenContent,
 			ChildrenBindings: ctx.ChildrenBindings,
@@ -1076,14 +790,7 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 		elseHTML := childrenToHTML(i.ElseNode, elseCtx)
 
 		// Update parent counters
-		ctx.TextCounter = elseCtx.TextCounter
-		ctx.IfCounter = elseCtx.IfCounter
-		ctx.EachCounter = elseCtx.EachCounter
-		ctx.EventCounter = elseCtx.EventCounter
-		ctx.BindCounter = elseCtx.BindCounter
-		ctx.ClassCounter = elseCtx.ClassCounter
-		ctx.AttrCounter = elseCtx.AttrCounter
-		ctx.CompCounter = elseCtx.CompCounter
+		ctx.IDCounter = elseCtx.IDCounter
 
 		ifBlock.ElseHTML = elseHTML
 		ifBlock.ElseBindings = elseCtx.Bindings
@@ -1179,7 +886,7 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 
 	// Create child context for the component with its own prefix
 	childCtx := &BuildContext{
-		Prefix:          fullCompPrefix,
+		IDCounter:       IDCounter{Prefix: fullCompPrefix},
 		Parent:          ctx,
 		Bindings:        &CollectedBindings{},
 		SlotContent:     slotHTML,
@@ -1285,10 +992,9 @@ func mergeNestedBindings(parent, child *CollectedBindings) {
 	parent.IfBlocks = append(parent.IfBlocks, child.IfBlocks...)
 	parent.EachBlocks = append(parent.EachBlocks, child.EachBlocks...)
 	parent.InputBindings = append(parent.InputBindings, child.InputBindings...)
-	parent.ClassBindings = append(parent.ClassBindings, child.ClassBindings...)
-	parent.ShowIfBindings = append(parent.ShowIfBindings, child.ShowIfBindings...)
 	parent.Components = append(parent.Components, child.Components...)
 	parent.AttrBindings = append(parent.AttrBindings, child.AttrBindings...)
+	parent.AttrCondBindings = append(parent.AttrCondBindings, child.AttrCondBindings...)
 }
 
 // ToHTML generates HTML for a slot node.
@@ -1312,10 +1018,8 @@ func (c *ChildNode) ToHTML(ctx *BuildContext) string {
 					ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, childBindings.TextBindings...)
 					ctx.Bindings.Events = append(ctx.Bindings.Events, childBindings.Events...)
 					ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, childBindings.InputBindings...)
-					ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, childBindings.ClassBindings...)
 					ctx.Bindings.IfBlocks = append(ctx.Bindings.IfBlocks, childBindings.IfBlocks...)
 					ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, childBindings.EachBlocks...)
-					ctx.Bindings.ShowIfBindings = append(ctx.Bindings.ShowIfBindings, childBindings.ShowIfBindings...)
 					ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, childBindings.AttrBindings...)
 				}
 			}
@@ -1359,10 +1063,8 @@ func (r *PageRouterNode) ToHTML(ctx *BuildContext) string {
 				ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, childBindings.TextBindings...)
 				ctx.Bindings.Events = append(ctx.Bindings.Events, childBindings.Events...)
 				ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, childBindings.InputBindings...)
-				ctx.Bindings.ClassBindings = append(ctx.Bindings.ClassBindings, childBindings.ClassBindings...)
 				ctx.Bindings.IfBlocks = append(ctx.Bindings.IfBlocks, childBindings.IfBlocks...)
 				ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, childBindings.EachBlocks...)
-				ctx.Bindings.ShowIfBindings = append(ctx.Bindings.ShowIfBindings, childBindings.ShowIfBindings...)
 				ctx.Bindings.AttrBindings = append(ctx.Bindings.AttrBindings, childBindings.AttrBindings...)
 			}
 		}
@@ -1383,7 +1085,7 @@ func (r *PageRouterNode) ToHTML(ctx *BuildContext) string {
 	}
 
 	// Record router binding for WASM
-	ctx.Bindings.RouterBindings = append(ctx.Bindings.RouterBindings, RouterBinding_{
+	ctx.Bindings.RouterBindings = append(ctx.Bindings.RouterBindings, RouterBinding{
 		StoreRef: r.Current,
 	})
 
@@ -1393,8 +1095,6 @@ func (r *PageRouterNode) ToHTML(ctx *BuildContext) string {
 // nodeToHTML dispatches to the appropriate ToHTML method.
 func nodeToHTML(n Node, ctx *BuildContext) string {
 	switch node := n.(type) {
-	case *Element:
-		return node.ToHTML(ctx)
 	case *TextNode:
 		return node.ToHTML(ctx)
 	case *HtmlNode:
@@ -1406,8 +1106,6 @@ func nodeToHTML(n Node, ctx *BuildContext) string {
 	case *BindValueNode:
 		return node.ToHTML(ctx)
 	case *BindCheckedNode:
-		return node.ToHTML(ctx)
-	case *ClassIfNode:
 		return node.ToHTML(ctx)
 	case *IfNode:
 		return node.ToHTML(ctx)

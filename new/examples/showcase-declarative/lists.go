@@ -109,23 +109,23 @@ func (l *Lists) Render() p.Node {
 
 			<div class="button-group">
 				<h3>Add</h3>
-				<button `, p.OnClick(l.PrependItem), `>Prepend</button>
-				<button `, p.OnClick(l.InsertMiddle), `>Insert Middle</button>
-				<button `, p.OnClick(l.AddItem), `>Append</button>
+				`, p.Html(`<button>Prepend</button>`).WithOn("click", l.PrependItem), `
+				`, p.Html(`<button>Insert Middle</button>`).WithOn("click", l.InsertMiddle), `
+				`, p.Html(`<button>Append</button>`).WithOn("click", l.AddItem), `
 			</div>
 
 			<div class="button-group">
 				<h3>Remove</h3>
-				<button `, p.OnClick(l.RemoveFirst), `>First</button>
-				<button `, p.OnClick(l.RemoveMiddle), `>Middle</button>
-				<button `, p.OnClick(l.RemoveLast), `>Last</button>
-				<button `, p.OnClick(l.ClearAll), `>Clear All</button>
+				`, p.Html(`<button>First</button>`).WithOn("click", l.RemoveFirst), `
+				`, p.Html(`<button>Middle</button>`).WithOn("click", l.RemoveMiddle), `
+				`, p.Html(`<button>Last</button>`).WithOn("click", l.RemoveLast), `
+				`, p.Html(`<button>Clear All</button>`).WithOn("click", l.ClearAll), `
 			</div>
 
 			<div class="button-group">
 				<h3>Replace All (simulates fetch)</h3>
-				<button `, p.OnClick(l.LoadFruits), `>Load Fruits</button>
-				<button `, p.OnClick(l.LoadNumbers), `>Load Numbers</button>
+				`, p.Html(`<button>Load Fruits</button>`).WithOn("click", l.LoadFruits), `
+				`, p.Html(`<button>Load Numbers</button>`).WithOn("click", l.LoadNumbers), `
 			</div>
 
 			<div class="list-container">

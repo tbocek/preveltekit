@@ -26,36 +26,6 @@ type Condition interface {
 }
 
 // =============================================================================
-// Element Node
-// =============================================================================
-
-// Element represents an HTML element with attributes and children.
-type Element struct {
-	Tag      string
-	Attrs    []NodeAttr
-	Children []Node
-}
-
-func (e *Element) nodeType() string { return "element" }
-
-// El creates an element with the given tag, attributes, and children.
-// Attrs and children can be mixed - they're separated automatically.
-func El(tag string, content ...any) *Element {
-	e := &Element{Tag: tag}
-	for _, c := range content {
-		switch v := c.(type) {
-		case NodeAttr:
-			e.Attrs = append(e.Attrs, v)
-		case Node:
-			e.Children = append(e.Children, v)
-		case string:
-			e.Children = append(e.Children, Text(v))
-		}
-	}
-	return e
-}
-
-// =============================================================================
 // Text Node
 // =============================================================================
 
@@ -77,8 +47,28 @@ func Text(content string) *TextNode {
 
 // HtmlNode represents raw HTML with embedded nodes.
 // It allows mixing raw HTML strings with dynamic nodes like Bind, If, Each.
+// Supports chainable AttrIf and WithOn methods for conditional attributes and events.
 type HtmlNode struct {
-	Parts []any // strings, Nodes, or values to stringify
+	Parts     []any        // strings, Nodes, or values to stringify
+	AttrConds []*AttrCond  // conditional attributes applied to first tag
+	Events    []*HtmlEvent // event bindings applied to first tag
+}
+
+// AttrCond represents a conditional attribute binding.
+// Used by HtmlNode.AttrIf() to conditionally set attribute values.
+type AttrCond struct {
+	Name       string    // attribute name (e.g., "class", "href", "disabled")
+	Cond       Condition // condition to evaluate
+	TrueValue  any       // value when true: string or *Store[T]
+	FalseValue any       // value when false: string or *Store[T] (optional)
+}
+
+// HtmlEvent represents an event binding for HtmlNode.
+// Used by HtmlNode.WithOn() to attach event handlers.
+type HtmlEvent struct {
+	Event     string   // event name (e.g., "click", "submit")
+	Handler   func()   // event handler
+	Modifiers []string // modifiers (e.g., "preventDefault", "stopPropagation")
 }
 
 func (h *HtmlNode) nodeType() string { return "html" }
@@ -87,6 +77,62 @@ func (h *HtmlNode) nodeType() string { return "html" }
 // Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
 func Html(parts ...any) *HtmlNode {
 	return &HtmlNode{Parts: parts}
+}
+
+// AttrIf adds a conditional attribute to the first HTML tag.
+// Values can be string literals or *Store[T] for reactive values.
+// Multiple AttrIf calls for the same attribute name merge additively.
+//
+// Examples:
+//
+//	Html(`<button>`).AttrIf("class", cond, "active")              // adds "active" when true
+//	Html(`<button>`).AttrIf("class", cond, "active", "inactive")  // "active" when true, "inactive" when false
+//	Html(`<a>`).AttrIf("href", cond, urlStore, "/fallback")       // reactive value with fallback
+func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode {
+	ac := &AttrCond{Name: name, Cond: cond}
+	if len(values) >= 1 {
+		ac.TrueValue = values[0]
+	}
+	if len(values) >= 2 {
+		ac.FalseValue = values[1]
+	}
+	h.AttrConds = append(h.AttrConds, ac)
+	return h
+}
+
+// WithOn attaches an event handler to the first HTML tag.
+// Returns the HtmlNode for chaining with modifiers.
+//
+// Example:
+//
+//	Html(`<button>Click</button>`).WithOn("click", handler)
+//	Html(`<form>`).WithOn("submit", handler).PreventDefault()
+func (h *HtmlNode) WithOn(event string, handler func()) *HtmlNode {
+	h.Events = append(h.Events, &HtmlEvent{
+		Event:   event,
+		Handler: handler,
+	})
+	return h
+}
+
+// PreventDefault adds the preventDefault modifier to the last event.
+// Must be called after WithOn.
+func (h *HtmlNode) PreventDefault() *HtmlNode {
+	if len(h.Events) > 0 {
+		last := h.Events[len(h.Events)-1]
+		last.Modifiers = append(last.Modifiers, "preventDefault")
+	}
+	return h
+}
+
+// StopPropagation adds the stopPropagation modifier to the last event.
+// Must be called after WithOn.
+func (h *HtmlNode) StopPropagation() *HtmlNode {
+	if len(h.Events) > 0 {
+		last := h.Events[len(h.Events)-1]
+		last.Modifiers = append(last.Modifiers, "stopPropagation")
+	}
+	return h
 }
 
 // =============================================================================
@@ -250,7 +296,7 @@ func Comp(instance any, content ...any) *ComponentNode {
 		switch v := item.(type) {
 		case *PropAttr:
 			c.Props[v.Name] = v.Value
-		case *EventAttr:
+		case *eventAttr:
 			c.Events[v.Event] = v.Handler
 		case Node:
 			c.Children = append(c.Children, v)
@@ -355,65 +401,6 @@ func Class(classes ...string) *ClassAttr {
 	return &ClassAttr{Classes: classes}
 }
 
-// ClassIfAttr represents a conditional class binding (legacy, used with Element).
-type ClassIfAttr struct {
-	ClassName string
-	Cond      Condition
-}
-
-func (c *ClassIfAttr) attrType() string { return "classif" }
-
-// ClassIfNode represents an HTML element with conditional classes.
-// Takes the full opening tag and injects id + merges classes.
-type ClassIfNode struct {
-	HTML       string
-	Conditions []ClassIfCond
-	OnClick    func() // Optional click handler
-}
-
-type ClassIfCond struct {
-	ClassName string
-	Cond      Condition
-}
-
-func (c *ClassIfNode) nodeType() string { return "classif" }
-
-// ClassIf creates a conditional class node.
-// Pass the full opening tag and class/condition pairs.
-// Example: ClassIf(`<div class="step">`, "active", store.Eq(1), "completed", store.Gt(1))
-func ClassIf(html string, pairs ...any) *ClassIfNode {
-	node := &ClassIfNode{HTML: html}
-	for i := 0; i+1 < len(pairs); i += 2 {
-		if className, ok := pairs[i].(string); ok {
-			if cond, ok := pairs[i+1].(Condition); ok {
-				node.Conditions = append(node.Conditions, ClassIfCond{
-					ClassName: className,
-					Cond:      cond,
-				})
-			}
-		}
-	}
-	return node
-}
-
-// WithOnClick adds a click handler to a ClassIfNode.
-func (c *ClassIfNode) WithOnClick(handler func()) *ClassIfNode {
-	c.OnClick = handler
-	return c
-}
-
-// ShowIfAttr represents a conditional display binding.
-type ShowIfAttr struct {
-	Cond Condition
-}
-
-func (s *ShowIfAttr) attrType() string { return "showif" }
-
-// ShowIf shows the element when condition is true, hides it otherwise.
-func ShowIf(cond Condition) *ShowIfAttr {
-	return &ShowIfAttr{Cond: cond}
-}
-
 // StaticAttr represents a static attribute.
 type StaticAttr struct {
 	Name  string
@@ -447,51 +434,15 @@ func DynAttr(name, template string, stores ...any) *DynAttrAttr {
 	}
 }
 
-// EventAttr represents an event handler binding.
-type EventAttr struct {
+// eventAttr represents an event handler binding (internal use).
+// Users should prefer HtmlNode.WithOn() for event handling.
+type eventAttr struct {
 	Event     string
 	Handler   func()   // Handler function (wrap args in closure)
 	Modifiers []string // ["preventDefault", "stopPropagation"]
 }
 
-func (e *EventAttr) attrType() string { return "event" }
-
-// OnClick creates a click event handler.
-func OnClick(handler func()) *EventAttr {
-	return &EventAttr{Event: "click", Handler: handler}
-}
-
-// OnSubmit creates a submit event handler.
-func OnSubmit(handler func()) *EventAttr {
-	return &EventAttr{Event: "submit", Handler: handler}
-}
-
-// OnInput creates an input event handler.
-func OnInput(handler func()) *EventAttr {
-	return &EventAttr{Event: "input", Handler: handler}
-}
-
-// OnChange creates a change event handler.
-func OnChange(handler func()) *EventAttr {
-	return &EventAttr{Event: "change", Handler: handler}
-}
-
-// OnEvent creates a custom event handler.
-func OnEvent(event string, handler func()) *EventAttr {
-	return &EventAttr{Event: event, Handler: handler}
-}
-
-// PreventDefault adds the preventDefault modifier.
-func (e *EventAttr) PreventDefault() *EventAttr {
-	e.Modifiers = append(e.Modifiers, "preventDefault")
-	return e
-}
-
-// StopPropagation adds the stopPropagation modifier.
-func (e *EventAttr) StopPropagation() *EventAttr {
-	e.Modifiers = append(e.Modifiers, "stopPropagation")
-	return e
-}
+func (e *eventAttr) attrType() string { return "event" }
 
 // BindValueNode represents a two-way binding to an input's value.
 // It wraps a complete HTML element and injects id/value attributes.
