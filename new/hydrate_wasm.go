@@ -243,7 +243,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 
 	// Set up component store binding for SPA navigation
 	if hcc, ok := app.(HasCurrentComponent); ok {
-		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", cfg, initialPrerenderedName)
+		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component", cfg, initialPrerenderedName)
 	} else {
 	}
 
