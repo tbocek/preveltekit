@@ -296,12 +296,9 @@ func BindEvents(c *Cleanup, events []Evt) {
 		e := e // Capture loop variable for closure
 		el := GetEl(e.ID)
 		if !ok(el) {
-			js.Global().Get("console").Call("log", "[BindEvents] element NOT found:", e.ID)
 			continue
 		}
-		js.Global().Get("console").Call("log", "[BindEvents] binding:", e.ID, e.Event)
 		fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-			js.Global().Get("console").Call("log", "[BindEvents] event fired:", e.ID, e.Event)
 			e.Fn()
 			return nil
 		})
