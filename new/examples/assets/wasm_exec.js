@@ -7,6 +7,8 @@
 
 (() => {
   const global = window;
+  const encoder = new TextEncoder("utf-8");
+  const decoder = new TextDecoder("utf-8");
 
   const enosys = () => {
     const err = new Error("not implemented");
@@ -14,144 +16,50 @@
     return err;
   };
 
-  let outputBuf = "";
-  global.fs = {
-    constants: {
-      O_WRONLY: -1,
-      O_RDWR: -1,
-      O_CREAT: -1,
-      O_TRUNC: -1,
-      O_APPEND: -1,
-      O_EXCL: -1,
+  global.fs = new Proxy(
+    {
+      constants: {
+        O_WRONLY: -1,
+        O_RDWR: -1,
+        O_CREAT: -1,
+        O_TRUNC: -1,
+        O_APPEND: -1,
+        O_EXCL: -1,
+      },
     },
-    writeSync(fd, buf) {
-      outputBuf += decoder.decode(buf);
-      const nl = outputBuf.lastIndexOf("\n");
-      if (nl != -1) {
-        console.log(outputBuf.substr(0, nl));
-        outputBuf = outputBuf.substr(nl + 1);
-      }
-      return buf.length;
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        return (...args) => {
+          const callback = args[args.length - 1];
+          if (typeof callback === "function") callback(enosys());
+          else throw enosys();
+        };
+      },
     },
-    write(fd, buf, offset, length, position, callback) {
-      if (offset !== 0 || length !== buf.length || position !== null) {
-        callback(enosys());
-        return;
-      }
-      const n = this.writeSync(fd, buf);
-      callback(null, n);
-    },
-    chmod(path, mode, callback) {
-      callback(enosys());
-    },
-    chown(path, uid, gid, callback) {
-      callback(enosys());
-    },
-    close(fd, callback) {
-      callback(enosys());
-    },
-    fchmod(fd, mode, callback) {
-      callback(enosys());
-    },
-    fchown(fd, uid, gid, callback) {
-      callback(enosys());
-    },
-    fstat(fd, callback) {
-      callback(enosys());
-    },
-    fsync(fd, callback) {
-      callback(null);
-    },
-    ftruncate(fd, length, callback) {
-      callback(enosys());
-    },
-    lchown(path, uid, gid, callback) {
-      callback(enosys());
-    },
-    link(path, link, callback) {
-      callback(enosys());
-    },
-    lstat(path, callback) {
-      callback(enosys());
-    },
-    mkdir(path, perm, callback) {
-      callback(enosys());
-    },
-    open(path, flags, mode, callback) {
-      callback(enosys());
-    },
-    read(fd, buffer, offset, length, position, callback) {
-      callback(enosys());
-    },
-    readdir(path, callback) {
-      callback(enosys());
-    },
-    readlink(path, callback) {
-      callback(enosys());
-    },
-    rename(from, to, callback) {
-      callback(enosys());
-    },
-    rmdir(path, callback) {
-      callback(enosys());
-    },
-    stat(path, callback) {
-      callback(enosys());
-    },
-    symlink(path, link, callback) {
-      callback(enosys());
-    },
-    truncate(path, length, callback) {
-      callback(enosys());
-    },
-    unlink(path, callback) {
-      callback(enosys());
-    },
-    utimes(path, atime, mtime, callback) {
-      callback(enosys());
-    },
-  };
+  );
 
-  global.process = {
-    getuid() {
-      return -1;
+  global.process = new Proxy(
+    {
+      pid: -1,
+      ppid: -1,
     },
-    getgid() {
-      return -1;
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        return () => {
+          throw enosys();
+        };
+      },
     },
-    geteuid() {
-      return -1;
-    },
-    getegid() {
-      return -1;
-    },
-    getgroups() {
-      throw enosys();
-    },
-    pid: -1,
-    ppid: -1,
-    umask() {
-      throw enosys();
-    },
-    cwd() {
-      throw enosys();
-    },
-    chdir() {
-      throw enosys();
-    },
-  };
+  );
 
-  const encoder = new TextEncoder("utf-8");
-  const decoder = new TextDecoder("utf-8");
   let reinterpretBuf = new DataView(new ArrayBuffer(8));
   var logLine = [];
   const wasmExit = {};
 
   global.Go = class {
     constructor() {
-      this._callbackTimeouts = new Map();
-      this._nextCallbackTimeoutID = 1;
-
       const mem = () => {
         return new DataView(this._inst.exports.memory.buffer);
       };
@@ -170,8 +78,7 @@
       };
 
       const loadValue = (addr) => {
-        let v_ref = mem().getBigUint64(addr, true);
-        return unboxValue(v_ref);
+        return unboxValue(mem().getBigUint64(addr, true));
       };
 
       const boxValue = (v) => {
@@ -295,6 +202,7 @@
           "runtime.ticks": () => {
             return BigInt((timeOrigin + performance.now()) * 1e6);
           },
+          // end
 
           "runtime.sleepTicks": (timeout) => {
             setTimeout(
@@ -309,6 +217,7 @@
               Number(timeout) / 1e6,
             );
           },
+          // end
 
           "syscall/js.finalizeRef": (v_ref) => {
             const id = v_ref & 0xffffffffn;
@@ -322,12 +231,14 @@
               }
             }
           },
+          // end
 
           "syscall/js.stringVal": (value_ptr, value_len) => {
             value_ptr >>>= 0;
             const s = loadString(value_ptr, value_len);
             return boxValue(s);
           },
+          // end
 
           "syscall/js.valueGet": (v_ref, p_ptr, p_len) => {
             let prop = loadString(p_ptr, p_len);
@@ -335,6 +246,7 @@
             let result = Reflect.get(v, prop);
             return boxValue(result);
           },
+          // end
 
           "syscall/js.valueSet": (v_ref, p_ptr, p_len, x_ref) => {
             const v = unboxValue(v_ref);
@@ -342,20 +254,24 @@
             const x = unboxValue(x_ref);
             Reflect.set(v, p, x);
           },
+          // end
 
           "syscall/js.valueDelete": (v_ref, p_ptr, p_len) => {
             const v = unboxValue(v_ref);
             const p = loadString(p_ptr, p_len);
             Reflect.deleteProperty(v, p);
           },
+          // end
 
           "syscall/js.valueIndex": (v_ref, i) => {
             return boxValue(Reflect.get(unboxValue(v_ref), i));
           },
+          // end
 
           "syscall/js.valueSetIndex": (v_ref, i, x_ref) => {
             Reflect.set(unboxValue(v_ref), i, unboxValue(x_ref));
           },
+          // end
 
           "syscall/js.valueCall": (
             ret_addr,
@@ -378,6 +294,7 @@
               mem().setUint8(ret_addr + 8, 0);
             }
           },
+          // end
 
           "syscall/js.valueInvoke": (
             ret_addr,
@@ -396,6 +313,7 @@
               mem().setUint8(ret_addr + 8, 0);
             }
           },
+          // end
 
           "syscall/js.valueNew": (
             ret_addr,
@@ -414,10 +332,12 @@
               mem().setUint8(ret_addr + 8, 0);
             }
           },
+          // end
 
           "syscall/js.valueLength": (v_ref) => {
             return unboxValue(v_ref).length;
           },
+          // end
 
           "syscall/js.valuePrepareString": (ret_addr, v_ref) => {
             const s = String(unboxValue(v_ref));
@@ -425,6 +345,7 @@
             storeValue(ret_addr, str);
             mem().setInt32(ret_addr + 8, str.length, true);
           },
+          // end
 
           "syscall/js.valueLoadString": (
             v_ref,
@@ -435,10 +356,12 @@
             const str = unboxValue(v_ref);
             loadSlice(slice_ptr, slice_len, slice_cap).set(str);
           },
+          // end
 
           "syscall/js.valueInstanceOf": (v_ref, t_ref) => {
             return unboxValue(v_ref) instanceof unboxValue(t_ref);
           },
+          // end
 
           "syscall/js.copyBytesToGo": (
             ret_addr,
@@ -462,6 +385,7 @@
             mem().setUint32(num_bytes_copied_addr, toCopy.length, true);
             mem().setUint8(returned_status_addr, 1);
           },
+          // end
 
           "syscall/js.copyBytesToJS": (
             ret_addr,
@@ -485,6 +409,7 @@
             mem().setUint32(num_bytes_copied_addr, toCopy.length, true);
             mem().setUint8(returned_status_addr, 1);
           },
+          // end
         },
       };
 

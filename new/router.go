@@ -19,6 +19,8 @@ type Router struct {
 	currentPath *Store[string]
 	beforeNav   func(from, to string) bool // return false to cancel navigation
 	linksSetup  bool                       // tracks if click listener is already registered
+	clickFn     js.Func                    // retained to prevent GC
+	popstateFn  js.Func                    // retained to prevent GC
 }
 
 // NewRouter creates a new router instance
@@ -68,11 +70,12 @@ func (r *Router) Start() {
 	r.handleRoute(path)
 
 	// Listen for popstate (back/forward)
-	js.Global().Call("addEventListener", "popstate", js.FuncOf(func(this js.Value, args []js.Value) any {
+	r.popstateFn = js.FuncOf(func(this js.Value, args []js.Value) any {
 		path := js.Global().Get("location").Get("pathname").String()
 		r.handleRoute(path)
 		return nil
-	}))
+	})
+	js.Global().Call("addEventListener", "popstate", r.popstateFn)
 
 	// Intercept all link clicks for SPA navigation
 	r.SetupLinks()
@@ -86,7 +89,7 @@ func (r *Router) SetupLinks() {
 	}
 	r.linksSetup = true
 
-	js.Global().Get("document").Call("addEventListener", "click", js.FuncOf(func(this js.Value, args []js.Value) any {
+	r.clickFn = js.FuncOf(func(this js.Value, args []js.Value) any {
 		if len(args) == 0 {
 			return nil
 		}
@@ -152,7 +155,8 @@ func (r *Router) SetupLinks() {
 		r.Navigate(path)
 
 		return nil
-	}))
+	})
+	js.Global().Get("document").Call("addEventListener", "click", r.clickFn)
 }
 
 // Navigate programmatically navigates to a path

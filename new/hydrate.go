@@ -112,16 +112,7 @@ func WithChild(path string, comp Component) func(*HydrateConfig) {
 
 // hydrateSSR handles the SSR phase - generating HTML and collecting bindings.
 func hydrateSSR(app Component, cfg *HydrateConfig) {
-	mode := os.Getenv("HYDRATE_MODE")
-
-	switch mode {
-	case "generate-all":
-		// Generate all HTML files and output merged bindings
-		hydrateGenerateAll(app, cfg)
-	default:
-		// Single route mode (for backwards compatibility or specific route rendering)
-		hydrateSingleRoute(app, cfg)
-	}
+	hydrateGenerateAll(app, cfg)
 }
 
 // hydrateGenerateAll generates HTML files for all routes.
@@ -328,96 +319,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-}
-
-// hydrateSingleRoute handles rendering a single route (original behavior).
-func hydrateSingleRoute(app Component, cfg *HydrateConfig) {
-	prerenderPath := os.Getenv("PRERENDER_PATH")
-	outputBindings := os.Getenv("OUTPUT_BINDINGS") == "1"
-
-	// Initialize stores and call OnCreate for all children
-	// (app was already initialized in Hydrate before Routes() was called)
-	for _, child := range cfg.Children {
-		initStores(child)
-	}
-	for _, child := range cfg.Children {
-		if oc, ok := child.(HasOnCreate); ok {
-			oc.OnCreate()
-		}
-	}
-
-	// Build store-to-field map for app component
-	appStoreMap := buildStoreMap(app, "component")
-
-	// Determine which child component to render based on prerender path
-	var slotContent string
-	var childBindings *CollectedBindings
-	var activeChildName string
-	var activeChild Component
-
-	for path, child := range cfg.Children {
-		if prerenderPath == path {
-			activeChild = child
-			activeChildName = componentVarName(child)
-			slotContent, childBindings = RenderHTML(child.Render())
-			break
-		}
-	}
-
-	// Default to first child for "/" or empty path
-	if activeChild == nil && (prerenderPath == "/" || prerenderPath == "") {
-		// Try to find a "basics" or first child
-		for path, child := range cfg.Children {
-			if strings.Contains(path, "basics") {
-				activeChild = child
-				activeChildName = componentVarName(child)
-				slotContent, childBindings = RenderHTML(child.Render())
-				break
-			}
-		}
-		// If no "basics", just use first child
-		if activeChild == nil {
-			for _, child := range cfg.Children {
-				activeChild = child
-				activeChildName = componentVarName(child)
-				slotContent, childBindings = RenderHTML(child.Render())
-				break
-			}
-		}
-	}
-
-	// Render app with slot content
-	var html string
-	var bindings *CollectedBindings
-	if slotContent != "" {
-		html, bindings = RenderHTMLWithSlot(app.Render(), slotContent)
-	} else {
-		html, bindings = RenderHTML(app.Render())
-	}
-
-	// Resolve app bindings
-	resolveBindings(bindings, appStoreMap, "component", app)
-
-	// Resolve child bindings if present
-	if childBindings != nil && activeChild != nil {
-		childStoreMap := buildStoreMap(activeChild, activeChildName)
-		resolveBindings(childBindings, childStoreMap, activeChildName, activeChild)
-
-		// Merge child bindings into main bindings
-		bindings.TextBindings = append(bindings.TextBindings, childBindings.TextBindings...)
-		bindings.InputBindings = append(bindings.InputBindings, childBindings.InputBindings...)
-		bindings.Events = append(bindings.Events, childBindings.Events...)
-		bindings.IfBlocks = append(bindings.IfBlocks, childBindings.IfBlocks...)
-	}
-
-	// Output HTML
-	fmt.Print(html)
-
-	// Output bindings if requested
-	if outputBindings {
-		bindingsJSON, _ := json.Marshal(bindings)
-		fmt.Fprintf(os.Stderr, "BINDINGS:%s\n", bindingsJSON)
-	}
 }
 
 // buildStoreMap builds a map from store pointer addresses to field paths.

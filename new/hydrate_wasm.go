@@ -241,7 +241,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 
 	// Set up component store binding for SPA navigation
 	if hcc, ok := app.(HasCurrentComponent); ok {
-		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component", cfg, initialPrerenderedName)
+		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", cfg, initialPrerenderedName)
 	} else {
 	}
 
@@ -585,8 +585,6 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 		return
 	}
 
-	// Use the pre-rendered component name passed in (captured before router started)
-
 	// Track if this is the first change
 	firstChange := true
 
@@ -631,7 +629,6 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 		// Apply collected bindings to make it reactive
 		ApplyWasmBindings(ctx.Bindings, currentCleanup)
 	})
-
 }
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.

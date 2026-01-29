@@ -638,6 +638,10 @@ func escapeAttrWasm(s string) string {
 
 // ApplyWasmBindings applies collected bindings to the DOM after HTML insertion.
 func ApplyWasmBindings(bindings *WasmBindings, cleanup *Cleanup) {
+	// Clear bound markers first so text bindings can rebind to new DOM
+	for _, tb := range bindings.TextBindings {
+		ClearBoundMarker(tb.MarkerID)
+	}
 
 	// Apply text bindings
 	for _, tb := range bindings.TextBindings {
@@ -725,7 +729,9 @@ func applyEventBindingWasm(ev WasmEventBinding, cleanup *Cleanup) {
 		return
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-		ev.Handler()
+		if ev.Handler != nil {
+			ev.Handler()
+		}
 		return nil
 	})
 	el.Call("addEventListener", ev.Event, fn)

@@ -10,7 +10,7 @@
     #    output stdout
     #    level DEBUG
     #}
-    root * examples/showcase-declarative/dist/
+    root * dist/
     try_files {path} {path}.html /index.html
     file_server {
         #https://caddyserver.com/docs/caddyfile/directives/file_server#precompressed
