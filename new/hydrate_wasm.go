@@ -71,22 +71,10 @@ type HasCurrentComponent interface {
 	GetCurrentComponent() *Store[Component]
 }
 
-// HydrateConfig configures the hydration process.
-type HydrateConfig struct {
-	OutputDir string
-	Children  map[string]Component
-}
-
 // Hydrate sets up DOM bindings for reactivity.
 // The bindings JSON is passed via a global variable set by the CLI-generated code.
-func Hydrate(app Component, opts ...func(*HydrateConfig)) {
-	cfg := &HydrateConfig{
-		OutputDir: "dist",
-		Children:  make(map[string]Component),
-	}
-	for _, opt := range opts {
-		opt(cfg)
-	}
+func Hydrate(app Component) {
+	children := make(map[string]Component)
 
 	// Initialize app stores first
 	initStores(app)
@@ -109,7 +97,7 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 						route.Handler(nil)
 						// Read the component that was set
 						if comp := currentStore.Get(); comp != nil {
-							cfg.Children[route.Path] = comp
+							children[route.Path] = comp
 						}
 					}
 				}
@@ -121,30 +109,16 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 		}
 	}
 
-	hydrateWASM(app, cfg)
-}
-
-// WithOutputDir sets the output directory (no-op in WASM, but needed for API compatibility).
-func WithOutputDir(dir string) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		cfg.OutputDir = dir
-	}
-}
-
-// WithChild registers a child component for a route path.
-func WithChild(path string, comp Component) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		cfg.Children[path] = comp
-	}
+	hydrateWASM(app, children)
 }
 
 // hydrateWASM sets up DOM bindings from the embedded bindings JSON.
-func hydrateWASM(app Component, cfg *HydrateConfig) {
+func hydrateWASM(app Component, children map[string]Component) {
 
 	// Get bindings from global variable (set by CLI-generated code)
 	bindingsJS := js.Global().Get("_preveltekit_bindings")
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
-		runLifecycle(app, cfg)
+		runLifecycle(app, children)
 		select {}
 		return
 	}
@@ -153,7 +127,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 
 	bindings := parseBindings(bindingsJSON)
 	if bindings == nil {
-		runLifecycle(app, cfg)
+		runLifecycle(app, children)
 		select {}
 		return
 	}
@@ -162,13 +136,13 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 	components := map[string]Component{
 		"component": app,
 	}
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		name := trimPrefix(path, "/")
 		components[name] = child
 	}
 
 	// Run OnCreate phase
-	runOnCreate(app, cfg)
+	runOnCreate(app, children)
 
 	// Collect event handlers from component Render() trees
 	collectHandlers(app, "")
@@ -176,7 +150,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 	// (e.g., "/" and "/basics" may both point to the same Basics component)
 	// We need to use the non-empty name for collection
 	collected := make(map[uintptr]string) // maps pointer to the name used for collection
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		ptr := reflect.ValueOf(child).Pointer()
 		name := trimPrefix(path, "/")
 
@@ -200,7 +174,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 	}
 
 	// Now collect any that were only registered with empty name (shouldn't happen normally)
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		ptr := reflect.ValueOf(child).Pointer()
 		if collected[ptr] == "" {
 			name := trimPrefix(path, "/")
@@ -221,19 +195,19 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 	var initialPrerenderedName string
 	currentPath := js.Global().Get("location").Get("pathname").String()
 
-	// Find the component for this path from cfg.Children
-	if comp, ok := cfg.Children[currentPath]; ok && comp != nil {
+	// Find the component for this path from children
+	if comp, ok := children[currentPath]; ok && comp != nil {
 		initialPrerenderedName = componentNameWasm(comp)
 	} else if currentPath == "/" || currentPath == "" {
 		// Root path - check for "/" in children
-		if comp, ok := cfg.Children["/"]; ok && comp != nil {
+		if comp, ok := children["/"]; ok && comp != nil {
 			initialPrerenderedName = componentNameWasm(comp)
 		}
 	}
 
 	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
 	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
-	for _, child := range cfg.Children {
+	for _, child := range children {
 		if om, ok := child.(HasOnMount); ok {
 			om.OnMount()
 		}
@@ -241,7 +215,7 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 
 	// Set up component store binding for SPA navigation
 	if hcc, ok := app.(HasCurrentComponent); ok {
-		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", cfg, initialPrerenderedName)
+		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", initialPrerenderedName)
 	} else {
 	}
 
@@ -255,17 +229,17 @@ func hydrateWASM(app Component, cfg *HydrateConfig) {
 }
 
 // runOnCreate calls OnCreate and injects styles for app and all children.
-func runOnCreate(app Component, cfg *HydrateConfig) {
+func runOnCreate(app Component, children map[string]Component) {
 	// App's OnCreate was already called in Hydrate before Routes() was called
 	if hs, ok := app.(HasStyle); ok {
 		InjectStyle("app", hs.Style())
 	}
 	// Initialize stores for all children first
-	for _, child := range cfg.Children {
+	for _, child := range children {
 		initStores(child)
 	}
 	// Then call OnCreate
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
 		}
@@ -276,11 +250,11 @@ func runOnCreate(app Component, cfg *HydrateConfig) {
 }
 
 // runOnMount calls OnMount for app and all children.
-func runOnMount(app Component, cfg *HydrateConfig) {
+func runOnMount(app Component, children map[string]Component) {
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
 	}
-	for _, child := range cfg.Children {
+	for _, child := range children {
 		if om, ok := child.(HasOnMount); ok {
 			om.OnMount()
 		}
@@ -288,9 +262,9 @@ func runOnMount(app Component, cfg *HydrateConfig) {
 }
 
 // runLifecycle runs full lifecycle (OnCreate + styles + OnMount) for all components.
-func runLifecycle(app Component, cfg *HydrateConfig) {
-	runOnCreate(app, cfg)
-	runOnMount(app, cfg)
+func runLifecycle(app Component, children map[string]Component) {
+	runOnCreate(app, children)
+	runOnMount(app, children)
 }
 
 // resolveStore resolves a store path like "component.Count" or "basics.Score" to a store pointer.
@@ -562,16 +536,16 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 // bindComponentStore subscribes to a Store[Component] and re-renders on change.
 // This enables SPA navigation where clicking a link updates the component store
 // and WASM re-renders the new component into the container.
-func bindComponentStore(store *Store[Component], containerID string, cfg *HydrateConfig) {
+func bindComponentStore(store *Store[Component], containerID string) {
 	initialCompName := ""
 	if initialComp := store.Get(); initialComp != nil {
 		initialCompName = componentNameWasm(initialComp)
 	}
-	bindComponentStoreWithInitial(store, containerID, cfg, initialCompName)
+	bindComponentStoreWithInitial(store, containerID, initialCompName)
 }
 
 // bindComponentStoreWithInitial is like bindComponentStore but takes the pre-rendered component name.
-func bindComponentStoreWithInitial(store *Store[Component], containerID string, cfg *HydrateConfig, initialPrerenderedName string) {
+func bindComponentStoreWithInitial(store *Store[Component], containerID string, initialPrerenderedName string) {
 	if store == nil {
 		return
 	}

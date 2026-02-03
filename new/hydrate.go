@@ -41,25 +41,10 @@ type HasCurrentComponent interface {
 	GetCurrentComponent() *Store[Component]
 }
 
-// HydrateConfig configures the hydration process.
-type HydrateConfig struct {
-	// OutputDir is the directory where HTML files are written (default: "dist")
-	OutputDir string
-	// Children maps route paths to child components
-	Children map[string]Component
-}
-
 // Hydrate is the main entry point for declarative components.
 // In SSR mode (native build), it generates HTML files and outputs bindings.
-// In WASM mode, it sets up DOM bindings for reactivity.
-func Hydrate(app Component, opts ...func(*HydrateConfig)) {
-	cfg := &HydrateConfig{
-		OutputDir: "dist",
-		Children:  make(map[string]Component),
-	}
-	for _, opt := range opts {
-		opt(cfg)
-	}
+func Hydrate(app Component) {
+	children := make(map[string]Component)
 
 	// Initialize app stores first
 	initStores(app)
@@ -80,7 +65,7 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 					route.Handler(nil)
 					// Read the component that was set
 					if comp := currentStore.Get(); comp != nil {
-						cfg.Children[route.Path] = comp
+						children[route.Path] = comp
 					}
 				}
 			}
@@ -93,35 +78,16 @@ func Hydrate(app Component, opts ...func(*HydrateConfig)) {
 	}
 
 	// SSR mode - generate HTML and bindings
-	hydrateSSR(app, cfg)
-}
-
-// WithOutputDir sets the output directory for HTML files.
-func WithOutputDir(dir string) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		cfg.OutputDir = dir
-	}
-}
-
-// WithChild registers a child component for a route path.
-func WithChild(path string, comp Component) func(*HydrateConfig) {
-	return func(cfg *HydrateConfig) {
-		cfg.Children[path] = comp
-	}
-}
-
-// hydrateSSR handles the SSR phase - generating HTML and collecting bindings.
-func hydrateSSR(app Component, cfg *HydrateConfig) {
-	hydrateGenerateAll(app, cfg)
+	hydrateGenerateAll(app, children)
 }
 
 // hydrateGenerateAll generates HTML files for all routes.
-func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
+func hydrateGenerateAll(app Component, children map[string]Component) {
 	// Deduplicate children (multiple routes may point to same component, e.g., "/" and "/basics")
 	// Use pointer address to detect duplicates
 	seenChildren := make(map[uintptr]bool)
 	uniqueChildren := make([]Component, 0)
-	for _, child := range cfg.Children {
+	for _, child := range children {
 		ptr := reflect.ValueOf(child).Pointer()
 		if !seenChildren[ptr] {
 			seenChildren[ptr] = true
@@ -152,7 +118,7 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 	// Build store maps
 	appStoreMap := buildStoreMap(app, "component")
 	childStoreMaps := make(map[string]map[uintptr]string)
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		name := strings.TrimPrefix(path, "/")
 		childStoreMaps[name] = buildStoreMap(child, name)
 	}
@@ -161,14 +127,14 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 	var allBindings CollectedBindings
 
 	// Create output directory
-	os.MkdirAll(cfg.OutputDir, 0755)
+	os.MkdirAll("dist", 0755)
 
 	// Pre-render all children with unique prefixes
 	childrenContent := make(map[string]string)
 	childrenBindings := make(map[string]*CollectedBindings)
 	allCollectedStyles := make(map[string]string)
 	var childStyles string
-	for path, child := range cfg.Children {
+	for path, child := range children {
 		name := strings.TrimPrefix(path, "/")
 		// Use prefix to ensure unique IDs across children
 		// Also pass the child's store map so nested components can resolve dynamic props
@@ -221,7 +187,7 @@ func hydrateGenerateAll(app Component, cfg *HydrateConfig) {
 		fullHTML := buildHTMLDocument(html, appStyle, childStyles, allCollectedStyles)
 
 		// Write HTML file
-		htmlPath := filepath.Join(cfg.OutputDir, route.HTMLFile)
+		htmlPath := filepath.Join("dist", route.HTMLFile)
 		os.WriteFile(htmlPath, []byte(fullHTML), 0644)
 		fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
 
@@ -571,68 +537,6 @@ func isNumeric(s string) bool {
 		}
 	}
 	return true
-}
-
-// GenerateHTMLFiles generates HTML files for all routes.
-// This is called by the CLI after collecting bindings.
-func GenerateHTMLFiles(app Component, cfg *HydrateConfig, outputDir string) error {
-	// Get routes from app
-	routes, ok := app.(HasRoutes)
-	if !ok {
-		return fmt.Errorf("app component must implement HasRoutes")
-	}
-
-	// Get app style
-	var appStyle string
-	if hs, ok := app.(HasStyle); ok {
-		appStyle = hs.Style()
-	}
-
-	// Generate HTML for each route
-	for _, route := range routes.Routes() {
-		prerenderPath := route.Path
-
-		// Find child component for this route
-		var childComp Component
-		var childName string
-		for path, child := range cfg.Children {
-			if path == prerenderPath || (prerenderPath == "/" && strings.Contains(path, "basics")) {
-				childComp = child
-				childName = strings.TrimPrefix(path, "/")
-				break
-			}
-		}
-
-		// Render with slot content - use prefix to match bindings markers
-		var html string
-		if childComp != nil {
-			slotContent, _ := RenderHTMLWithPrefix(childComp.Render(), childName)
-			html, _ = RenderHTMLWithSlot(app.Render(), slotContent)
-		} else {
-			html, _ = RenderHTML(app.Render())
-		}
-
-		// Build full HTML document
-		var childStyle string
-		if childComp != nil {
-			if hs, ok := childComp.(HasStyle); ok {
-				childStyle = hs.Style()
-			}
-		}
-
-		fullHTML := buildHTMLDocument(html, appStyle, childStyle, nil)
-
-		// Write to file
-		htmlFile := filepath.Join(outputDir, route.HTMLFile)
-		if err := os.MkdirAll(filepath.Dir(htmlFile), 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(htmlFile, []byte(fullHTML), 0644); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func buildHTMLDocument(body, appStyle, childStyle string, collectedStyles map[string]string) string {
