@@ -35,21 +35,31 @@ type BuildContext struct {
 	// Used to resolve dynamic props that share parent stores
 	ParentStoreMap map[uintptr]string
 
+	// RouteGroupID is the ID of the current route group (for component container binding)
+	RouteGroupID string
+
 	// CollectedStyles holds CSS from nested components (deduplicated by component name)
 	CollectedStyles map[string]string
 }
 
 // CollectedBindings stores all bindings found during tree walking.
 type CollectedBindings struct {
-	TextBindings     []TextBinding      `json:"TextBindings"`
-	Events           []EventBinding     `json:"Events"`
-	IfBlocks         []IfBlock          `json:"IfBlocks"`
-	EachBlocks       []EachBlock        `json:"EachBlocks"`
-	InputBindings    []InputBinding     `json:"InputBindings"`
-	AttrBindings     []AttrBinding      `json:"AttrBindings"`
-	AttrCondBindings []AttrCondBinding  `json:"AttrCondBindings"`
-	Components       []ComponentBinding `json:"Components"`
-	ComponentStore   *Store[Component]  `json:"-"` // For WASM to subscribe to navigation
+	TextBindings        []TextBinding        `json:"TextBindings"`
+	Events              []EventBinding       `json:"Events"`
+	IfBlocks            []IfBlock            `json:"IfBlocks"`
+	EachBlocks          []EachBlock          `json:"EachBlocks"`
+	InputBindings       []InputBinding       `json:"InputBindings"`
+	AttrBindings        []AttrBinding        `json:"AttrBindings"`
+	AttrCondBindings    []AttrCondBinding    `json:"AttrCondBindings"`
+	Components          []ComponentBinding   `json:"Components"`
+	ComponentStore      *Store[Component]    `json:"-"` // For WASM to subscribe to navigation
+	ComponentContainers []ComponentContainer `json:"ComponentContainers,omitempty"`
+}
+
+// ComponentContainer maps a route group ID to its DOM container
+type ComponentContainer struct {
+	ID          string `json:"ID"`          // Route group ID, e.g., "main"
+	ContainerID string `json:"ContainerID"` // DOM element ID, e.g., "content"
 }
 
 // =============================================================================
@@ -293,7 +303,7 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 			bindNode := &BindNode{StoreRef: v, IsHTML: false}
 			sb.WriteString(bindNode.ToHTML(ctx))
 		case *Store[Component]:
-			// Render current component with marker for WASM to update on navigation
+			// Render current component - WASM will update the parent container on navigation
 			comp := v.Get()
 			if comp != nil {
 				// Use ActiveChildName if specified (for per-route HTML generation),
@@ -302,7 +312,19 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 				if name == "" {
 					name = componentName(comp)
 				}
-				sb.WriteString(`<div id="component-root">`)
+
+				// Extract container ID from HTML rendered so far (last id="..." before this store)
+				containerID := extractLastID(sb.String())
+				fmt.Printf("[SSR DEBUG] extractLastID returned: %q\n", containerID)
+
+				// Record route group ID to container mapping
+				if containerID != "" && ctx.RouteGroupID != "" {
+					ctx.Bindings.ComponentContainers = append(ctx.Bindings.ComponentContainers, ComponentContainer{
+						ID:          ctx.RouteGroupID,
+						ContainerID: containerID,
+					})
+					fmt.Printf("[SSR DEBUG] Added ComponentContainer: ID=%q containerID=%q\n", ctx.RouteGroupID, containerID)
+				}
 
 				// Check if we have pre-rendered content for this child
 				if ctx.ChildrenContent != nil {
@@ -329,7 +351,6 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 					mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
 				}
 
-				sb.WriteString(`</div>`)
 				// Record component binding for WASM
 				ctx.Bindings.ComponentStore = v
 			}
@@ -1105,6 +1126,28 @@ func escapeAttr(s string) string {
 	return s
 }
 
+// extractLastID finds the last id="..." value in an HTML string.
+// Returns empty string if no id attribute found.
+func extractLastID(html string) string {
+	// Find all id="..." patterns and return the last one
+	lastID := ""
+	for i := 0; i < len(html); i++ {
+		// Look for id="
+		if i+4 < len(html) && html[i:i+4] == `id="` {
+			start := i + 4
+			end := start
+			for end < len(html) && html[end] != '"' {
+				end++
+			}
+			if end < len(html) {
+				lastID = html[start:end]
+			}
+			i = end
+		}
+	}
+	return lastID
+}
+
 // RenderResult contains all output from HTML rendering.
 type RenderResult struct {
 	HTML            string
@@ -1148,7 +1191,7 @@ func RenderHTMLWithChildren(root Node, childrenContent map[string]string, childr
 }
 
 // RenderHTMLWithChildContent renders HTML with a specific child's content for per-route HTML generation.
-func RenderHTMLWithChildContent(root Node, childName string, allContent map[string]string, allBindings map[string]*CollectedBindings) (string, *CollectedBindings) {
+func RenderHTMLWithChildContent(root Node, childName string, allContent map[string]string, allBindings map[string]*CollectedBindings, routeGroupID string) (string, *CollectedBindings) {
 	ctx := NewBuildContext()
 	// Only include the specific child's content
 	ctx.ChildrenContent = map[string]string{childName: allContent[childName]}
@@ -1157,6 +1200,8 @@ func RenderHTMLWithChildContent(root Node, childName string, allContent map[stri
 	}
 	// Set active child name so Store[Component] rendering knows which child to render
 	ctx.ActiveChildName = childName
+	// Set route group ID for component container binding
+	ctx.RouteGroupID = routeGroupID
 	html := nodeToHTML(root, ctx)
 	return html, ctx.Bindings
 }

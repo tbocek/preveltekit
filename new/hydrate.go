@@ -11,14 +11,9 @@ import (
 	"strings"
 )
 
-// Component is the interface that all declarative components must implement.
-type Component interface {
-	Render() Node
-}
-
 // HasRoutes is implemented by components that define routes.
 type HasRoutes interface {
-	Routes() []StaticRoute
+	Routes() []Route
 }
 
 // HasStyle is implemented by components that have CSS styles.
@@ -36,11 +31,6 @@ type HasOnMount interface {
 	OnMount()
 }
 
-// HasCurrentComponent is implemented by apps that have a CurrentComponent store for routing.
-type HasCurrentComponent interface {
-	GetCurrentComponent() *Store[Component]
-}
-
 // Hydrate is the main entry point for declarative components.
 // In SSR mode (native build), it generates HTML files and outputs bindings.
 func Hydrate(app Component) {
@@ -51,25 +41,11 @@ func Hydrate(app Component) {
 		oc.OnCreate()
 	}
 
-	// Auto-discover children from Routes() by calling handlers and reading CurrentComponent
+	// Discover children from routes with SSRPath
 	if hr, ok := app.(HasRoutes); ok {
-		if hcc, ok := app.(HasCurrentComponent); ok {
-			currentStore := hcc.GetCurrentComponent()
-			routes := hr.Routes()
-			for _, route := range routes {
-				if route.Handler != nil {
-					// Call handler to set CurrentComponent
-					route.Handler(nil)
-					// Read the component that was set
-					if comp := currentStore.Get(); comp != nil {
-						children[route.Path] = comp
-					}
-				}
-			}
-			// Reset CurrentComponent to the default route (first route, typically "/" or "/basics")
-			// so that SSR renders the correct initial component
-			if len(routes) > 0 && routes[0].Handler != nil {
-				routes[0].Handler(nil)
+		for _, route := range hr.Routes() {
+			if route.SSRPath != "" && route.Component != nil {
+				children[route.Path] = route.Component
 			}
 		}
 	}
@@ -158,9 +134,21 @@ func hydrateGenerateAll(app Component, children map[string]Component) {
 	}
 
 	// Get routes from app
-	var routes []StaticRoute
+	var routes []Route
 	if hr, ok := app.(HasRoutes); ok {
 		routes = hr.Routes()
+	}
+
+	// Call app's OnMount to register router IDs
+	if om, ok := app.(HasOnMount); ok {
+		om.OnMount()
+	}
+
+	// Get the registered router IDs
+	routerIDs := GetPendingRouterIDs()
+	routerID := ""
+	if len(routerIDs) > 0 {
+		routerID = routerIDs[0] // Use first registered ID for now
 	}
 
 	// Generate HTML file for each route
@@ -172,7 +160,7 @@ func hydrateGenerateAll(app Component, children map[string]Component) {
 		}
 
 		// Render app with this specific child's content
-		html, bindings := RenderHTMLWithChildContent(app.Render(), childName, childrenContent, childrenBindings)
+		html, bindings := RenderHTMLWithChildContent(app.Render(), childName, childrenContent, childrenBindings, routerID)
 
 		// Resolve app bindings
 		resolveBindings(bindings, appStoreMap, "component", app)
@@ -279,6 +267,17 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
+	// Merge component containers (deduplicate by ID)
+	seenContainer := make(map[string]bool)
+	for _, c := range dst.ComponentContainers {
+		seenContainer[c.ID] = true
+	}
+	for _, c := range src.ComponentContainers {
+		if !seenContainer[c.ID] {
+			dst.ComponentContainers = append(dst.ComponentContainers, c)
+			seenContainer[c.ID] = true
+		}
+	}
 }
 
 // buildStoreMap builds a map from store pointer addresses to field paths.

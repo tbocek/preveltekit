@@ -51,6 +51,8 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 		case "Components":
 			// Skip these - not needed for hydration yet
 			p.skipValue()
+		case "ComponentContainers":
+			b.ComponentContainers = p.parseComponentContainers()
 		default:
 			p.skipValue()
 		}
@@ -585,6 +587,65 @@ func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
 			}
 		}
 		result = append(result, eb)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseComponentContainers() []HydrateComponentContainer {
+	var result []HydrateComponentContainer
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		cc := HydrateComponentContainer{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "ID":
+				cc.ID = p.parseString()
+			case "ContainerID":
+				cc.ContainerID = p.parseString()
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, cc)
 
 		p.skipWS()
 		if !p.consume(',') {

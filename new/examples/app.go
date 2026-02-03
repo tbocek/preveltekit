@@ -4,7 +4,7 @@ import p "preveltekit"
 
 type App struct {
 	CurrentComponent *p.Store[p.Component]
-	routes           []p.StaticRoute
+	routes           []p.Route
 }
 
 func (a *App) OnCreate() {
@@ -22,35 +22,30 @@ func (a *App) OnCreate() {
 	// Set initial component
 	a.CurrentComponent = p.New[p.Component](basics)
 
-	// Build routes - framework discovers components by calling handlers
-	a.routes = []p.StaticRoute{
-		{Path: "/", HTMLFile: "index.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
-		{Path: "/basics", HTMLFile: "basics.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(basics) }},
-		{Path: "/components", HTMLFile: "components.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(components) }},
-		{Path: "/lists", HTMLFile: "lists.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(lists) }},
-		{Path: "/routing", HTMLFile: "routing.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(routing) }},
-		{Path: "/links", HTMLFile: "links.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(links) }},
-		{Path: "/fetch", HTMLFile: "fetch.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(fetch) }},
-		{Path: "/storage", HTMLFile: "storage.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(storage) }},
-		{Path: "/debounce", HTMLFile: "debounce.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(debounce) }},
-		{Path: "/bitcoin", HTMLFile: "bitcoin.html", Handler: func(params map[string]string) { a.CurrentComponent.Set(bitcoin) }},
+	// Build routes with explicit components
+	a.routes = []p.Route{
+		{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
+		{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
+		{Path: "/components", HTMLFile: "components.html", SSRPath: "/components", Component: components},
+		{Path: "/lists", HTMLFile: "lists.html", SSRPath: "/lists", Component: lists},
+		{Path: "/routing", HTMLFile: "routing.html", SSRPath: "/routing", Component: routing},
+		{Path: "/links", HTMLFile: "links.html", SSRPath: "/links", Component: links},
+		{Path: "/fetch", HTMLFile: "fetch.html", SSRPath: "/fetch", Component: fetch},
+		{Path: "/storage", HTMLFile: "storage.html", SSRPath: "/storage", Component: storage},
+		{Path: "/debounce", HTMLFile: "debounce.html", SSRPath: "/debounce", Component: debounce},
+		{Path: "/bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
 	}
 }
 
-func (a *App) GetCurrentComponent() *p.Store[p.Component] {
-	return a.CurrentComponent
-}
-
 func (a *App) OnMount() {
-	router := p.NewRouter()
-	router.RegisterRoutes(a.routes)
+	router := p.NewRouter(a.CurrentComponent, a.routes, "a unique id")
 	router.NotFound(func() {
 		a.CurrentComponent.Set(nil)
 	})
 	router.Start()
 }
 
-func (a *App) Routes() []p.StaticRoute {
+func (a *App) Routes() []p.Route {
 	return a.routes
 }
 

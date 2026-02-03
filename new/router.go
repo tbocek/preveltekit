@@ -6,43 +6,26 @@ import (
 	"syscall/js"
 )
 
-// Route defines a single route with path pattern and handler
-type Route struct {
-	Path    string
-	Handler func(params map[string]string)
-}
-
 // Router handles client-side routing
 type Router struct {
-	routes      []Route
-	notFound    func()
-	currentPath *Store[string]
-	beforeNav   func(from, to string) bool // return false to cancel navigation
-	linksSetup  bool                       // tracks if click listener is already registered
-	clickFn     js.Func                    // retained to prevent GC
-	popstateFn  js.Func                    // retained to prevent GC
+	componentStore *Store[Component]
+	routes         []Route
+	id             string
+	notFound       func()
+	currentPath    *Store[string]
+	beforeNav      func(from, to string) bool // return false to cancel navigation
+	linksSetup     bool                       // tracks if click listener is already registered
+	clickFn        js.Func                    // retained to prevent GC
+	popstateFn     js.Func                    // retained to prevent GC
 }
 
-// NewRouter creates a new router instance
-func NewRouter() *Router {
+// NewRouter creates a new router instance with a component store, routes, and ID
+func NewRouter(componentStore *Store[Component], routes []Route, id string) *Router {
 	return &Router{
-		currentPath: New(""),
-	}
-}
-
-// Handle registers a route handler for a path pattern
-// Supports :param for path parameters (e.g., "/user/:id")
-func (r *Router) Handle(path string, handler func(params map[string]string)) {
-	r.routes = append(r.routes, Route{Path: path, Handler: handler})
-}
-
-// RegisterRoutes registers multiple routes from StaticRoute definitions.
-// This allows using Routes() as single source of truth for both SSR and runtime.
-func (r *Router) RegisterRoutes(routes []StaticRoute) {
-	for _, route := range routes {
-		if route.Handler != nil {
-			r.routes = append(r.routes, Route{Path: route.Path, Handler: route.Handler})
-		}
+		componentStore: componentStore,
+		routes:         routes,
+		id:             id,
+		currentPath:    New(""),
 	}
 }
 
@@ -64,8 +47,21 @@ func (r *Router) CurrentPath() *Store[string] {
 
 // Start initializes the router and handles the current URL
 func (r *Router) Start() {
+	js.Global().Get("console").Call("log", "[DEBUG] Router.Start called")
+	js.Global().Get("console").Call("log", "[DEBUG] componentStore is nil:", r.componentStore == nil)
+	js.Global().Get("console").Call("log", "[DEBUG] routes count:", len(r.routes))
+
+	// Bind component store to DOM container for reactive updates
+	containerID := componentContainers[r.id]
+	if containerID == "" {
+		containerID = "component-root" // fallback
+	}
+	js.Global().Get("console").Call("log", "[DEBUG] binding router", r.id, "to container:", containerID)
+	bindComponentStore(r.componentStore, containerID)
+
 	// Handle initial route
 	path := js.Global().Get("location").Get("pathname").String()
+	js.Global().Get("console").Call("log", "[DEBUG] initial path:", path)
 	r.currentPath.Set(path)
 	r.handleRoute(path)
 
@@ -186,6 +182,8 @@ func (r *Router) Replace(path string) {
 }
 
 func (r *Router) handleRoute(path string) {
+	js.Global().Get("console").Call("log", "[DEBUG] handleRoute called with path:", path)
+
 	// Normalize path
 	if path == "" {
 		path = "/"
@@ -198,21 +196,27 @@ func (r *Router) handleRoute(path string) {
 
 	// Find matching route (most specific first)
 	var bestMatch *Route
-	var bestParams map[string]string
 	bestSpecificity := -1
 
 	for i := range r.routes {
 		route := &r.routes[i]
-		params, specificity, ok := matchRoute(route.Path, path)
+		_, specificity, ok := matchRoute(route.Path, path)
+		js.Global().Get("console").Call("log", "[DEBUG] checking route:", route.Path, "specificity:", specificity, "ok:", ok)
 		if ok && specificity > bestSpecificity {
 			bestMatch = route
-			bestParams = params
 			bestSpecificity = specificity
 		}
 	}
 
+	js.Global().Get("console").Call("log", "[DEBUG] bestMatch found:", bestMatch != nil)
 	if bestMatch != nil {
-		bestMatch.Handler(bestParams)
+		js.Global().Get("console").Call("log", "[DEBUG] bestMatch.Path:", bestMatch.Path)
+		js.Global().Get("console").Call("log", "[DEBUG] bestMatch.Component is nil:", bestMatch.Component == nil)
+	}
+
+	if bestMatch != nil && bestMatch.Component != nil {
+		js.Global().Get("console").Call("log", "[DEBUG] setting componentStore")
+		r.componentStore.Set(bestMatch.Component)
 	} else if r.notFound != nil {
 		r.notFound()
 	}

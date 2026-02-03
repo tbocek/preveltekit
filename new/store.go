@@ -1,12 +1,17 @@
 // Package reactive provides generic reactive stores for Go WebAssembly applications.
 package preveltekit
 
-// StaticRoute defines a route for both build-time pre-rendering and runtime routing.
-// This is the single source of truth for your application's routes.
-type StaticRoute struct {
-	Path     string                         // URL path (e.g., "/doc")
-	HTMLFile string                         // Output filename for pre-rendering (e.g., "doc.html")
-	Handler  func(params map[string]string) // Route handler for runtime navigation
+// Component is the interface that all declarative components must implement.
+type Component interface {
+	Render() Node
+}
+
+// Route defines a single route for both build-time pre-rendering and runtime routing.
+type Route struct {
+	Path      string    // URL path pattern (e.g., "/user/:id")
+	HTMLFile  string    // Output filename for pre-rendering (e.g., "user.html")
+	SSRPath   string    // URL to pre-render (empty = skip SSR)
+	Component Component // Component to render for this route
 }
 
 // Store is a generic reactive container that calls callbacks on mutation

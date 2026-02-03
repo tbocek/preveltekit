@@ -13,6 +13,10 @@ var setupIfBlocks = make(map[string]bool)
 // Track which each-blocks have been set up to avoid duplicates
 var setupEachBlocks = make(map[string]bool)
 
+// componentContainers maps store IDs to their DOM container IDs.
+// Set during hydration, used by the router to bind component store updates.
+var componentContainers = make(map[string]string)
+
 // trimPrefix removes prefix from s if present
 func trimPrefix(s, prefix string) string {
 	if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
@@ -41,14 +45,9 @@ func containsChar(s string, c byte) bool {
 	return false
 }
 
-// Component is the interface that all declarative components must implement.
-type Component interface {
-	Render() Node
-}
-
 // HasRoutes is implemented by components that define routes.
 type HasRoutes interface {
-	Routes() []StaticRoute
+	Routes() []Route
 }
 
 // HasStyle is implemented by components that have CSS styles.
@@ -66,11 +65,6 @@ type HasOnMount interface {
 	OnMount()
 }
 
-// HasCurrentComponent is implemented by apps that have a CurrentComponent store for routing.
-type HasCurrentComponent interface {
-	GetCurrentComponent() *Store[Component]
-}
-
 // Hydrate sets up DOM bindings for reactivity.
 // The bindings JSON is passed via a global variable set by the CLI-generated code.
 func Hydrate(app Component) {
@@ -81,27 +75,11 @@ func Hydrate(app Component) {
 		oc.OnCreate()
 	}
 
-	// Auto-discover children from Routes() by calling handlers and reading CurrentComponent
+	// Discover children from routes
 	if hr, ok := app.(HasRoutes); ok {
-		if hcc, ok := app.(HasCurrentComponent); ok {
-			currentStore := hcc.GetCurrentComponent()
-			if currentStore != nil {
-				// Save the original component before discovery loop
-				originalComp := currentStore.Get()
-				for _, route := range hr.Routes() {
-					if route.Handler != nil {
-						// Call handler to set CurrentComponent
-						route.Handler(nil)
-						// Read the component that was set
-						if comp := currentStore.Get(); comp != nil {
-							children[route.Path] = comp
-						}
-					}
-				}
-				// Restore original component after discovery
-				if originalComp != nil {
-					currentStore.Set(originalComp)
-				}
+		for _, route := range hr.Routes() {
+			if route.Component != nil {
+				children[route.Path] = route.Component
 			}
 		}
 	}
@@ -127,6 +105,12 @@ func hydrateWASM(app Component, children map[string]Component) {
 		runLifecycle(app, children)
 		select {}
 		return
+	}
+
+	// Store component containers for router to use
+	for _, c := range bindings.ComponentContainers {
+		componentContainers[c.ID] = c.ContainerID
+		js.Global().Get("console").Call("log", "[DEBUG] componentContainer:", c.ID, "->", c.ContainerID)
 	}
 
 	// Build component map: "component" -> app, "basics" -> child, etc.
@@ -186,22 +170,6 @@ func hydrateWASM(app Component, children map[string]Component) {
 	cleanup := &Cleanup{}
 	applyBindings(bindings, components, cleanup)
 
-	// Determine the pre-rendered component from the current URL path
-	// This is more reliable than reading from CurrentComponent store, which may have
-	// been modified during route discovery
-	var initialPrerenderedName string
-	currentPath := js.Global().Get("location").Get("pathname").String()
-
-	// Find the component for this path from children
-	if comp, ok := children[currentPath]; ok && comp != nil {
-		initialPrerenderedName = componentNameWasm(comp)
-	} else if currentPath == "/" || currentPath == "" {
-		// Root path - check for "/" in children
-		if comp, ok := children["/"]; ok && comp != nil {
-			initialPrerenderedName = componentNameWasm(comp)
-		}
-	}
-
 	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
 	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
 	for _, child := range children {
@@ -210,13 +178,8 @@ func hydrateWASM(app Component, children map[string]Component) {
 		}
 	}
 
-	// Set up component store binding for SPA navigation
-	if hcc, ok := app.(HasCurrentComponent); ok {
-		bindComponentStoreWithInitial(hcc.GetCurrentComponent(), "component-root", initialPrerenderedName)
-	} else {
-	}
-
 	// NOW run app's OnMount which starts the router
+	// Router will handle component store binding for SPA navigation
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
 	}
@@ -530,16 +493,19 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 // This enables SPA navigation where clicking a link updates the component store
 // and WASM re-renders the new component into the container.
 func bindComponentStore(store *Store[Component], containerID string) {
+	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStore called, containerID:", containerID)
 	initialCompName := ""
 	if initialComp := store.Get(); initialComp != nil {
 		initialCompName = componentNameWasm(initialComp)
 	}
+	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStore initialCompName:", initialCompName)
 	bindComponentStoreWithInitial(store, containerID, initialCompName)
 }
 
 // bindComponentStoreWithInitial is like bindComponentStore but takes the pre-rendered component name.
 func bindComponentStoreWithInitial(store *Store[Component], containerID string, initialPrerenderedName string) {
 	if store == nil {
+		js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: store is nil")
 		return
 	}
 
@@ -549,21 +515,26 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 	// Get the container element
 	container := GetEl(containerID)
 	if !ok(container) {
+		js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: container NOT FOUND:", containerID)
 		return
 	}
+	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: container found, registering OnChange")
 
 	// Track if this is the first change
 	firstChange := true
 
 	// Subscribe to component changes
 	store.OnChange(func(comp Component) {
+		js.Global().Get("console").Call("log", "[DEBUG] componentStore.OnChange triggered")
 		// On first change, only skip if we're staying on the same component that was pre-rendered
 		if firstChange {
 			firstChange = false
 			if comp != nil && componentNameWasm(comp) == initialPrerenderedName {
+				js.Global().Get("console").Call("log", "[DEBUG] skipping first change, same component:", initialPrerenderedName)
 				return
 			}
 		}
+		js.Global().Get("console").Call("log", "[DEBUG] rendering new component")
 		if comp == nil {
 			container.Set("innerHTML", "")
 			currentCleanup.Release()
@@ -600,6 +571,8 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.
 func applyBindings(bindings *HydrateBindings, components map[string]Component, cleanup *Cleanup) {
+	js.Global().Get("console").Call("log", "[DEBUG] applyBindings called")
+	js.Global().Get("console").Call("log", "[DEBUG] bindings.Events count:", len(bindings.Events))
 
 	// Text bindings
 	for _, tb := range bindings.TextBindings {
@@ -1130,13 +1103,20 @@ func floatToStr(f float64) string {
 
 // HydrateBindings is the JSON representation of bindings for WASM.
 type HydrateBindings struct {
-	TextBindings     []HydrateTextBinding     `json:"TextBindings"`
-	Events           []HydrateEvent           `json:"Events"`
-	IfBlocks         []HydrateIfBlock         `json:"IfBlocks"`
-	EachBlocks       []HydrateEachBlock       `json:"EachBlocks"`
-	InputBindings    []HydrateInputBinding    `json:"InputBindings"`
-	AttrBindings     []HydrateAttrBinding     `json:"AttrBindings"`
-	AttrCondBindings []HydrateAttrCondBinding `json:"AttrCondBindings"`
+	TextBindings        []HydrateTextBinding        `json:"TextBindings"`
+	Events              []HydrateEvent              `json:"Events"`
+	IfBlocks            []HydrateIfBlock            `json:"IfBlocks"`
+	EachBlocks          []HydrateEachBlock          `json:"EachBlocks"`
+	InputBindings       []HydrateInputBinding       `json:"InputBindings"`
+	AttrBindings        []HydrateAttrBinding        `json:"AttrBindings"`
+	AttrCondBindings    []HydrateAttrCondBinding    `json:"AttrCondBindings"`
+	ComponentContainers []HydrateComponentContainer `json:"ComponentContainers,omitempty"`
+}
+
+// HydrateComponentContainer maps a route group ID to its DOM container ID
+type HydrateComponentContainer struct {
+	ID          string `json:"ID"`
+	ContainerID string `json:"ContainerID"`
 }
 
 type HydrateTextBinding struct {
