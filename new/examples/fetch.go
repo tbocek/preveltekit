@@ -26,15 +26,9 @@ type Fetch struct {
 	RawData *p.Store[string]
 }
 
-func (f *Fetch) OnMount() {
-	if p.IsBuildTime {
-		f.Status.Set("ready")
-		f.RawData.Set("")
-		return
-	}
-
-	f.Status.Set("ready")
-	f.RawData.Set("")
+func (f *Fetch) OnCreate() {
+	f.Status = p.New("ready")
+	f.RawData = p.New("")
 }
 
 func (f *Fetch) FetchTodo() {

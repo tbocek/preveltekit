@@ -15,13 +15,16 @@ type Debounce struct {
 	throttleClick   func()
 }
 
+func (d *Debounce) OnCreate() {
+	d.SearchInput = p.New("")
+	d.SearchResult = p.New("")
+	d.SearchCount = p.New(0)
+	d.ClickCount = p.New(0)
+	d.ThrottleCount = p.New(0)
+	d.Status = p.New("Type to search...")
+}
+
 func (d *Debounce) OnMount() {
-	d.SearchInput.Set("")
-	d.SearchResult.Set("")
-	d.SearchCount.Set(0)
-	d.ClickCount.Set(0)
-	d.ThrottleCount.Set(0)
-	d.Status.Set("Type to search...")
 
 	d.doSearch, d.cleanupDebounce = p.Debounce(300, func() {
 		query := d.SearchInput.Get()

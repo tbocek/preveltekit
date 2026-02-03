@@ -11,12 +11,12 @@ type Components struct {
 	AlertMessage *p.Store[string]
 }
 
-func (c *Components) OnMount() {
-	c.Message.Set("Hello from parent!")
-	c.ClickCount.Set(0)
-	c.CardTitle.Set("Dynamic Card")
-	c.AlertType.Set("info")
-	c.AlertMessage.Set("This is an alert message")
+func (c *Components) OnCreate() {
+	c.Message = p.New("Hello from parent!")
+	c.ClickCount = p.New(0)
+	c.CardTitle = p.New("Dynamic Card")
+	c.AlertType = p.New("info")
+	c.AlertMessage = p.New("This is an alert message")
 }
 
 func (c *Components) HandleButtonClick() {

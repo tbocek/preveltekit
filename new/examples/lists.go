@@ -3,17 +3,14 @@ package main
 import p "preveltekit"
 
 type Lists struct {
-	Items     *p.List[string]
-	NewItem   *p.Store[string]
-	ItemCount *p.Store[int]
+	Items   *p.List[string]
+	NewItem *p.Store[string]
 }
 
-func (l *Lists) OnMount() {
-	if l.Items.Len() == 0 {
-		l.Items.Set([]string{"Apple", "Banana", "Cherry"})
-		l.ItemCount.Set(3)
-	}
-	l.NewItem.Set("")
+func (l *Lists) OnCreate() {
+	l.Items = p.NewList[string]()
+	l.Items.Set([]string{"Apple", "Banana", "Cherry"})
+	l.NewItem = p.New("")
 }
 
 func (l *Lists) AddItem() {
@@ -23,7 +20,6 @@ func (l *Lists) AddItem() {
 	}
 	l.Items.Append(item)
 	l.NewItem.Set("")
-	l.updateCount()
 }
 
 func (l *Lists) PrependItem() {
@@ -34,7 +30,6 @@ func (l *Lists) PrependItem() {
 	items := l.Items.Get()
 	l.Items.Set(append([]string{item}, items...))
 	l.NewItem.Set("")
-	l.updateCount()
 }
 
 func (l *Lists) InsertMiddle() {
@@ -50,49 +45,38 @@ func (l *Lists) InsertMiddle() {
 	newItems = append(newItems, items[mid:]...)
 	l.Items.Set(newItems)
 	l.NewItem.Set("")
-	l.updateCount()
 }
 
 func (l *Lists) RemoveFirst() {
-	if l.Items.Len() > 0 {
+	if l.Items.Len().Get() > 0 {
 		l.Items.RemoveAt(0)
-		l.updateCount()
 	}
 }
 
 func (l *Lists) RemoveLast() {
-	length := l.Items.Len()
+	length := l.Items.Len().Get()
 	if length > 0 {
 		l.Items.RemoveAt(length - 1)
-		l.updateCount()
 	}
 }
 
 func (l *Lists) RemoveMiddle() {
-	length := l.Items.Len()
+	length := l.Items.Len().Get()
 	if length > 0 {
 		l.Items.RemoveAt(length / 2)
-		l.updateCount()
 	}
 }
 
 func (l *Lists) ClearAll() {
 	l.Items.Clear()
-	l.updateCount()
 }
 
 func (l *Lists) LoadFruits() {
 	l.Items.Set([]string{"Mango", "Pineapple", "Papaya", "Guava"})
-	l.updateCount()
 }
 
 func (l *Lists) LoadNumbers() {
 	l.Items.Set([]string{"One", "Two", "Three", "Four", "Five"})
-	l.updateCount()
-}
-
-func (l *Lists) updateCount() {
-	l.ItemCount.Set(l.Items.Len())
 }
 
 func (l *Lists) Render() p.Node {
@@ -101,7 +85,7 @@ func (l *Lists) Render() p.Node {
 
 		<section>
 			<h2>List Operations</h2>
-			<p>Items: <strong>`, p.Bind(l.ItemCount), `</strong></p>
+			<p>Items: <strong>`, l.Items.Len(), `</strong></p>
 
 			<div class="input-row">
 				`, p.BindValue(`<input type="text" placeholder="New item name">`, l.NewItem), `
@@ -130,7 +114,7 @@ func (l *Lists) Render() p.Node {
 
 			<div class="list-container">
 				<h3>Current Items</h3>`,
-		p.If(l.ItemCount.Gt(0),
+		p.If(l.Items.Len().Gt(0),
 			p.Html(`<ul>`,
 				p.Each(l.Items, func(item string, i int) p.Node {
 					return p.Html(`<li><span class="index">`, itoa(i), `</span> `, item, `</li>`)

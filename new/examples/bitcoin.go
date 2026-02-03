@@ -21,10 +21,15 @@ type Bitcoin struct {
 }
 
 func (b *Bitcoin) OnCreate() {
+	b.Price = p.New("")
+	b.Symbol = p.New("")
+	b.UpdateTime = p.New("")
+	b.Loading = p.New(true)
+	b.Error = p.New("")
+}
+
+func (b *Bitcoin) OnMount() {
 	if p.IsBuildTime {
-		// During SSR, show loading state - the actual fetch happens in WASM
-		b.Loading.Set(true)
-		b.Error.Set("")
 		return
 	}
 
@@ -33,9 +38,6 @@ func (b *Bitcoin) OnCreate() {
 	b.stopRefresh = p.SetInterval(60000, func() {
 		b.FetchPrice()
 	})
-}
-
-func (b *Bitcoin) OnMount() {
 }
 
 func (b *Bitcoin) OnDestroy() {

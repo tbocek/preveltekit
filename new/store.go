@@ -75,6 +75,7 @@ type Edit[T any] struct {
 // List is a reactive slice with methods that trigger updates
 type List[T comparable] struct {
 	items    []T
+	lenStore *Store[int] // cached length store for reactive conditions
 	onEdit   []func(Edit[T])
 	onRender []func([]T) // for initial render only
 	onChange []func([]T) // called on any change
@@ -94,9 +95,16 @@ func (l *List[T]) Get() []T {
 	return cp
 }
 
-// Len returns the length
-func (l *List[T]) Len() int {
-	return len(l.items)
+// Len returns a reactive store tracking the list length.
+// The store auto-updates when the list changes.
+func (l *List[T]) Len() *Store[int] {
+	if l.lenStore == nil {
+		l.lenStore = New(len(l.items))
+		l.OnChange(func(_ []T) {
+			l.lenStore.Set(len(l.items))
+		})
+	}
+	return l.lenStore
 }
 
 // At returns item at index

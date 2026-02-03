@@ -76,10 +76,7 @@ type HasCurrentComponent interface {
 func Hydrate(app Component) {
 	children := make(map[string]Component)
 
-	// Initialize app stores first
-	initStores(app)
-
-	// Call OnCreate to let app initialize its children
+	// Call OnCreate to let app initialize its stores and children
 	if oc, ok := app.(HasOnCreate); ok {
 		oc.OnCreate()
 	}
@@ -234,11 +231,7 @@ func runOnCreate(app Component, children map[string]Component) {
 	if hs, ok := app.(HasStyle); ok {
 		InjectStyle("app", hs.Style())
 	}
-	// Initialize stores for all children first
-	for _, child := range children {
-		initStores(child)
-	}
-	// Then call OnCreate
+	// Call OnCreate for all children
 	for path, child := range children {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
@@ -580,7 +573,7 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 		// Get component name for prefix
 		name := componentNameWasm(comp)
 
-		// NOTE: Do NOT call initStores/OnCreate/OnMount here!
+		// NOTE: Do NOT call OnCreate/OnMount here!
 		// These were already called during initial hydration (runOnCreate/runOnMount).
 		// The component stores already have their proper values.
 		// We just need to re-render with current state.
@@ -941,95 +934,6 @@ func isStore(v any) bool {
 		return true
 	}
 	return false
-}
-
-// initStores initializes all nil store fields in a component with default values.
-func initStores(comp Component) {
-	rv := reflect.ValueOf(comp).Elem()
-	rt := rv.Type()
-
-	for i := 0; i < rt.NumField(); i++ {
-		f := rv.Field(i)
-		ft := rt.Field(i).Type
-
-		// Check if field is a nil pointer to a store type
-		if f.Kind() == reflect.Ptr && f.IsNil() && f.CanSet() {
-			// Get the element type to check the actual store type
-			elemType := ft.Elem()
-			elemName := elemType.Name()
-			pkgPath := elemType.PkgPath()
-
-			// Check if it's from preveltekit package
-			if pkgPath != "preveltekit" {
-				continue
-			}
-
-			switch elemName {
-			case "LocalStore":
-				f.Set(reflect.ValueOf(&LocalStore{Store: New("")}))
-			case "Store":
-				// Need to determine the type parameter - check the field's type
-				// Since we can't easily get generic params, use the Elem().Field approach
-				// or just try to create based on common types
-				// For now, create a Store[string] as default and let OnCreate override
-				// Actually, we need to check the actual generic type
-				// Use reflection to check the type parameter
-				initGenericStore(f, ft)
-			case "List":
-				initGenericList(f, ft)
-			}
-		}
-	}
-}
-
-// initGenericStore initializes a generic Store field based on its type parameter.
-func initGenericStore(f reflect.Value, ft reflect.Type) {
-	// Create a zero value of the pointer type and check what methods it has
-	// This is tricky with generics - we need to use type assertions at runtime
-
-	// Get the full type string which includes generic params in some cases
-	// For WASM, the type shows as *preveltekit.Store without params
-	// We need to infer from the field usage or use a different approach
-
-	// Try to create each type and see which one is assignable
-	stringStore := New("")
-	if reflect.TypeOf(stringStore).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(stringStore))
-		return
-	}
-
-	intStore := New(0)
-	if reflect.TypeOf(intStore).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(intStore))
-		return
-	}
-
-	boolStore := New(false)
-	if reflect.TypeOf(boolStore).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(boolStore))
-		return
-	}
-
-	float64Store := New(0.0)
-	if reflect.TypeOf(float64Store).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(float64Store))
-		return
-	}
-}
-
-// initGenericList initializes a generic List field based on its type parameter.
-func initGenericList(f reflect.Value, ft reflect.Type) {
-	stringList := NewList[string]()
-	if reflect.TypeOf(stringList).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(stringList))
-		return
-	}
-
-	intList := NewList[int]()
-	if reflect.TypeOf(intList).AssignableTo(ft) {
-		f.Set(reflect.ValueOf(intList))
-		return
-	}
 }
 
 // replaceAll replaces all occurrences of old with new in s

@@ -46,10 +46,7 @@ type HasCurrentComponent interface {
 func Hydrate(app Component) {
 	children := make(map[string]Component)
 
-	// Initialize app stores first
-	initStores(app)
-
-	// Call OnCreate to let app initialize its children
+	// Call OnCreate to let app initialize its stores and children
 	if oc, ok := app.(HasOnCreate); ok {
 		oc.OnCreate()
 	}
@@ -95,11 +92,8 @@ func hydrateGenerateAll(app Component, children map[string]Component) {
 		}
 	}
 
-	// Initialize stores and call OnCreate/OnMount for unique children only
+	// Call OnCreate/OnMount for unique children
 	// (app was already initialized in Hydrate before Routes() was called)
-	for _, child := range uniqueChildren {
-		initStores(child)
-	}
 	for _, child := range uniqueChildren {
 		if oc, ok := child.(HasOnCreate); ok {
 			oc.OnCreate()
@@ -309,38 +303,6 @@ func componentVarName(comp Component) string {
 		return "comp"
 	}
 	return strings.ToLower(t[:1]) + t[1:]
-}
-
-// initStores initializes all nil store fields in a component with default values.
-func initStores(comp Component) {
-	rv := reflect.ValueOf(comp).Elem()
-	rt := rv.Type()
-
-	for i := 0; i < rt.NumField(); i++ {
-		f := rv.Field(i)
-		ft := rt.Field(i).Type
-
-		// Check if field is a nil pointer to a store type
-		if f.Kind() == reflect.Ptr && f.IsNil() && f.CanSet() {
-			ftStr := ft.String()
-			switch {
-			case ftStr == "*preveltekit.LocalStore":
-				f.Set(reflect.ValueOf(&LocalStore{Store: New("")}))
-			case strings.HasPrefix(ftStr, "*preveltekit.Store[string]"):
-				f.Set(reflect.ValueOf(New("")))
-			case strings.HasPrefix(ftStr, "*preveltekit.Store[int]"):
-				f.Set(reflect.ValueOf(New(0)))
-			case strings.HasPrefix(ftStr, "*preveltekit.Store[bool]"):
-				f.Set(reflect.ValueOf(New(false)))
-			case strings.HasPrefix(ftStr, "*preveltekit.Store[float64]"):
-				f.Set(reflect.ValueOf(New(0.0)))
-			case strings.HasPrefix(ftStr, "*preveltekit.List[string]"):
-				f.Set(reflect.ValueOf(NewList[string]()))
-			case strings.HasPrefix(ftStr, "*preveltekit.List[int]"):
-				f.Set(reflect.ValueOf(NewList[int]()))
-			}
-		}
-	}
 }
 
 // resolveBindings resolves store references in bindings to field paths.

@@ -8,19 +8,17 @@ type Storage struct {
 	Status *p.Store[string]
 }
 
-func (s *Storage) OnMount() {
-	// Theme is automatically loaded and saved via LocalStore
-	// Set default if no saved value exists
-	if s.Theme.Get() == "" {
-		s.Theme.Set("light")
-	}
+func (s *Storage) OnCreate() {
+	s.Theme = p.NewLocalStore("theme", "light")
+	s.Notes = p.New("")
+	s.Status = p.New("Ready")
+}
 
+func (s *Storage) OnMount() {
 	// Load saved notes (manual persistence example)
 	if saved := p.GetStorage("notes"); saved != "" {
 		s.Notes.Set(saved)
 	}
-
-	s.Status.Set("Ready")
 }
 
 func (s *Storage) SetLight() {

@@ -11,13 +11,13 @@ type Basics struct {
 	Score    *p.Store[int]
 }
 
-func (b *Basics) OnMount() {
-	b.Count.Set(0)
-	b.Name.Set("")
-	b.Message.Set("Fill out the form above")
-	b.DarkMode.Set(false)
-	b.Agreed.Set(false)
-	b.Score.Set(75)
+func (b *Basics) OnCreate() {
+	b.Count = p.New(0)
+	b.Name = p.New("")
+	b.Message = p.New("Fill out the form above")
+	b.DarkMode = p.New(false)
+	b.Agreed = p.New(false)
+	b.Score = p.New(75)
 }
 
 func (b *Basics) Increment() {

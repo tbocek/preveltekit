@@ -364,7 +364,6 @@ func renderComponentNodeWasm(c *ComponentNode, ctx *WasmRenderContext) string {
 	childCtx := NewWasmRenderContext(fullCompPrefix)
 	childCtx.Components["component"] = comp
 
-	initStores(comp)
 	if oc, ok := comp.(HasOnCreate); ok {
 		oc.OnCreate()
 	}

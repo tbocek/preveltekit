@@ -8,9 +8,9 @@ type Routing struct {
 	CurrentStep *p.Store[int]
 }
 
-func (r *Routing) OnMount() {
-	r.CurrentTab.Set("home")
-	r.CurrentStep.Set(1)
+func (r *Routing) OnCreate() {
+	r.CurrentTab = p.New("home")
+	r.CurrentStep = p.New(1)
 }
 
 func (r *Routing) GoToTab(tab string) {

@@ -7,8 +7,8 @@ type Links struct {
 	LastNavigation *p.Store[string]
 }
 
-func (l *Links) OnMount() {
-	l.LastNavigation.Set("")
+func (l *Links) OnCreate() {
+	l.LastNavigation = p.New("")
 }
 
 func (l *Links) Render() p.Node {
