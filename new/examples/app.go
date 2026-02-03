@@ -7,34 +7,35 @@ type App struct {
 	routes           []p.Route
 }
 
-func (a *App) OnCreate() {
+func (a *App) New() p.Component {
 	// Initialize child components
-	basics := &Basics{}
-	components := &Components{}
-	lists := &Lists{}
-	routing := &Routing{}
-	links := &Links{}
-	fetch := &Fetch{}
-	storage := &Storage{}
-	debounce := &Debounce{}
-	bitcoin := &Bitcoin{}
+	basics := (&Basics{}).New()
+	components := (&Components{}).New()
+	lists := (&Lists{}).New()
+	routing := (&Routing{}).New()
+	links := (&Links{}).New()
+	fetch := (&Fetch{}).New()
+	storage := (&Storage{}).New()
+	debounce := (&Debounce{}).New()
+	bitcoin := (&Bitcoin{}).New()
 
-	// Set initial component
-	a.CurrentComponent = p.New[p.Component](basics)
-
-	// Build routes with explicit components
-	a.routes = []p.Route{
-		{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
-		{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
-		{Path: "/components", HTMLFile: "components.html", SSRPath: "/components", Component: components},
-		{Path: "/lists", HTMLFile: "lists.html", SSRPath: "/lists", Component: lists},
-		{Path: "/routing", HTMLFile: "routing.html", SSRPath: "/routing", Component: routing},
-		{Path: "/links", HTMLFile: "links.html", SSRPath: "/links", Component: links},
-		{Path: "/fetch", HTMLFile: "fetch.html", SSRPath: "/fetch", Component: fetch},
-		{Path: "/storage", HTMLFile: "storage.html", SSRPath: "/storage", Component: storage},
-		{Path: "/debounce", HTMLFile: "debounce.html", SSRPath: "/debounce", Component: debounce},
-		{Path: "/bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
+	// Create fresh app with initialized stores
+	app := &App{
+		CurrentComponent: p.New("app.CurrentComponent", basics),
+		routes: []p.Route{
+			{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
+			{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
+			{Path: "/components", HTMLFile: "components.html", SSRPath: "/components", Component: components},
+			{Path: "/lists", HTMLFile: "lists.html", SSRPath: "/lists", Component: lists},
+			{Path: "/routing", HTMLFile: "routing.html", SSRPath: "/routing", Component: routing},
+			{Path: "/links", HTMLFile: "links.html", SSRPath: "/links", Component: links},
+			{Path: "/fetch", HTMLFile: "fetch.html", SSRPath: "/fetch", Component: fetch},
+			{Path: "/storage", HTMLFile: "storage.html", SSRPath: "/storage", Component: storage},
+			{Path: "/debounce", HTMLFile: "debounce.html", SSRPath: "/debounce", Component: debounce},
+			{Path: "/bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
+		},
 	}
+	return app
 }
 
 func (a *App) OnMount() {

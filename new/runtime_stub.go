@@ -5,17 +5,12 @@ package preveltekit
 // Stub implementations for non-WASM builds (SSR/pre-rendering)
 // These are no-ops since DOM manipulation only happens in the browser
 
-type jsValue struct{}
+// Document is a no-op stub for SSR (uses jsValue from js_stub.go)
+var Document = &jsValue{}
 
-func (jsValue) IsUndefined() bool { return true }
-func (jsValue) IsNull() bool      { return true }
-
-// Document is a no-op stub for SSR
-var Document = jsValue{}
-
-func InjectStyle(name, css string)      {}
-func GetEl(id string) jsValue           { return jsValue{} }
-func FindComment(marker string) jsValue { return jsValue{} }
+func InjectStyle(name, css string)       {}
+func GetEl(id string) *jsValue           { return &jsValue{} }
+func FindComment(marker string) *jsValue { return &jsValue{} }
 
 // Cleanup holds js.Func references for batch release (stub for SSR).
 type Cleanup struct{}
@@ -30,7 +25,7 @@ func (c *Cleanup) Release() {}
 type jsFunc struct{}
 
 // On is a no-op for SSR, returns zero-value jsFunc.
-func On(el jsValue, event string, handler func()) jsFunc { return jsFunc{} }
+func On(el *jsValue, event string, handler func()) jsFunc { return jsFunc{} }
 
 // Bindable is implemented by types that can be bound to DOM elements.
 type Bindable[T any] interface {
@@ -44,14 +39,14 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-func BindText[T any](marker string, store Bindable[T])                         {}
-func BindHTML[T any](marker string, store Bindable[T])                         {}
-func BindInput(id string, store Settable[string]) jsFunc                       { return jsFunc{} }
-func BindInputInt(id string, store Settable[int]) jsFunc                       { return jsFunc{} }
-func BindCheckbox(id string, store Settable[bool]) jsFunc                      { return jsFunc{} }
-func ToggleClass(el jsValue, class string, add bool)                           {}
-func ReplaceContent(anchorMarker string, current jsValue, html string) jsValue { return jsValue{} }
-func FindExistingIfContent(anchorMarker string) jsValue                        { return jsValue{} }
+func BindText[T any](marker string, store Bindable[T])                           {}
+func BindHTML[T any](marker string, store Bindable[T])                           {}
+func BindInput(id string, store Settable[string]) jsFunc                         { return jsFunc{} }
+func BindInputInt(id string, store Settable[int]) jsFunc                         { return jsFunc{} }
+func BindCheckbox(id string, store Settable[bool]) jsFunc                        { return jsFunc{} }
+func ToggleClass(el *jsValue, class string, add bool)                            {}
+func ReplaceContent(anchorMarker string, current *jsValue, html string) *jsValue { return &jsValue{} }
+func FindExistingIfContent(anchorMarker string) *jsValue                         { return &jsValue{} }
 
 // Batch binding types and functions (stubs for SSR)
 type Evt struct {

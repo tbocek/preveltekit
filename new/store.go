@@ -14,10 +14,37 @@ type Route struct {
 	Component Component // Component to render for this route
 }
 
+// HasID is implemented by stores that have a user-defined ID.
+type HasID interface {
+	ID() string
+}
+
 // Store is a generic reactive container that calls callbacks on mutation
 type Store[T any] struct {
+	id        string
 	value     T
 	callbacks []func(T)
+}
+
+// storeRegistry holds all registered stores by ID for hydration lookup
+var storeRegistry = make(map[string]any)
+
+// handlerRegistry holds all registered event handlers by ID for hydration lookup
+var handlerRegistry = make(map[string]func())
+
+// GetStore looks up a store by ID from the global registry
+func GetStore(id string) any {
+	return storeRegistry[id]
+}
+
+// GetHandler looks up a handler by ID from the global registry
+func GetHandler(id string) func() {
+	return handlerRegistry[id]
+}
+
+// RegisterHandler registers an event handler with a unique ID
+func RegisterHandler(id string, handler func()) {
+	handlerRegistry[id] = handler
 }
 
 // LocalStore is a Store[string] that automatically syncs with localStorage.
@@ -30,9 +57,24 @@ type LocalStore struct {
 	*Store[string]
 }
 
-// New creates a reactive store with an initial value
-func New[T any](initial T) *Store[T] {
+// New creates a reactive store with a unique ID and initial value.
+// The ID is used as the comment marker in HTML for hydration.
+// Example: p.New("myapp.Count", 0) creates <!--myapp.Count--> in HTML
+func New[T any](id string, initial T) *Store[T] {
+	s := &Store[T]{id: id, value: initial}
+	storeRegistry[id] = s
+	return s
+}
+
+// newInternal creates a store without registering it.
+// Used for internal stores like List.Len() that don't need DOM bindings.
+func newInternal[T any](initial T) *Store[T] {
 	return &Store[T]{value: initial}
+}
+
+// ID returns the store's unique identifier
+func (s *Store[T]) ID() string {
+	return s.id
 }
 
 // Get returns the current value
@@ -104,7 +146,7 @@ func (l *List[T]) Get() []T {
 // The store auto-updates when the list changes.
 func (l *List[T]) Len() *Store[int] {
 	if l.lenStore == nil {
-		l.lenStore = New(len(l.items))
+		l.lenStore = newInternal(len(l.items))
 		l.OnChange(func(_ []T) {
 			l.lenStore.Set(len(l.items))
 		})

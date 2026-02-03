@@ -189,9 +189,24 @@ func renderHtmlNodeWasm(h *HtmlNode, ctx *WasmRenderContext) string {
 }
 
 // renderStoreBindingWasm renders a store value with marker and collects binding.
+// Uses the store's ID directly as the marker to match SSR output.
 func renderStoreBindingWasm(store any, isHTML bool, ctx *WasmRenderContext) string {
-	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullMarkerID(localMarker)
+	// Get store ID directly - this matches what SSR does
+	var markerID string
+	switch s := store.(type) {
+	case *Store[string]:
+		markerID = s.ID()
+	case *Store[int]:
+		markerID = s.ID()
+	case *Store[bool]:
+		markerID = s.ID()
+	case *Store[float64]:
+		markerID = s.ID()
+	default:
+		// Fallback to generated ID for unknown types
+		localMarker := ctx.NextTextMarker()
+		markerID = ctx.FullMarkerID(localMarker)
+	}
 
 	// Get current value
 	value := storeValueToString(store)
@@ -364,8 +379,9 @@ func renderComponentNodeWasm(c *ComponentNode, ctx *WasmRenderContext) string {
 	childCtx := NewWasmRenderContext(fullCompPrefix)
 	childCtx.Components["component"] = comp
 
-	if oc, ok := comp.(HasOnCreate); ok {
-		oc.OnCreate()
+	// Call OnMount if the component has it (for nested routing, etc.)
+	if om, ok := comp.(HasOnMount); ok {
+		om.OnMount()
 	}
 
 	html := renderNodeWasm(comp.Render(), childCtx)
@@ -438,13 +454,14 @@ func injectAttrsWasm(html, attrs string) string {
 }
 
 // injectEventsWasm injects event bindings into HTML.
+// Uses the user-provided handler ID from WithOn for the element ID.
 func injectEventsWasm(html []byte, events []*HtmlEvent, ctx *WasmRenderContext) []byte {
 	if len(events) == 0 {
 		return html
 	}
 
-	localID := ctx.NextEventID()
-	fullID := ctx.FullElementID(localID)
+	// Use the first event's user-provided ID as the element ID
+	elementID := events[0].ID
 
 	var eventNames []byte
 	for i, ev := range events {
@@ -453,7 +470,7 @@ func injectEventsWasm(html []byte, events []*HtmlEvent, ctx *WasmRenderContext) 
 		}
 		eventNames = append(eventNames, ev.Event...)
 		ctx.Bindings.Events = append(ctx.Bindings.Events, WasmEventBinding{
-			ElementID: fullID,
+			ElementID: elementID,
 			Event:     ev.Event,
 			Handler:   ev.Handler,
 		})
@@ -461,7 +478,7 @@ func injectEventsWasm(html []byte, events []*HtmlEvent, ctx *WasmRenderContext) 
 
 	for i := 0; i < len(html); i++ {
 		if html[i] == '>' {
-			inject := ` id="` + fullID + `" data-event="` + string(eventNames) + `"`
+			inject := ` id="` + elementID + `" data-event="` + string(eventNames) + `"`
 			// Build result by concatenating strings to avoid slice mutation bugs
 			if i > 0 && html[i-1] == '/' {
 				return []byte(string(html[:i-1]) + inject + string(html[i-1:]))

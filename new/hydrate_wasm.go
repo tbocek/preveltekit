@@ -55,9 +55,9 @@ type HasStyle interface {
 	Style() string
 }
 
-// HasOnCreate is implemented by components with OnCreate lifecycle.
-type HasOnCreate interface {
-	OnCreate()
+// HasNew is implemented by components that can create fresh instances.
+type HasNew interface {
+	New() Component
 }
 
 // HasOnMount is implemented by components with OnMount lifecycle.
@@ -66,16 +66,16 @@ type HasOnMount interface {
 }
 
 // Hydrate sets up DOM bindings for reactivity.
-// The bindings JSON is passed via a global variable set by the CLI-generated code.
+// With the ID-based system, stores and handlers register themselves with unique IDs.
+// We still need the bindings JSON for If-blocks, Each-blocks, and AttrCond bindings.
 func Hydrate(app Component) {
-	children := make(map[string]Component)
-
-	// Call OnCreate to let app initialize its stores and children
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
+	// Create fresh app instance with initialized stores (this registers stores)
+	if hn, ok := app.(HasNew); ok {
+		app = hn.New()
 	}
 
-	// Discover children from routes
+	// Discover children from routes and initialize them (registers their stores)
+	children := make(map[string]Component)
 	if hr, ok := app.(HasRoutes); ok {
 		for _, route := range hr.Routes() {
 			if route.Component != nil {
@@ -84,7 +84,123 @@ func Hydrate(app Component) {
 		}
 	}
 
+	// Call Render() on all components to register handlers via WithOn()
+	app.Render()
+	for _, child := range children {
+		child.Render()
+	}
+
+	// Use the full hydration which handles If-blocks, Each-blocks, etc.
 	hydrateWASM(app, children)
+}
+
+// hydrateFromRegistry walks the DOM and binds stores/handlers using the global registries.
+// This is the new simplified hydration that doesn't need bindings JSON.
+func hydrateFromRegistry() {
+	cleanup := &Cleanup{}
+
+	// 1. Bind text nodes: Walk all comment nodes, use comment text as store ID
+	bindTextNodesFromRegistry()
+
+	// 2. Bind event handlers: Walk elements with data-on attribute
+	bindEventsFromRegistry(cleanup)
+
+	// 3. Bind inputs: Walk input/textarea elements, use ID as store ID
+	bindInputsFromRegistry(cleanup)
+}
+
+// bindTextNodesFromRegistry walks all comment nodes and binds stores from the registry.
+func bindTextNodesFromRegistry() {
+	// First, collect all comment node IDs (don't bind yet, as binding removes comments)
+	var storeIDs []string
+	walker := Document.Call("createTreeWalker",
+		Document.Get("body"),
+		nodeFilterShowComment,
+		js.Null(),
+	)
+	for {
+		node := walker.Call("nextNode")
+		if node.IsNull() {
+			break
+		}
+		storeID := node.Get("nodeValue").String()
+		js.Global().Get("console").Call("log", "[DEBUG] Comment node:", storeID)
+		storeIDs = append(storeIDs, storeID)
+	}
+
+	// Now bind each store (this removes the comment nodes, but we've already collected them all)
+	for _, storeID := range storeIDs {
+		store := GetStore(storeID)
+		if store != nil {
+			js.Global().Get("console").Call("log", "[DEBUG] Binding store:", storeID)
+			bindTextDynamic(storeID, store, false)
+		}
+	}
+}
+
+// bindEventsFromRegistry walks elements with data-on and binds handlers from the registry.
+func bindEventsFromRegistry(cleanup *Cleanup) {
+	elements := Document.Call("querySelectorAll", "[data-on]")
+	length := elements.Get("length").Int()
+	for i := 0; i < length; i++ {
+		el := elements.Call("item", i)
+		handlerID := el.Get("id").String()
+		events := el.Call("getAttribute", "data-on").String()
+
+		handler := GetHandler(handlerID)
+		if handler == nil {
+			js.Global().Get("console").Call("log", "[DEBUG] No handler for:", handlerID)
+			continue
+		}
+
+		// Parse event names (comma-separated)
+		for _, event := range splitEvents(events) {
+			bindEventDynamic(cleanup, handlerID, event, handler)
+		}
+	}
+}
+
+// splitEvents splits a comma-separated event string into individual events.
+func splitEvents(events string) []string {
+	var result []string
+	start := 0
+	for i := 0; i <= len(events); i++ {
+		if i == len(events) || events[i] == ',' {
+			if i > start {
+				result = append(result, events[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return result
+}
+
+// bindInputsFromRegistry walks input/textarea elements and binds stores from the registry.
+func bindInputsFromRegistry(cleanup *Cleanup) {
+	// Bind text inputs
+	inputs := Document.Call("querySelectorAll", "input[id], textarea[id]")
+	length := inputs.Get("length").Int()
+	for i := 0; i < length; i++ {
+		el := inputs.Call("item", i)
+		storeID := el.Get("id").String()
+		store := GetStore(storeID)
+		if store == nil {
+			continue
+		}
+
+		inputType := el.Call("getAttribute", "type").String()
+		if inputType == "checkbox" {
+			if s, ok := store.(*Store[bool]); ok {
+				cleanup.Add(BindCheckbox(storeID, s))
+			}
+		} else {
+			if s, ok := store.(*Store[string]); ok {
+				cleanup.Add(BindInput(storeID, s))
+			} else if s, ok := store.(*Store[int]); ok {
+				cleanup.Add(BindInputInt(storeID, s))
+			}
+		}
+	}
 }
 
 // hydrateWASM sets up DOM bindings from the embedded bindings JSON.
@@ -168,7 +284,24 @@ func hydrateWASM(app Component, children map[string]Component) {
 
 	// Apply all bindings
 	cleanup := &Cleanup{}
+
+	// Debug: check bindings and DOM elements
+	js.Global().Get("console").Call("log", "[DEBUG] bindings.Events count:", len(bindings.Events))
+	js.Global().Get("console").Call("log", "[DEBUG] Before applyBindings - checking DOM elements:")
+	for _, ev := range bindings.Events {
+		el := Document.Call("getElementById", ev.ElementID)
+		exists := !el.IsNull() && !el.IsUndefined()
+		js.Global().Get("console").Call("log", "[DEBUG] DOM element", ev.ElementID, "exists:", exists, "event:", ev.Event)
+	}
+
 	applyBindings(bindings, components, cleanup)
+
+	// Bind text nodes by walking DOM for comment markers with store IDs
+	// This is needed because text bindings now use store IDs as markers directly
+	bindTextNodesFromRegistry()
+
+	// Bind inputs by walking DOM for elements with store IDs
+	bindInputsFromRegistry(cleanup)
 
 	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
 	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
@@ -188,17 +321,14 @@ func hydrateWASM(app Component, children map[string]Component) {
 	select {}
 }
 
-// runOnCreate calls OnCreate and injects styles for app and all children.
+// runOnCreate injects styles for app and all children.
+// Note: New() was already called to initialize stores.
 func runOnCreate(app Component, children map[string]Component) {
-	// App's OnCreate was already called in Hydrate before Routes() was called
 	if hs, ok := app.(HasStyle); ok {
 		InjectStyle("app", hs.Style())
 	}
-	// Call OnCreate for all children
+	// Inject styles for all children
 	for path, child := range children {
-		if oc, ok := child.(HasOnCreate); ok {
-			oc.OnCreate()
-		}
 		if hs, ok := child.(HasStyle); ok {
 			InjectStyle(trimPrefix(path, "/"), hs.Style())
 		}
@@ -223,25 +353,14 @@ func runLifecycle(app Component, children map[string]Component) {
 	runOnMount(app, children)
 }
 
-// resolveStore resolves a store path like "component.Count" or "basics.Score" to a store pointer.
+// resolveStore looks up a store by its user-defined ID from the global registry.
+// Stores register themselves via New("myapp.Count", 0) which adds them to storeRegistry.
 func resolveStore(storeID string, components map[string]Component) any {
-	compName, fieldName, ok := splitFirst(storeID, ".")
-	if !ok {
-		return nil
+	store := GetStore(storeID)
+	if store == nil {
+		js.Global().Get("console").Call("log", "[DEBUG] resolveStore: store not found in registry:", storeID)
 	}
-
-	comp, ok := components[compName]
-	if !ok {
-		return nil
-	}
-
-	rv := reflect.ValueOf(comp).Elem()
-	field := rv.FieldByName(fieldName)
-	if !field.IsValid() || field.IsNil() {
-		return nil
-	}
-
-	return field.Interface()
+	return store
 }
 
 // handlerMap stores element ID -> handler function mappings collected from Render()
@@ -250,9 +369,11 @@ var handlerMap = make(map[string]func())
 // collectHandlers walks a component's Render() tree and extracts event handlers.
 // It uses the same ID generation logic as SSR to ensure IDs match.
 func collectHandlers(comp Component, prefix string) {
+	js.Global().Get("console").Call("log", "[DEBUG] collectHandlers prefix:", prefix, "comp:", componentNameWasm(comp))
 	node := comp.Render()
 	ctx := &handlerCollectCtx{IDCounter: IDCounter{Prefix: prefix}}
 	collectHandlersFromNode(node, ctx)
+	js.Global().Get("console").Call("log", "[DEBUG] collectHandlers done, handlerMap size:", len(handlerMap))
 }
 
 // handlerCollectCtx tracks state while collecting handlers.
@@ -269,22 +390,11 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 
 	switch node := n.(type) {
 	case *HtmlNode:
-		// Html nodes can have events via WithOn() stored in Events field
-		// or embedded eventAttr in Parts (legacy)
-		// SSR generates IDs in injectChainedAttrs: NextEventID if Events, NextClassID if only AttrConds
-		if len(node.Events) > 0 {
-			// New style: events attached via WithOn()
-			localID := ctx.NextEventID()
-			fullID := ctx.FullElementID(localID)
-			// All events on this node share one element ID
-			for _, ev := range node.Events {
-				handlerMap[fullID] = ev.Handler
-			}
-		} else if len(node.AttrConds) > 0 {
-			// SSR calls NextClassID for AttrConds without Events - must stay in sync
-			ctx.NextClassID()
-		}
-		// Also check Parts for embedded nodes, legacy eventAttr, and stores
+		// IMPORTANT: Process parts FIRST, then events - must match SSR order!
+		// SSR's HtmlNode.ToHTML calls renderParts() first, then injectChainedAttrs().
+		// This ensures counter synchronization for nested nodes.
+
+		// First: process Parts (may contain nested nodes with events, stores, etc.)
 		for _, part := range node.Parts {
 			if ev, ok := part.(*eventAttr); ok {
 				localID := ctx.NextEventID()
@@ -299,12 +409,37 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 			}
 		}
 
+		// Second: process chained Events (via WithOn) - use user-provided handler ID
+		if len(node.Events) > 0 {
+			// Use the user-provided ID from WithOn
+			for _, ev := range node.Events {
+				handlerMap[ev.ID] = ev.Handler
+			}
+		} else if len(node.AttrConds) > 0 {
+			// SSR calls NextClassID for AttrConds without Events - must stay in sync
+			ctx.NextClassID()
+		}
+
 	case *Fragment:
 		for _, child := range node.Children {
 			collectHandlersFromNode(child, ctx)
 		}
 
+	case *BindNode:
+		// SSR increments Text counter for BindNode
+		ctx.Text++
+
+	case *BindValueNode:
+		// SSR increments Bind counter for BindValueNode
+		ctx.Bind++
+
+	case *BindCheckedNode:
+		// SSR increments Bind counter for BindCheckedNode
+		ctx.Bind++
+
 	case *IfNode:
+		// SSR increments If counter for IfNode marker
+		ctx.If++
 		// Collect from all branches (handlers exist in all possible paths)
 		for _, branch := range node.Branches {
 			for _, child := range branch.Children {
@@ -316,6 +451,8 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 		}
 
 	case *EachNode:
+		// SSR increments Each counter for EachNode marker
+		ctx.Each++
 		// Each nodes have a body function - we can't easily extract handlers from it
 		// since it requires an item. For now, skip (each items are re-rendered anyway)
 
@@ -330,23 +467,32 @@ func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
 	}
 }
 
-// getHandler looks up a handler by element ID from the collected handlers.
+// getHandler looks up a handler by ID from the global handler registry.
+// Handlers are registered via WithOn() which calls RegisterHandler().
 func getHandler(elementID string) func() {
+	// First try the global handler registry (for WithOn handlers)
+	if handler := GetHandler(elementID); handler != nil {
+		return handler
+	}
+	// Fall back to handlerMap for legacy event handling
 	return handlerMap[elementID]
 }
 
 // bindTextDynamic sets up a text binding for any store type.
 func bindTextDynamic(markerID string, store any, isHTML bool) {
+	js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic:", markerID, "store is nil:", store == nil)
 	switch s := store.(type) {
 	case *Store[string]:
 		bindText(markerID, s, isHTML)
 	case *Store[int]:
+		js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic: binding int store, current value:", s.Get())
 		bindText(markerID, s, isHTML)
 	case *Store[bool]:
 		bindText(markerID, s, isHTML)
 	case *Store[float64]:
 		bindText(markerID, s, isHTML)
 	default:
+		js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic: unknown store type")
 	}
 }
 
@@ -573,12 +719,16 @@ func bindComponentStoreWithInitial(store *Store[Component], containerID string, 
 func applyBindings(bindings *HydrateBindings, components map[string]Component, cleanup *Cleanup) {
 	js.Global().Get("console").Call("log", "[DEBUG] applyBindings called")
 	js.Global().Get("console").Call("log", "[DEBUG] bindings.Events count:", len(bindings.Events))
+	js.Global().Get("console").Call("log", "[DEBUG] bindings.TextBindings count:", len(bindings.TextBindings))
 
 	// Text bindings
 	for _, tb := range bindings.TextBindings {
+		js.Global().Get("console").Call("log", "[DEBUG] text binding:", tb.MarkerID, "storeID:", tb.StoreID)
 		store := resolveStore(tb.StoreID, components)
 		if store != nil {
 			bindTextDynamic(tb.MarkerID, store, tb.IsHTML)
+		} else {
+			js.Global().Get("console").Call("log", "[DEBUG] text binding: store not resolved for", tb.StoreID)
 		}
 	}
 
@@ -593,8 +743,18 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	// Event bindings
 	for _, ev := range bindings.Events {
 		handler := getHandler(ev.ElementID)
+		js.Global().Get("console").Call("log", "[DEBUG] binding event:", ev.ElementID, ev.Event, "handler found:", handler != nil)
 		if handler != nil {
-			bindEventDynamic(cleanup, ev.ElementID, ev.Event, handler)
+			// Wrap handler to add debug logging
+			elementID := ev.ElementID
+			event := ev.Event
+			originalHandler := handler
+			wrappedHandler := func() {
+				js.Global().Get("console").Call("log", "[DEBUG] Handler executing for:", elementID, event)
+				originalHandler()
+				js.Global().Get("console").Call("log", "[DEBUG] Handler completed for:", elementID, event)
+			}
+			bindEventDynamic(cleanup, ev.ElementID, ev.Event, wrappedHandler)
 		}
 	}
 

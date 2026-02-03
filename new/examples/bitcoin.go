@@ -20,12 +20,14 @@ type Bitcoin struct {
 	stopRefresh func()
 }
 
-func (b *Bitcoin) OnCreate() {
-	b.Price = p.New("")
-	b.Symbol = p.New("")
-	b.UpdateTime = p.New("")
-	b.Loading = p.New(true)
-	b.Error = p.New("")
+func (b *Bitcoin) New() p.Component {
+	return &Bitcoin{
+		Price:      p.New("bitcoin.Price", ""),
+		Symbol:     p.New("bitcoin.Symbol", ""),
+		UpdateTime: p.New("bitcoin.UpdateTime", ""),
+		Loading:    p.New("bitcoin.Loading", true),
+		Error:      p.New("bitcoin.Error", ""),
+	}
 }
 
 func (b *Bitcoin) OnMount() {
@@ -118,7 +120,7 @@ func (b *Bitcoin) Render() p.Node {
 			p.Html(`<p class="loading">Loading...</p>`),
 		).ElseIf(b.Error.Ne(""),
 			p.Html(`<p class="error">Error: `, p.Bind(b.Error), `</p>`,
-				p.Html(`<button>Retry</button>`).WithOn("click", b.Retry)),
+				p.Html(`<button>Retry</button>`).WithOn("click", "bitcoin.Retry", b.Retry)),
 		).Else(
 			p.Html(`<div class="price-info">
 					<span class="symbol">`, p.Bind(b.Symbol), `</span>

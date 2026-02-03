@@ -21,9 +21,9 @@ type HasStyle interface {
 	Style() string
 }
 
-// HasOnCreate is implemented by components with OnCreate lifecycle.
-type HasOnCreate interface {
-	OnCreate()
+// HasNew is implemented by components that can create fresh instances.
+type HasNew interface {
+	New() Component
 }
 
 // HasOnMount is implemented by components with OnMount lifecycle.
@@ -32,65 +32,23 @@ type HasOnMount interface {
 }
 
 // Hydrate is the main entry point for declarative components.
-// In SSR mode (native build), it generates HTML files and outputs bindings.
+// In SSR mode (native build), it generates HTML files and outputs bindings JSON.
+// The ID-based system is used for stores and handlers, but bindings JSON is still
+// needed for If-blocks, Each-blocks, and AttrCond bindings.
 func Hydrate(app Component) {
-	children := make(map[string]Component)
-
-	// Call OnCreate to let app initialize its stores and children
-	if oc, ok := app.(HasOnCreate); ok {
-		oc.OnCreate()
+	// First pass: discover all SSR paths
+	// Create fresh instance to get routes
+	if hn, ok := app.(HasNew); ok {
+		app = hn.New()
 	}
 
-	// Discover children from routes with SSRPath
+	var ssrPaths []Route
 	if hr, ok := app.(HasRoutes); ok {
 		for _, route := range hr.Routes() {
-			if route.SSRPath != "" && route.Component != nil {
-				children[route.Path] = route.Component
+			if route.SSRPath != "" {
+				ssrPaths = append(ssrPaths, route)
 			}
 		}
-	}
-
-	// SSR mode - generate HTML and bindings
-	hydrateGenerateAll(app, children)
-}
-
-// hydrateGenerateAll generates HTML files for all routes.
-func hydrateGenerateAll(app Component, children map[string]Component) {
-	// Deduplicate children (multiple routes may point to same component, e.g., "/" and "/basics")
-	// Use pointer address to detect duplicates
-	seenChildren := make(map[uintptr]bool)
-	uniqueChildren := make([]Component, 0)
-	for _, child := range children {
-		ptr := reflect.ValueOf(child).Pointer()
-		if !seenChildren[ptr] {
-			seenChildren[ptr] = true
-			uniqueChildren = append(uniqueChildren, child)
-		}
-	}
-
-	// Call OnCreate/OnMount for unique children
-	// (app was already initialized in Hydrate before Routes() was called)
-	for _, child := range uniqueChildren {
-		if oc, ok := child.(HasOnCreate); ok {
-			oc.OnCreate()
-		}
-		if om, ok := child.(HasOnMount); ok {
-			om.OnMount()
-		}
-	}
-
-	// Get app style
-	var appStyle string
-	if hs, ok := app.(HasStyle); ok {
-		appStyle = hs.Style()
-	}
-
-	// Build store maps
-	appStoreMap := buildStoreMap(app, "component")
-	childStoreMaps := make(map[string]map[uintptr]string)
-	for path, child := range children {
-		name := strings.TrimPrefix(path, "/")
-		childStoreMaps[name] = buildStoreMap(child, name)
 	}
 
 	// Collect all bindings (merged from all routes for single bindings.json)
@@ -99,74 +57,45 @@ func hydrateGenerateAll(app Component, children map[string]Component) {
 	// Create output directory
 	os.MkdirAll("dist", 0755)
 
-	// Pre-render all children with unique prefixes
-	childrenContent := make(map[string]string)
-	childrenBindings := make(map[string]*CollectedBindings)
-	allCollectedStyles := make(map[string]string)
-	var childStyles string
-	for path, child := range children {
-		name := strings.TrimPrefix(path, "/")
-		// Use prefix to ensure unique IDs across children
-		// Also pass the child's store map so nested components can resolve dynamic props
-		result := RenderHTMLWithContextFull(child.Render(),
-			WithPrefixCtx(name),
-			WithParentStoreMapCtx(childStoreMaps[name]),
+	// Second pass: generate HTML for each SSR path with fresh state
+	for _, route := range ssrPaths {
+		// Set the SSR path before lifecycle methods
+		SetSSRPath(route.SSRPath)
+
+		// Create fresh app instance
+		freshApp := app.(HasNew).New()
+
+		// Call OnMount (creates router which reads path and sets component)
+		if om, ok := freshApp.(HasOnMount); ok {
+			om.OnMount()
+		}
+
+		// Get the registered router IDs (from OnMount -> NewRouter)
+		routerIDs := GetPendingRouterIDs()
+		routerID := ""
+		if len(routerIDs) > 0 {
+			routerID = routerIDs[0]
+		}
+
+		// Get app style
+		var appStyle string
+		if hs, ok := freshApp.(HasStyle); ok {
+			appStyle = hs.Style()
+		}
+
+		// Build app store map
+		appStoreMap := buildStoreMap(freshApp, "component")
+
+		// Render the full tree - router already set the correct component
+		result := RenderHTMLWithContextFull(freshApp.Render(),
+			WithRouteGroupIDCtx(routerID),
 		)
-		childrenContent[name] = result.HTML
 
-		// Collect child styles (from component's Style() method)
-		if hs, ok := child.(HasStyle); ok {
-			childStyles += hs.Style() + "\n"
-		}
-
-		// Merge collected styles from nested components
-		for compName, style := range result.CollectedStyles {
-			if _, exists := allCollectedStyles[compName]; !exists {
-				allCollectedStyles[compName] = style
-			}
-		}
-
-		// Resolve child bindings and store them for if-block branch inclusion
-		if result.Bindings != nil {
-			resolveBindings(result.Bindings, childStoreMaps[name], name, child)
-			childrenBindings[name] = result.Bindings
-		}
-	}
-
-	// Get routes from app
-	var routes []Route
-	if hr, ok := app.(HasRoutes); ok {
-		routes = hr.Routes()
-	}
-
-	// Call app's OnMount to register router IDs
-	if om, ok := app.(HasOnMount); ok {
-		om.OnMount()
-	}
-
-	// Get the registered router IDs
-	routerIDs := GetPendingRouterIDs()
-	routerID := ""
-	if len(routerIDs) > 0 {
-		routerID = routerIDs[0] // Use first registered ID for now
-	}
-
-	// Generate HTML file for each route
-	for _, route := range routes {
-		// Get the child name for this route
-		childName := strings.TrimPrefix(route.Path, "/")
-		if childName == "" {
-			childName = "basics" // Default for "/" route
-		}
-
-		// Render app with this specific child's content
-		html, bindings := RenderHTMLWithChildContent(app.Render(), childName, childrenContent, childrenBindings, routerID)
-
-		// Resolve app bindings
-		resolveBindings(bindings, appStoreMap, "component", app)
+		// Resolve bindings (needed for If-blocks, Each-blocks, AttrConds)
+		resolveBindings(result.Bindings, appStoreMap, "component", freshApp)
 
 		// Build full HTML document
-		fullHTML := buildHTMLDocument(html, appStyle, childStyles, allCollectedStyles)
+		fullHTML := buildHTMLDocument(result.HTML, appStyle, "", result.CollectedStyles)
 
 		// Write HTML file
 		htmlPath := filepath.Join("dist", route.HTMLFile)
@@ -174,7 +103,7 @@ func hydrateGenerateAll(app Component, children map[string]Component) {
 		fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
 
 		// Merge bindings for this route into allBindings
-		mergeBindings(&allBindings, bindings)
+		mergeBindings(&allBindings, result.Bindings)
 	}
 
 	// Output merged bindings as JSON
@@ -230,7 +159,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	// Merge attr bindings
 	seenAttr := make(map[string]bool)
 	for _, b := range dst.AttrBindings {
 		seenAttr[b.ElementID] = true
@@ -242,7 +170,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	// Merge each blocks
 	seenEach := make(map[string]bool)
 	for _, b := range dst.EachBlocks {
 		seenEach[b.MarkerID] = true
@@ -254,7 +181,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	// Merge attr cond bindings
 	seenAttrCond := make(map[string]bool)
 	for _, b := range dst.AttrCondBindings {
 		seenAttrCond[b.ElementID+":"+b.AttrName] = true
@@ -267,7 +193,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	// Merge component containers (deduplicate by ID)
 	seenContainer := make(map[string]bool)
 	for _, c := range dst.ComponentContainers {
 		seenContainer[c.ID] = true
@@ -280,7 +205,20 @@ func mergeBindings(dst, src *CollectedBindings) {
 	}
 }
 
+// getStoreID extracts the ID from any store type using the HasID interface.
+// Returns empty string if the value is not a store or has no ID.
+func getStoreID(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(HasID); ok {
+		return s.ID()
+	}
+	return ""
+}
+
 // buildStoreMap builds a map from store pointer addresses to field paths.
+// DEPRECATED: Use getStoreID instead to get store IDs directly.
 func buildStoreMap(comp Component, prefix string) map[uintptr]string {
 	storeMap := make(map[uintptr]string)
 	rv := reflect.ValueOf(comp).Elem()
@@ -304,42 +242,34 @@ func componentVarName(comp Component) string {
 	return strings.ToLower(t[:1]) + t[1:]
 }
 
-// resolveBindings resolves store references in bindings to field paths.
+// resolveBindings resolves store references in bindings using store IDs directly.
+// Stores have user-defined IDs set via New("myapp.Count", 0), so we use those directly.
 func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, prefix string, comp Component) {
-	// Resolve text bindings
+	// Resolve text bindings - use store's ID directly
 	for i := range bindings.TextBindings {
-		// Skip if already resolved (e.g., from child component bindings)
 		if bindings.TextBindings[i].StoreID != "" {
 			continue
 		}
-		if bindings.TextBindings[i].StoreRef != nil {
-			addr := reflect.ValueOf(bindings.TextBindings[i].StoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.TextBindings[i].StoreID = name
-			}
+		if id := getStoreID(bindings.TextBindings[i].StoreRef); id != "" {
+			bindings.TextBindings[i].StoreID = id
 		}
 	}
 
-	// Resolve input bindings
+	// Resolve input bindings - use store's ID directly
 	for i := range bindings.InputBindings {
-		// Skip if already resolved
 		if bindings.InputBindings[i].StoreID != "" {
 			continue
 		}
-		if bindings.InputBindings[i].StoreRef != nil {
-			addr := reflect.ValueOf(bindings.InputBindings[i].StoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.InputBindings[i].StoreID = name
-			}
+		if id := getStoreID(bindings.InputBindings[i].StoreRef); id != "" {
+			bindings.InputBindings[i].StoreID = id
 		}
 	}
 
-	// Resolve if-block conditions and recursively resolve nested bindings
+	// Resolve if-block conditions using store IDs directly
 	for i := range bindings.IfBlocks {
 		for j := range bindings.IfBlocks[i].Branches {
 			// Skip if already resolved
 			if bindings.IfBlocks[i].Branches[j].StoreID != "" {
-				// Still need to recursively resolve nested bindings
 				if bindings.IfBlocks[i].Branches[j].Bindings != nil {
 					resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
 				}
@@ -348,89 +278,59 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 			cond := bindings.IfBlocks[i].Branches[j].CondRef
 			if cond != nil {
 				if sc, ok := cond.(*StoreCondition); ok && sc.Store != nil {
-					addr := reflect.ValueOf(sc.Store).Pointer()
-					if name, ok := storeMap[addr]; ok {
-						// Build expression with proper operand quoting
+					// Use store's ID directly instead of reflection
+					storeID := getStoreID(sc.Store)
+					if storeID != "" {
 						operand := fmt.Sprintf("%v", sc.Operand)
 						if !isNumeric(operand) && operand != "true" && operand != "false" {
 							operand = `"` + operand + `"`
 						}
-						bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get() " + sc.Op + " " + operand
-
-						// Add structured condition data for WASM evaluation
-						bindings.IfBlocks[i].Branches[j].StoreID = name
+						bindings.IfBlocks[i].Branches[j].CondExpr = storeID + ".Get() " + sc.Op + " " + operand
+						bindings.IfBlocks[i].Branches[j].StoreID = storeID
 						bindings.IfBlocks[i].Branches[j].Op = sc.Op
 						bindings.IfBlocks[i].Branches[j].Operand = fmt.Sprintf("%v", sc.Operand)
-
-						// Add to deps
-						parts := strings.Split(name, ".")
-						fieldName := parts[len(parts)-1]
-						if prefix == "component" {
-							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
-						} else {
-							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
-						}
+						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, storeID)
 					}
 				}
 
 				if bc, ok := cond.(*BoolCondition); ok && bc.Store != nil {
-					addr := reflect.ValueOf(bc.Store).Pointer()
-					if name, ok := storeMap[addr]; ok {
-						bindings.IfBlocks[i].Branches[j].CondExpr = name + ".Get()"
-
-						// Add structured condition data for WASM evaluation
-						bindings.IfBlocks[i].Branches[j].StoreID = name
+					// Use store's ID directly instead of reflection
+					storeID := getStoreID(bc.Store)
+					if storeID != "" {
+						bindings.IfBlocks[i].Branches[j].CondExpr = storeID + ".Get()"
+						bindings.IfBlocks[i].Branches[j].StoreID = storeID
 						bindings.IfBlocks[i].Branches[j].IsBool = true
-
-						parts := strings.Split(name, ".")
-						fieldName := parts[len(parts)-1]
-						if prefix == "component" {
-							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, fieldName)
-						} else {
-							bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, name)
-						}
+						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, storeID)
 					}
 				}
 			}
 
-			// Recursively resolve nested bindings in this branch
 			if bindings.IfBlocks[i].Branches[j].Bindings != nil {
 				resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
 			}
 		}
 
-		// Recursively resolve else branch bindings
 		if bindings.IfBlocks[i].ElseBindings != nil {
 			resolveBindings(bindings.IfBlocks[i].ElseBindings, storeMap, prefix, comp)
 		}
 	}
 
-	// Event handlers are resolved directly in WASM via collectHandlers
-	// No need to resolve handler names here anymore
-
-	// Resolve attr bindings
+	// Resolve attr bindings - use store IDs directly
 	for i := range bindings.AttrBindings {
-		// Skip if already resolved
 		if len(bindings.AttrBindings[i].StoreIDs) > 0 {
 			continue
 		}
-		if len(bindings.AttrBindings[i].StoreRefs) > 0 {
-			var storeIDs []string
-			for _, storeRef := range bindings.AttrBindings[i].StoreRefs {
-				if storeRef != nil {
-					addr := reflect.ValueOf(storeRef).Pointer()
-					if name, ok := storeMap[addr]; ok {
-						storeIDs = append(storeIDs, name)
-					}
-				}
+		var storeIDs []string
+		for _, storeRef := range bindings.AttrBindings[i].StoreRefs {
+			if id := getStoreID(storeRef); id != "" {
+				storeIDs = append(storeIDs, id)
 			}
-			bindings.AttrBindings[i].StoreIDs = storeIDs
 		}
+		bindings.AttrBindings[i].StoreIDs = storeIDs
 	}
 
-	// Resolve each block list references
+	// Resolve each block list references - lists don't have IDs, use reflection fallback
 	for i := range bindings.EachBlocks {
-		// Skip if already resolved
 		if bindings.EachBlocks[i].ListID != "" {
 			continue
 		}
@@ -442,39 +342,26 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		}
 	}
 
-	// Resolve AttrCond bindings (from HtmlNode.AttrIf())
+	// Resolve AttrCond bindings - use store IDs directly
 	for i := range bindings.AttrCondBindings {
-		// Skip if already resolved
 		if len(bindings.AttrCondBindings[i].Deps) > 0 {
 			continue
 		}
 
 		var deps []string
 
-		// Resolve condition store
-		if bindings.AttrCondBindings[i].CondStoreRef != nil {
-			addr := reflect.ValueOf(bindings.AttrCondBindings[i].CondStoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				deps = append(deps, name)
-			}
+		if id := getStoreID(bindings.AttrCondBindings[i].CondStoreRef); id != "" {
+			deps = append(deps, id)
 		}
 
-		// Resolve true value store (if dynamic)
-		if bindings.AttrCondBindings[i].TrueStoreRef != nil {
-			addr := reflect.ValueOf(bindings.AttrCondBindings[i].TrueStoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.AttrCondBindings[i].TrueStoreID = name
-				deps = append(deps, name)
-			}
+		if id := getStoreID(bindings.AttrCondBindings[i].TrueStoreRef); id != "" {
+			bindings.AttrCondBindings[i].TrueStoreID = id
+			deps = append(deps, id)
 		}
 
-		// Resolve false value store (if dynamic)
-		if bindings.AttrCondBindings[i].FalseStoreRef != nil {
-			addr := reflect.ValueOf(bindings.AttrCondBindings[i].FalseStoreRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.AttrCondBindings[i].FalseStoreID = name
-				deps = append(deps, name)
-			}
+		if id := getStoreID(bindings.AttrCondBindings[i].FalseStoreRef); id != "" {
+			bindings.AttrCondBindings[i].FalseStoreID = id
+			deps = append(deps, id)
 		}
 
 		bindings.AttrCondBindings[i].Deps = deps
@@ -529,7 +416,6 @@ func buildHTMLDocument(body, appStyle, childStyle string, collectedStyles map[st
 %s
 <script src="wasm_exec.js"></script>
 <script>
-// Load bindings first, then WASM
 fetch("bindings.json")
   .then(r => r.json())
   .then(bindings => {

@@ -26,10 +26,11 @@ func ClearStorage() {
 }
 
 // NewLocalStore stub - returns a LocalStore during pre-render.
+// The key is also used as the store's ID for hydration.
 func NewLocalStore(key string, defaultValue string) *LocalStore {
 	stored := GetStorage(key)
 	if stored == "" {
 		stored = defaultValue
 	}
-	return &LocalStore{New(stored)}
+	return &LocalStore{Store: New(key, stored)}
 }

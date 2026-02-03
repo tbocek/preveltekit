@@ -11,13 +11,15 @@ type Basics struct {
 	Score    *p.Store[int]
 }
 
-func (b *Basics) OnCreate() {
-	b.Count = p.New(0)
-	b.Name = p.New("")
-	b.Message = p.New("Fill out the form above")
-	b.DarkMode = p.New(false)
-	b.Agreed = p.New(false)
-	b.Score = p.New(75)
+func (b *Basics) New() p.Component {
+	return &Basics{
+		Count:    p.New("basics.Count", 0),
+		Name:     p.New("basics.Name", ""),
+		Message:  p.New("basics.Message", "Fill out the form above"),
+		DarkMode: p.New("basics.DarkMode", false),
+		Agreed:   p.New("basics.Agreed", false),
+		Score:    p.New("basics.Score", 75),
+	}
 }
 
 func (b *Basics) Increment() {
@@ -62,11 +64,11 @@ func (b *Basics) Render() p.Node {
 		<section>
 			<h2>Counter</h2>
 			<p>Count: <strong>`, b.Count, `</strong></p>
-			`, p.Html(`<button>-1</button>`).WithOn("click", b.Decrement), `
-			`, p.Html(`<button>+1</button>`).WithOn("click", b.Increment), `
-			`, p.Html(`<button>+5</button>`).WithOn("click", func() { b.Add(5) }), `
-			`, p.Html(`<button>Double</button>`).WithOn("click", b.Double), `
-			`, p.Html(`<button>Reset</button>`).WithOn("click", b.Reset), `
+			`, p.Html(`<button>-1</button>`).WithOn("click", "basics.Decrement", b.Decrement), `
+			`, p.Html(`<button>+1</button>`).WithOn("click", "basics.Increment", b.Increment), `
+			`, p.Html(`<button>+5</button>`).WithOn("click", "basics.Add5", func() { b.Add(5) }), `
+			`, p.Html(`<button>Double</button>`).WithOn("click", "basics.Double", b.Double), `
+			`, p.Html(`<button>Reset</button>`).WithOn("click", "basics.Reset", b.Reset), `
 		</section>
 
 		<section>
@@ -84,11 +86,11 @@ func (b *Basics) Render() p.Node {
 		p.Html(`<p class="grade f">Grade: F - Failing</p>`),
 	), `
 			<div class="buttons">
-				`, p.Html(`<button>A</button>`).WithOn("click", func() { b.SetScore(95) }), `
-				`, p.Html(`<button>B</button>`).WithOn("click", func() { b.SetScore(85) }), `
-				`, p.Html(`<button>C</button>`).WithOn("click", func() { b.SetScore(75) }), `
-				`, p.Html(`<button>D</button>`).WithOn("click", func() { b.SetScore(65) }), `
-				`, p.Html(`<button>F</button>`).WithOn("click", func() { b.SetScore(50) }), `
+				`, p.Html(`<button>A</button>`).WithOn("click", "basics.SetScoreA", func() { b.SetScore(95) }), `
+				`, p.Html(`<button>B</button>`).WithOn("click", "basics.SetScoreB", func() { b.SetScore(85) }), `
+				`, p.Html(`<button>C</button>`).WithOn("click", "basics.SetScoreC", func() { b.SetScore(75) }), `
+				`, p.Html(`<button>D</button>`).WithOn("click", "basics.SetScoreD", func() { b.SetScore(65) }), `
+				`, p.Html(`<button>F</button>`).WithOn("click", "basics.SetScoreF", func() { b.SetScore(50) }), `
 			</div>
 		</section>
 
@@ -110,7 +112,7 @@ func (b *Basics) Render() p.Node {
 				<label>Name: `, p.BindValue(`<input type="text" placeholder="Your name">`, b.Name), `</label>
 				<label>`, p.BindChecked(`<input type="checkbox">`, b.Agreed), ` I agree to the terms</label>
 				<button type="submit">Submit</button>
-			</form>`).WithOn("submit", b.Submit).PreventDefault(), `
+			</form>`).WithOn("submit", "basics.Submit", b.Submit).PreventDefault(), `
 			<p class="message">`, p.Bind(b.Message), `</p>
 		</section>
 	</div>`)

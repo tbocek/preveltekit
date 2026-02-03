@@ -26,9 +26,11 @@ type Fetch struct {
 	RawData *p.Store[string]
 }
 
-func (f *Fetch) OnCreate() {
-	f.Status = p.New("ready")
-	f.RawData = p.New("")
+func (f *Fetch) New() p.Component {
+	return &Fetch{
+		Status:  p.New("fetch.Status", "ready"),
+		RawData: p.New("fetch.RawData", ""),
+	}
 }
 
 func (f *Fetch) FetchTodo() {
@@ -122,10 +124,10 @@ func (f *Fetch) Render() p.Node {
 			<p>Fetch data with automatic JSON decoding into Go structs:</p>
 
 			<div class="buttons">
-				`, p.Html(`<button>Fetch Todo</button>`).WithOn("click", f.FetchTodo), `
-				`, p.Html(`<button>Fetch User</button>`).WithOn("click", f.FetchUser), `
-				`, p.Html(`<button>Fetch Post</button>`).WithOn("click", f.FetchPost), `
-				`, p.Html(`<button>Create Post (POST)</button>`).WithOn("click", f.CreatePost), `
+				`, p.Html(`<button>Fetch Todo</button>`).WithOn("click", "fetch.FetchTodo", f.FetchTodo), `
+				`, p.Html(`<button>Fetch User</button>`).WithOn("click", "fetch.FetchUser", f.FetchUser), `
+				`, p.Html(`<button>Fetch Post</button>`).WithOn("click", "fetch.FetchPost", f.FetchPost), `
+				`, p.Html(`<button>Create Post (POST)</button>`).WithOn("click", "fetch.CreatePost", f.CreatePost), `
 			</div>`,
 
 		p.If(f.RawData.Ne(""),

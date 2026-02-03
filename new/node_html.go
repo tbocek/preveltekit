@@ -22,15 +22,6 @@ type BuildContext struct {
 	// SlotContent holds HTML to be rendered in place of <slot/> elements
 	SlotContent string
 
-	// ChildrenContent maps child names to their pre-rendered HTML for SPA routing
-	ChildrenContent map[string]string
-
-	// ChildrenBindings maps child names to their bindings for SPA routing
-	ChildrenBindings map[string]*CollectedBindings
-
-	// ActiveChildName specifies which child to render (for per-route HTML generation)
-	ActiveChildName string
-
 	// ParentStoreMap maps store pointers to their IDs in the parent component
 	// Used to resolve dynamic props that share parent stores
 	ParentStoreMap map[uintptr]string
@@ -306,16 +297,15 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 			// Render current component - WASM will update the parent container on navigation
 			comp := v.Get()
 			if comp != nil {
-				// Use ActiveChildName if specified (for per-route HTML generation),
-				// otherwise use the component's actual name
-				name := ctx.ActiveChildName
-				if name == "" {
-					name = componentName(comp)
+				// Call OnMount to initialize component (e.g., set up nested router)
+				if om, ok := comp.(interface{ OnMount() }); ok {
+					om.OnMount()
 				}
+
+				name := componentName(comp)
 
 				// Extract container ID from HTML rendered so far (last id="..." before this store)
 				containerID := extractLastID(sb.String())
-				fmt.Printf("[SSR DEBUG] extractLastID returned: %q\n", containerID)
 
 				// Record route group ID to container mapping
 				if containerID != "" && ctx.RouteGroupID != "" {
@@ -323,33 +313,19 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 						ID:          ctx.RouteGroupID,
 						ContainerID: containerID,
 					})
-					fmt.Printf("[SSR DEBUG] Added ComponentContainer: ID=%q containerID=%q\n", ctx.RouteGroupID, containerID)
 				}
 
-				// Check if we have pre-rendered content for this child
-				if ctx.ChildrenContent != nil {
-					if content, ok := ctx.ChildrenContent[name]; ok {
-						sb.WriteString(content)
-						// Merge pre-resolved bindings
-						if ctx.ChildrenBindings != nil {
-							if bindings, ok := ctx.ChildrenBindings[name]; ok {
-								mergeNestedBindings(ctx.Bindings, bindings)
-							}
-						}
-					} else {
-						// Fallback: render directly (bindings won't be resolved)
-						childCtx := ctx.Child(name)
-						html := nodeToHTML(comp.Render(), childCtx)
-						sb.WriteString(html)
-						mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
-					}
-				} else {
-					// No pre-rendered content, render directly
-					childCtx := ctx.Child(name)
-					html := nodeToHTML(comp.Render(), childCtx)
-					sb.WriteString(html)
-					mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
-				}
+				// Render the component directly
+				childCtx := ctx.Child(name)
+				html := nodeToHTML(comp.Render(), childCtx)
+				sb.WriteString(html)
+
+				// Build store map for the child component and resolve its bindings
+				// This must happen BEFORE merging so that StoreIDs are set
+				childStoreMap := buildStoreMap(comp, name)
+				resolveBindings(childCtx.Bindings, childStoreMap, name, comp)
+
+				mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
 
 				// Record component binding for WASM
 				ctx.Bindings.ComponentStore = v
@@ -364,20 +340,22 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 
 // injectChainedAttrs injects AttrConds and Events into the first HTML tag.
 func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
-	// Generate element ID - use event ID if we have events, otherwise class ID
-	var localID string
+	// For events, use the first event's ID directly (handlers are registered by ID)
+	// For AttrConds without events, we still need a generated ID for now
+	var elementID string
 	if len(h.Events) > 0 {
-		localID = ctx.NextEventID()
+		elementID = h.Events[0].ID
 	} else {
-		localID = ctx.NextClassID()
+		// AttrConds still need an element ID for reactive updates
+		localID := ctx.NextClassID()
+		elementID = ctx.FullElementID(localID)
 	}
-	fullID := ctx.FullElementID(localID)
 
 	// Collect active values for each attribute (for SSR rendering)
 	// Map: attr name -> list of values to add
 	attrValues := make(map[string][]string)
 
-	// Process AttrConds
+	// Process AttrConds (still need bindings for reactive attribute updates)
 	for _, ac := range h.AttrConds {
 		// Extract condition info
 		var condStoreRef any
@@ -396,9 +374,9 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 		trueVal, trueStoreRef := evalAttrValue(ac.TrueValue)
 		falseVal, falseStoreRef := evalAttrValue(ac.FalseValue)
 
-		// Record binding for WASM hydration
+		// Record binding for WASM hydration (AttrConds still need this for reactivity)
 		ctx.Bindings.AttrCondBindings = append(ctx.Bindings.AttrCondBindings, AttrCondBinding{
-			ElementID:     fullID,
+			ElementID:     elementID,
 			AttrName:      ac.Name,
 			TrueValue:     trueVal,
 			FalseValue:    falseVal,
@@ -420,25 +398,24 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 		}
 	}
 
-	// Process Events
-	var eventNames []string
-	for _, ev := range h.Events {
-		ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
-			ElementID: fullID,
-			Event:     ev.Event,
-			Modifiers: ev.Modifiers,
-		})
-		eventNames = append(eventNames, ev.Event)
-	}
-
-	// Build extra attributes string
+	// Build extra attributes string with event types for WASM
 	var extraAttrs string
-	if len(eventNames) > 0 {
-		extraAttrs = fmt.Sprintf(` data-event="%s"`, strings.Join(eventNames, ","))
+	if len(h.Events) > 0 {
+		var eventNames []string
+		for _, ev := range h.Events {
+			eventNames = append(eventNames, ev.Event)
+			// Add event binding so WASM knows to bind this handler
+			ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
+				ElementID: ev.ID, // Use the user-provided handler ID
+				Event:     ev.Event,
+				Modifiers: ev.Modifiers,
+			})
+		}
+		extraAttrs = fmt.Sprintf(` data-on="%s"`, strings.Join(eventNames, ","))
 	}
 
 	// Inject id and merge attributes into first tag
-	return injectIDAndMergeAttrs(html, fullID, attrValues, extraAttrs)
+	return injectIDAndMergeAttrs(html, elementID, attrValues, extraAttrs)
 }
 
 // evalAttrValue extracts string value and store reference from an AttrCond value.
@@ -654,90 +631,72 @@ func (f *Fragment) ToHTML(ctx *BuildContext) string {
 
 // ToHTML generates HTML for a bind node (text interpolation).
 func (b *BindNode) ToHTML(ctx *BuildContext) string {
-	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullMarkerID(localMarker)
-
-	// Get current value for SSR
+	// Get store ID and value directly from the store
+	var storeID string
 	var value string
 	switch s := b.StoreRef.(type) {
 	case *Store[string]:
+		storeID = s.ID()
 		value = s.Get()
 	case *Store[int]:
+		storeID = s.ID()
 		value = fmt.Sprintf("%d", s.Get())
 	case *Store[bool]:
+		storeID = s.ID()
 		value = fmt.Sprintf("%t", s.Get())
 	case *Store[float64]:
+		storeID = s.ID()
 		value = fmt.Sprintf("%g", s.Get())
 	default:
 		value = ""
 	}
 
-	// Record text binding (uses marker ID in HTML comment)
-	ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, TextBinding{
-		MarkerID: markerID,
-		StoreID:  b.StoreID,
-		StoreRef: b.StoreRef,
-		IsHTML:   b.IsHTML,
-	})
-
+	// Use store ID directly as the marker - no bindings JSON needed
 	if b.IsHTML {
-		return fmt.Sprintf("<span>%s</span><!--%s-->", value, markerID)
+		return fmt.Sprintf("<span>%s</span><!--%s-->", value, storeID)
 	}
-	return fmt.Sprintf("%s<!--%s-->", escapeHTML(value), markerID)
+	return fmt.Sprintf("%s<!--%s-->", escapeHTML(value), storeID)
 }
 
 // ToHTML generates HTML for a BindValue node (two-way input binding).
 // Parses the HTML string and injects id and value attributes.
 func (b *BindValueNode) ToHTML(ctx *BuildContext) string {
-	localID := ctx.NextBindID()
-	fullID := ctx.FullElementID(localID)
-
-	// Get current value for SSR
+	// Get store ID and current value directly from the store
+	var storeID string
 	var value string
 	switch s := b.Store.(type) {
 	case *Store[string]:
+		storeID = s.ID()
 		value = s.Get()
 	case *Store[int]:
+		storeID = s.ID()
 		value = fmt.Sprintf("%d", s.Get())
 	}
 
-	// Record input binding
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-		ElementID: fullID,
-		StoreRef:  b.Store,
-		BindType:  "value",
-	})
-
 	// Check if it's a textarea (value goes as content, not attribute)
 	if strings.HasPrefix(strings.TrimSpace(strings.ToLower(b.HTML)), "<textarea") {
-		return injectTextareaContent(b.HTML, fullID, value)
+		return injectTextareaContent(b.HTML, storeID, value)
 	}
 
-	// Inject id and value into the HTML element
-	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s" value="%s"`, fullID, escapeAttr(value)))
+	// Inject store ID as element id and current value
+	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s" value="%s"`, storeID, escapeAttr(value)))
 }
 
 // ToHTML generates HTML for a BindChecked node (checkbox binding).
 // Parses the HTML string and injects id and checked attributes.
 func (b *BindCheckedNode) ToHTML(ctx *BuildContext) string {
-	localID := ctx.NextBindID()
-	fullID := ctx.FullElementID(localID)
-
-	// Record input binding
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-		ElementID: fullID,
-		StoreRef:  b.Store,
-		BindType:  "checked",
-	})
-
-	// Get checked state
+	// Get store ID and checked state directly from the store
+	var storeID string
 	checked := ""
-	if s, ok := b.Store.(*Store[bool]); ok && s.Get() {
-		checked = " checked"
+	if s, ok := b.Store.(*Store[bool]); ok {
+		storeID = s.ID()
+		if s.Get() {
+			checked = " checked"
+		}
 	}
 
-	// Inject id and checked into the HTML element
-	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s"%s`, fullID, checked))
+	// Inject store ID as element id and checked state
+	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s"%s`, storeID, checked))
 }
 
 // =============================================================================
@@ -812,11 +771,9 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	for _, branch := range i.Branches {
 		// Create a child context to capture this branch's bindings
 		branchCtx := &BuildContext{
-			IDCounter:        ctx.IDCounter, // Copy all counters
-			Bindings:         &CollectedBindings{},
-			ChildrenContent:  ctx.ChildrenContent,
-			ChildrenBindings: ctx.ChildrenBindings,
-			ParentStoreMap:   ctx.ParentStoreMap,
+			IDCounter:      ctx.IDCounter, // Copy all counters
+			Bindings:       &CollectedBindings{},
+			ParentStoreMap: ctx.ParentStoreMap,
 		}
 		branchHTML := childrenToHTML(branch.Children, branchCtx)
 
@@ -838,11 +795,9 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// Else branch
 	if len(i.ElseNode) > 0 {
 		elseCtx := &BuildContext{
-			IDCounter:        ctx.IDCounter, // Copy all counters
-			Bindings:         &CollectedBindings{},
-			ChildrenContent:  ctx.ChildrenContent,
-			ChildrenBindings: ctx.ChildrenBindings,
-			ParentStoreMap:   ctx.ParentStoreMap,
+			IDCounter:      ctx.IDCounter, // Copy all counters
+			Bindings:       &CollectedBindings{},
+			ParentStoreMap: ctx.ParentStoreMap,
 		}
 		elseHTML := childrenToHTML(i.ElseNode, elseCtx)
 
@@ -1181,31 +1136,6 @@ func RenderHTMLWithSlot(root Node, slotContent string) (string, *CollectedBindin
 	return html, ctx.Bindings
 }
 
-// RenderHTMLWithChildren renders HTML with named child content for SPA routing.
-func RenderHTMLWithChildren(root Node, childrenContent map[string]string, childrenBindings map[string]*CollectedBindings) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	ctx.ChildrenContent = childrenContent
-	ctx.ChildrenBindings = childrenBindings
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
-// RenderHTMLWithChildContent renders HTML with a specific child's content for per-route HTML generation.
-func RenderHTMLWithChildContent(root Node, childName string, allContent map[string]string, allBindings map[string]*CollectedBindings, routeGroupID string) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	// Only include the specific child's content
-	ctx.ChildrenContent = map[string]string{childName: allContent[childName]}
-	if allBindings[childName] != nil {
-		ctx.ChildrenBindings = map[string]*CollectedBindings{childName: allBindings[childName]}
-	}
-	// Set active child name so Store[Component] rendering knows which child to render
-	ctx.ActiveChildName = childName
-	// Set route group ID for component container binding
-	ctx.RouteGroupID = routeGroupID
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
 // RenderHTMLWithPrefix renders HTML with a prefix for unique IDs.
 func RenderHTMLWithPrefix(root Node, prefix string) (string, *CollectedBindings) {
 	ctx := NewBuildContext()
@@ -1245,17 +1175,16 @@ func WithPrefixCtx(prefix string) func(*BuildContext) {
 	}
 }
 
-// WithChildrenContentCtx sets children content on the build context.
-func WithChildrenContentCtx(content map[string]string, bindings map[string]*CollectedBindings) func(*BuildContext) {
-	return func(ctx *BuildContext) {
-		ctx.ChildrenContent = content
-		ctx.ChildrenBindings = bindings
-	}
-}
-
 // WithParentStoreMapCtx sets the parent store map on the build context.
 func WithParentStoreMapCtx(storeMap map[uintptr]string) func(*BuildContext) {
 	return func(ctx *BuildContext) {
 		ctx.ParentStoreMap = storeMap
+	}
+}
+
+// WithRouteGroupIDCtx sets the route group ID on the build context.
+func WithRouteGroupIDCtx(id string) func(*BuildContext) {
+	return func(ctx *BuildContext) {
+		ctx.RouteGroupID = id
 	}
 }
