@@ -19,8 +19,16 @@ type Router struct {
 	popstateFn     js.Func                    // retained to prevent GC
 }
 
-// NewRouter creates a new router instance with a component store, routes, and ID
+// NewRouter creates a new router instance with a component store, routes, and ID.
+// Automatically registers all route components as options on the component store
+// so SSR can pre-render all branches.
 func NewRouter(componentStore *Store[Component], routes []Route, id string) *Router {
+	// Register all route components as store options for pre-baked rendering
+	for _, route := range routes {
+		if route.Component != nil {
+			componentStore.WithOptions(route.Component)
+		}
+	}
 	return &Router{
 		componentStore: componentStore,
 		routes:         routes,
@@ -51,7 +59,7 @@ func (r *Router) Start() {
 	js.Global().Get("console").Call("log", "[DEBUG] componentStore is nil:", r.componentStore == nil)
 	js.Global().Get("console").Call("log", "[DEBUG] routes count:", len(r.routes))
 
-	// RouteBlock handles DOM updates via pre-baked HTML swap.
+	// ComponentBlock handles DOM updates via pre-baked HTML swap.
 	// No need to bind component store to DOM container.
 
 	// Handle initial route

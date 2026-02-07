@@ -61,9 +61,7 @@ func Hydrate(app Component) {
 	for _, route := range ssrPaths {
 		// Reset global counters so each iteration starts from s0,
 		// matching the single app.New() call in WASM.
-		storeCounter = 0
-		storeRegistry = make(map[string]any)
-		handlerRegistry = make(map[string]func())
+		resetRegistries()
 
 		// Set the SSR path before lifecycle methods
 		SetSSRPath(route.SSRPath)
@@ -92,16 +90,11 @@ func Hydrate(app Component) {
 		// Build app store map
 		appStoreMap := buildStoreMap(freshApp, "component")
 
-		// Get routes for RouteBlock generation
-		var allRoutes []Route
-		if hr, ok := freshApp.(HasRoutes); ok {
-			allRoutes = hr.Routes()
-		}
-
 		// Render the full tree - router already set the correct component
+		// Routes are now auto-registered as store options via NewRouter,
+		// so no need to pass them through context.
 		result := RenderHTMLWithContextFull(freshApp.Render(),
 			WithRouteGroupIDCtx(routerID),
-			WithRoutesCtx(allRoutes),
 		)
 
 		// Resolve bindings (needed for If-blocks, Each-blocks, AttrConds)
@@ -217,14 +210,14 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	seenRoute := make(map[string]bool)
-	for _, rb := range dst.RouteBlocks {
-		seenRoute[rb.MarkerID] = true
+	seenCompBlock := make(map[string]bool)
+	for _, cb := range dst.ComponentBlocks {
+		seenCompBlock[cb.MarkerID] = true
 	}
-	for _, rb := range src.RouteBlocks {
-		if !seenRoute[rb.MarkerID] {
-			dst.RouteBlocks = append(dst.RouteBlocks, rb)
-			seenRoute[rb.MarkerID] = true
+	for _, cb := range src.ComponentBlocks {
+		if !seenCompBlock[cb.MarkerID] {
+			dst.ComponentBlocks = append(dst.ComponentBlocks, cb)
+			seenCompBlock[cb.MarkerID] = true
 		}
 	}
 }

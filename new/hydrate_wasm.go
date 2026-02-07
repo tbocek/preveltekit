@@ -12,8 +12,8 @@ var setupIfBlocks = make(map[string]bool)
 // Track which each-blocks have been set up to avoid duplicates
 var setupEachBlocks = make(map[string]bool)
 
-// Track which route-blocks have been set up to avoid duplicates
-var setupRouteBlocks = make(map[string]bool)
+// Track which component-blocks have been set up to avoid duplicates
+var setupComponentBlocks = make(map[string]bool)
 
 // trimPrefix removes prefix from s if present
 func trimPrefix(s, prefix string) string {
@@ -184,10 +184,10 @@ func hydrateWASM(app Component, children map[string]Component) {
 		om.OnMount()
 	}
 
-	// Apply route blocks AFTER OnMount, since the router's path store
-	// is created during OnMount -> NewRouter -> New(id+".path", "")
-	for _, rb := range bindings.RouteBlocks {
-		bindRouteBlock(rb, components)
+	// Apply component blocks AFTER OnMount, since the component store's
+	// options are registered during OnMount -> NewRouter -> WithOptions()
+	for _, cb := range bindings.ComponentBlocks {
+		bindComponentBlock(cb, components)
 	}
 
 	// Keep WASM running
@@ -400,14 +400,14 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 		// Also clear the if-block's own setup status so it can be re-setup
 		delete(setupIfBlocks, ifb.MarkerID)
 	}
-	// Recursively clear route-block markers
-	for _, rb := range bindings.RouteBlocks {
-		for _, branch := range rb.Branches {
+	// Recursively clear component-block markers
+	for _, cb := range bindings.ComponentBlocks {
+		for _, branch := range cb.Branches {
 			if branch.Bindings != nil {
 				clearBoundMarkers(branch.Bindings)
 			}
 		}
-		delete(setupRouteBlocks, rb.MarkerID)
+		delete(setupComponentBlocks, cb.MarkerID)
 	}
 
 	// NOTE: Do NOT clear setupEachBlocks here. Each-blocks subscribe to list.OnChange
@@ -415,112 +415,94 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 	// The list callbacks will re-find the marker when needed.
 }
 
-// bindRouteBlock sets up a route-block with pre-baked HTML swap on path change.
-// Modeled on bindIfBlock but with path-matching instead of store-condition evaluation.
-func bindRouteBlock(rb HydrateRouteBlock, components map[string]Component) {
-	if setupRouteBlocks[rb.MarkerID] {
+// bindComponentBlock sets up a component-block with pre-baked HTML swap on store change.
+// Subscribes to the Store[Component] and swaps branches by component type name.
+func bindComponentBlock(cb HydrateComponentBlock, components map[string]Component) {
+	if setupComponentBlocks[cb.MarkerID] {
 		return
 	}
-	setupRouteBlocks[rb.MarkerID] = true
+	setupComponentBlocks[cb.MarkerID] = true
 
 	// Find existing SSR content (the <span> before the comment marker)
-	currentEl := FindExistingIfContent(rb.MarkerID)
+	currentEl := FindExistingIfContent(cb.MarkerID)
 
 	currentCleanup := &Cleanup{}
 
-	currentBranchPath := ""
+	currentBranchName := ""
 	firstCall := true
 
-	updateRouteBlock := func() {
-		js.Global().Get("console").Call("log", "[ROUTE] updateRouteBlock called, firstCall:", firstCall, "currentBranchPath:", currentBranchPath)
+	updateComponentBlock := func() {
+		// Get current component from the store
+		compStore := resolveStore(cb.StoreID, components)
+		if compStore == nil {
+			js.Global().Get("console").Call("log", "[COMP] store not found:", cb.StoreID)
+			return
+		}
 
-		// Get current path from the path store
-		pathStore := resolveStore(rb.PathStoreID, components)
-		path := ""
-		if ps, ok2 := pathStore.(*Store[string]); ok2 {
-			path = ps.Get()
+		// Get the component's type name
+		var activeName string
+		if cs, ok2 := compStore.(*Store[Component]); ok2 {
+			comp := cs.Get()
+			if comp != nil {
+				activeName = componentName(comp)
+			}
 		}
-		if path == "" {
-			path = js.Global().Get("location").Get("pathname").String()
-		}
-		if path == "" {
-			path = "/"
-		}
-		js.Global().Get("console").Call("log", "[ROUTE] resolved path:", path)
 
-		// Find matching branch using route matching
+		js.Global().Get("console").Call("log", "[COMP] updateComponentBlock called, firstCall:", firstCall, "activeName:", activeName, "currentBranch:", currentBranchName)
+
+		// Find matching branch by component name
 		var activeHTML string
 		var activeBindings *HydrateBindings
-		activePath := ""
-		bestSpecificity := -1
-
-		for _, branch := range rb.Branches {
-			_, specificity, ok3 := matchRoute(branch.Path, path)
-			js.Global().Get("console").Call("log", "[ROUTE] branch:", branch.Path, "match:", ok3, "specificity:", specificity, "hasBindings:", branch.Bindings != nil)
-			if branch.Bindings != nil {
-				js.Global().Get("console").Call("log", "[ROUTE]   branch events:", len(branch.Bindings.Events), "text:", len(branch.Bindings.TextBindings))
-			}
-			if ok3 && specificity > bestSpecificity {
+		for _, branch := range cb.Branches {
+			if branch.Name == activeName {
 				activeHTML = branch.HTML
 				activeBindings = branch.Bindings
-				activePath = branch.Path
-				bestSpecificity = specificity
+				break
 			}
 		}
 
-		js.Global().Get("console").Call("log", "[ROUTE] activePath:", activePath, "activeHTML len:", len(activeHTML), "hasActiveBindings:", activeBindings != nil)
-
-		// Skip if same route is already active (but not on first call)
-		if activePath == currentBranchPath && !firstCall {
-			js.Global().Get("console").Call("log", "[ROUTE] SKIP: same route already active")
+		// Skip if same branch is already active (but not on first call)
+		if activeName == currentBranchName && !firstCall {
+			js.Global().Get("console").Call("log", "[COMP] SKIP: same component already active")
 			return
 		}
 
 		if firstCall {
 			firstCall = false
-			currentBranchPath = activePath
-			js.Global().Get("console").Call("log", "[ROUTE] FIRST CALL: skipping DOM swap, applying bindings only")
-			// On initial load, SSR already rendered the correct HTML.
-			// Don't swap the DOM, but DO apply the branch's bindings
-			// so that event listeners, text bindings, etc. are wired up.
+			currentBranchName = activeName
+			js.Global().Get("console").Call("log", "[COMP] FIRST CALL: skipping DOM swap, applying bindings only")
 			if activeBindings != nil {
-				js.Global().Get("console").Call("log", "[ROUTE] applying initial bindings, events:", len(activeBindings.Events))
 				clearBoundMarkers(activeBindings)
 				applyBindings(activeBindings, components, currentCleanup)
-			} else {
-				js.Global().Get("console").Call("log", "[ROUTE] WARNING: no bindings for initial route")
 			}
 			return
 		}
 
-		js.Global().Get("console").Call("log", "[ROUTE] SWAP: replacing DOM, old:", currentBranchPath, "new:", activePath)
-		currentBranchPath = activePath
+		js.Global().Get("console").Call("log", "[COMP] SWAP: replacing DOM, old:", currentBranchName, "new:", activeName)
+		currentBranchName = activeName
 
 		// Swap HTML (same mechanism as IfBlock)
-		currentEl = FindExistingIfContent(rb.MarkerID)
-		currentEl = ReplaceContent(rb.MarkerID, currentEl, activeHTML)
+		currentEl = FindExistingIfContent(cb.MarkerID)
+		currentEl = ReplaceContent(cb.MarkerID, currentEl, activeHTML)
 
 		// Release old bindings, apply new
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
 
 		if activeBindings != nil {
-			js.Global().Get("console").Call("log", "[ROUTE] applying swap bindings, events:", len(activeBindings.Events))
 			clearBoundMarkers(activeBindings)
 			applyBindings(activeBindings, components, currentCleanup)
-		} else {
-			js.Global().Get("console").Call("log", "[ROUTE] WARNING: no bindings for swapped route")
 		}
 	}
 
-	// Subscribe to the router's currentPath store
-	pathStore := resolveStore(rb.PathStoreID, components)
-	if pathStore != nil {
-		subscribeToStore(pathStore, updateRouteBlock)
+	// Subscribe to the component store
+	compStore := resolveStore(cb.StoreID, components)
+	if compStore != nil {
+		subscribeToStore(compStore, updateComponentBlock)
 	}
 
 	// Initial sync (handles SSR → WASM handoff)
-	updateRouteBlock()
+	updateComponentBlock()
 }
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.
@@ -761,13 +743,6 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 		return
 	}
 
-	// Get the component that owns this list for rendering
-	compName, _, _ := splitFirst(eb.ListID, ".")
-	comp, compOk := components[compName]
-	if !compOk {
-		return
-	}
-
 	// Extract item ID prefix from marker (e.g., "lists_e0" -> "lists_")
 	itemIDPrefix := eb.MarkerID[:len(eb.MarkerID)-1]
 	if len(itemIDPrefix) > 0 && itemIDPrefix[len(itemIDPrefix)-1] == 'e' {
@@ -782,8 +757,6 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 	case *List[int]:
 		bindListItems(list, eb.MarkerID, itemIDPrefix, intToStr)
 	}
-
-	_ = comp
 }
 
 // bindListItems sets up list rendering and subscribes to changes.
@@ -1004,6 +977,8 @@ func subscribeToStore(store any, callback func()) {
 		s.OnChange(func(_ bool) { callback() })
 	case *Store[float64]:
 		s.OnChange(func(_ float64) { callback() })
+	case *Store[Component]:
+		s.OnChange(func(_ Component) { callback() })
 	}
 }
 
@@ -1065,7 +1040,7 @@ type HydrateBindings struct {
 	AttrBindings        []HydrateAttrBinding        `json:"AttrBindings"`
 	AttrCondBindings    []HydrateAttrCondBinding    `json:"AttrCondBindings"`
 	ComponentContainers []HydrateComponentContainer `json:"ComponentContainers,omitempty"`
-	RouteBlocks         []HydrateRouteBlock         `json:"RouteBlocks,omitempty"`
+	ComponentBlocks     []HydrateComponentBlock     `json:"ComponentBlocks,omitempty"`
 }
 
 // HydrateComponentContainer maps a route group ID to its DOM container ID
@@ -1139,17 +1114,17 @@ type HydrateEachBlock struct {
 	IndexVar string `json:"IndexVar"`
 }
 
-// HydrateRouteBlock is the WASM-side representation of a RouteBlock.
-// Like HydrateIfBlock but with path-based conditions instead of store conditions.
-type HydrateRouteBlock struct {
-	MarkerID    string               `json:"MarkerID"`
-	PathStoreID string               `json:"PathStoreID"`
-	Branches    []HydrateRouteBranch `json:"Branches"`
+// HydrateComponentBlock is the WASM-side representation of a ComponentBlock.
+// Like HydrateIfBlock but keyed by component type name instead of store conditions.
+type HydrateComponentBlock struct {
+	MarkerID string                   `json:"MarkerID"`
+	StoreID  string                   `json:"StoreID"`
+	Branches []HydrateComponentBranch `json:"Branches"`
 }
 
-// HydrateRouteBranch represents one route's pre-baked content.
-type HydrateRouteBranch struct {
-	Path     string           `json:"Path"`
+// HydrateComponentBranch represents one component's pre-baked content.
+type HydrateComponentBranch struct {
+	Name     string           `json:"Name"`
 	HTML     string           `json:"HTML"`
 	Bindings *HydrateBindings `json:"Bindings,omitempty"`
 }

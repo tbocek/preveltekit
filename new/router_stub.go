@@ -15,10 +15,18 @@ type Router struct {
 	beforeNav      func(from, to string) bool
 }
 
-// NewRouter creates a new router instance and registers the ID for SSR
+// NewRouter creates a new router instance and registers the ID for SSR.
+// Automatically registers all route components as options on the component store
+// so SSR can pre-render all branches.
 func NewRouter(componentStore *Store[Component], routes []Route, id string) *Router {
 	// Register ID for SSR to discover container mapping
 	pendingRouterIDs = append(pendingRouterIDs, id)
+	// Register all route components as store options for pre-baked rendering
+	for _, route := range routes {
+		if route.Component != nil {
+			componentStore.WithOptions(route.Component)
+		}
+	}
 	return &Router{
 		componentStore: componentStore,
 		routes:         routes,

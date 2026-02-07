@@ -29,9 +29,6 @@ type BuildContext struct {
 	// RouteGroupID is the ID of the current route group (for component container binding)
 	RouteGroupID string
 
-	// Routes holds all routes for the current route group (for RouteBlock generation)
-	Routes []Route
-
 	// CollectedStyles holds CSS from nested components (deduplicated by component name)
 	CollectedStyles map[string]string
 }
@@ -48,7 +45,7 @@ type CollectedBindings struct {
 	Components          []ComponentBinding   `json:"Components"`
 	ComponentStore      *Store[Component]    `json:"-"` // For WASM to subscribe to navigation
 	ComponentContainers []ComponentContainer `json:"ComponentContainers,omitempty"`
-	RouteBlocks         []RouteBlock         `json:"RouteBlocks,omitempty"`
+	ComponentBlocks     []ComponentBlock     `json:"ComponentBlocks,omitempty"`
 }
 
 // ComponentContainer maps a route group ID to its DOM container
@@ -57,20 +54,20 @@ type ComponentContainer struct {
 	ContainerID string `json:"ContainerID"` // DOM element ID, e.g., "content"
 }
 
-// RouteBlock represents a router's pre-baked route branches.
-// Like IfBlock but with path-based conditions instead of store conditions.
-// HTML: <span>active route content</span><!--r0--> where content swaps on navigation.
-type RouteBlock struct {
-	MarkerID    string        `json:"MarkerID"`    // Comment marker, e.g., "r0"
-	PathStoreID string        `json:"PathStoreID"` // Store ID of the router's currentPath, e.g., "main.path"
-	Branches    []RouteBranch `json:"Branches"`    // One per route
+// ComponentBlock represents a Store[Component]'s pre-baked branches.
+// Like IfBlock but keyed by component type name instead of store conditions.
+// HTML: <span>active component content</span><!--r0--> where content swaps on store change.
+type ComponentBlock struct {
+	MarkerID string            `json:"MarkerID"` // Comment marker, e.g., "r0"
+	StoreID  string            `json:"StoreID"`  // Store ID of the component store
+	Branches []ComponentBranch `json:"Branches"`
 }
 
-// RouteBranch represents one route's pre-baked content.
-type RouteBranch struct {
-	Path     string             `json:"Path"`               // Route pattern, e.g., "/basics", "/users/:id"
-	HTML     string             `json:"HTML"`               // Pre-rendered HTML for this route
-	Bindings *CollectedBindings `json:"Bindings,omitempty"` // Nested bindings for this route's content
+// ComponentBranch represents one component's pre-baked content.
+type ComponentBranch struct {
+	Name     string             `json:"Name"`               // Component type name, e.g., "basics", "components"
+	HTML     string             `json:"HTML"`               // Pre-rendered HTML for this component
+	Bindings *CollectedBindings `json:"Bindings,omitempty"` // Nested bindings for this component's content
 }
 
 // =============================================================================
@@ -282,55 +279,60 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 			bindNode := &BindNode{StoreRef: v, IsHTML: false}
 			sb.WriteString(bindNode.ToHTML(ctx))
 		case *Store[Component]:
-			// Route-based component rendering: bake ALL route branches into a RouteBlock
+			// Component store rendering: bake ALL option branches into a ComponentBlock
 			// (like IfBlock bakes all conditional branches).
 			comp := v.Get()
-			if comp != nil && len(ctx.Routes) > 0 {
-				// Generate a route marker (like IfBlock markers)
+			if comp != nil && len(v.Options()) > 0 {
+				// Generate a marker (like IfBlock markers)
 				localMarker := ctx.NextRouteMarker()
 				markerID := ctx.FullMarkerID(localMarker)
 
-				routeBlock := RouteBlock{
-					MarkerID:    markerID,
-					PathStoreID: ctx.RouteGroupID + ".path",
+				block := ComponentBlock{
+					MarkerID: markerID,
+					StoreID:  v.ID(),
 				}
 
-				// Render ALL route components, each in an isolated context
+				// Render ALL option components, deduplicated by type name
 				var activeHTML string
-				for _, route := range ctx.Routes {
-					routeComp := route.Component
-					if routeComp == nil {
+				seen := make(map[string]bool)
+				for _, opt := range v.Options() {
+					optComp, ok := opt.(Component)
+					if !ok || optComp == nil {
 						continue
 					}
-					routeName := componentName(routeComp)
+					name := componentName(optComp)
+					if seen[name] {
+						continue
+					}
+					seen[name] = true
 
 					// Render in isolated child context (like IfBlock branches)
-					branchCtx := ctx.Child(routeName)
-					branchHTML := nodeToHTML(routeComp.Render(), branchCtx)
+					branchCtx := ctx.Child(name)
+					branchHTML := nodeToHTML(optComp.Render(), branchCtx)
 
 					// Resolve bindings within this branch
-					childStoreMap := buildStoreMap(routeComp, routeName)
-					resolveBindings(branchCtx.Bindings, childStoreMap, routeName, routeComp)
+					childStoreMap := buildStoreMap(optComp, name)
+					resolveBindings(branchCtx.Bindings, childStoreMap, name, optComp)
 
-					routeBlock.Branches = append(routeBlock.Branches, RouteBranch{
-						Path:     route.Path,
+					block.Branches = append(block.Branches, ComponentBranch{
+						Name:     name,
 						HTML:     branchHTML,
 						Bindings: branchCtx.Bindings,
 					})
 
 					// Track which branch is active for this SSR render
-					if routeComp == comp {
+					if optComp == comp {
 						activeHTML = branchHTML
 					}
 				}
 
-				ctx.Bindings.RouteBlocks = append(ctx.Bindings.RouteBlocks, routeBlock)
+				ctx.Bindings.ComponentBlocks = append(ctx.Bindings.ComponentBlocks, block)
 
 				// Emit: <span>{activeHTML}</span><!--markerID-->
 				// Same pattern as IfBlock output
 				sb.WriteString(fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID))
 			} else if comp != nil {
-				// Fallback: no routes in context, render current component directly
+				// Fallback: no options, render current component directly
 				name := componentName(comp)
 				childCtx := ctx.Child(name)
 				html := nodeToHTML(comp.Render(), childCtx)
@@ -1002,7 +1004,7 @@ func mergeNestedBindings(parent, child *CollectedBindings) {
 	parent.Components = append(parent.Components, child.Components...)
 	parent.AttrBindings = append(parent.AttrBindings, child.AttrBindings...)
 	parent.AttrCondBindings = append(parent.AttrCondBindings, child.AttrCondBindings...)
-	parent.RouteBlocks = append(parent.RouteBlocks, child.RouteBlocks...)
+	parent.ComponentBlocks = append(parent.ComponentBlocks, child.ComponentBlocks...)
 }
 
 // ToHTML generates HTML for a slot node.
@@ -1182,12 +1184,5 @@ func WithParentStoreMapCtx(storeMap map[uintptr]string) func(*BuildContext) {
 func WithRouteGroupIDCtx(id string) func(*BuildContext) {
 	return func(ctx *BuildContext) {
 		ctx.RouteGroupID = id
-	}
-}
-
-// WithRoutesCtx sets the routes on the build context for RouteBlock generation.
-func WithRoutesCtx(routes []Route) func(*BuildContext) {
-	return func(ctx *BuildContext) {
-		ctx.Routes = routes
 	}
 }

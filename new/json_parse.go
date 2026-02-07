@@ -53,8 +53,8 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 			p.skipValue()
 		case "ComponentContainers":
 			b.ComponentContainers = p.parseComponentContainers()
-		case "RouteBlocks":
-			b.RouteBlocks = p.parseRouteBlocks()
+		case "ComponentBlocks":
+			b.ComponentBlocks = p.parseComponentBlocks()
 		default:
 			p.skipValue()
 		}
@@ -659,8 +659,8 @@ func (p *jsonParser) parseComponentContainers() []HydrateComponentContainer {
 	return result
 }
 
-func (p *jsonParser) parseRouteBlocks() []HydrateRouteBlock {
-	var result []HydrateRouteBlock
+func (p *jsonParser) parseComponentBlocks() []HydrateComponentBlock {
+	var result []HydrateComponentBlock
 	p.skipWS()
 	if p.peek() == 'n' {
 		p.pos += 4 // skip null
@@ -677,8 +677,8 @@ func (p *jsonParser) parseRouteBlocks() []HydrateRouteBlock {
 			break
 		}
 
-		rb := p.parseRouteBlock()
-		result = append(result, rb)
+		cb := p.parseComponentBlock()
+		result = append(result, cb)
 
 		p.skipWS()
 		if !p.consume(',') {
@@ -690,8 +690,8 @@ func (p *jsonParser) parseRouteBlocks() []HydrateRouteBlock {
 	return result
 }
 
-func (p *jsonParser) parseRouteBlock() HydrateRouteBlock {
-	rb := HydrateRouteBlock{}
+func (p *jsonParser) parseComponentBlock() HydrateComponentBlock {
+	cb := HydrateComponentBlock{}
 	p.consume('{')
 	for {
 		p.skipWS()
@@ -706,11 +706,11 @@ func (p *jsonParser) parseRouteBlock() HydrateRouteBlock {
 
 		switch key {
 		case "MarkerID":
-			rb.MarkerID = p.parseString()
-		case "PathStoreID":
-			rb.PathStoreID = p.parseString()
+			cb.MarkerID = p.parseString()
+		case "StoreID":
+			cb.StoreID = p.parseString()
 		case "Branches":
-			rb.Branches = p.parseRouteBranches()
+			cb.Branches = p.parseComponentBranches()
 		default:
 			p.skipValue()
 		}
@@ -722,11 +722,11 @@ func (p *jsonParser) parseRouteBlock() HydrateRouteBlock {
 			break
 		}
 	}
-	return rb
+	return cb
 }
 
-func (p *jsonParser) parseRouteBranches() []HydrateRouteBranch {
-	var result []HydrateRouteBranch
+func (p *jsonParser) parseComponentBranches() []HydrateComponentBranch {
+	var result []HydrateComponentBranch
 	p.skipWS()
 	if p.peek() == 'n' {
 		p.pos += 4 // skip null
@@ -743,7 +743,7 @@ func (p *jsonParser) parseRouteBranches() []HydrateRouteBranch {
 			break
 		}
 
-		br := HydrateRouteBranch{}
+		br := HydrateComponentBranch{}
 		p.consume('{')
 		for {
 			p.skipWS()
@@ -757,8 +757,8 @@ func (p *jsonParser) parseRouteBranches() []HydrateRouteBranch {
 			p.skipWS()
 
 			switch key {
-			case "Path":
-				br.Path = p.parseString()
+			case "Name":
+				br.Name = p.parseString()
 			case "HTML":
 				br.HTML = p.parseString()
 			case "Bindings":

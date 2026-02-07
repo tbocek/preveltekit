@@ -24,6 +24,22 @@ type Store[T any] struct {
 	id        string
 	value     T
 	callbacks []func(T)
+	options   []any // possible values for pre-baked rendering (used by Store[Component])
+}
+
+// WithOptions registers alternative values this store may hold.
+// Used by SSR to pre-render all possible components for a Store[Component].
+// For routing, NewRouter calls this automatically. For other cases (tabs, wizards),
+// call it manually: store.WithOptions(compA, compB, compC)
+func (s *Store[T]) WithOptions(alternatives ...T) {
+	for _, alt := range alternatives {
+		s.options = append(s.options, alt)
+	}
+}
+
+// Options returns the registered alternative values for this store.
+func (s *Store[T]) Options() []any {
+	return s.options
 }
 
 // storeRegistry holds all registered stores by ID for hydration lookup
@@ -37,6 +53,14 @@ func nextStoreID() string {
 	id := "s" + itoa(storeCounter)
 	storeCounter++
 	return id
+}
+
+// resetRegistries resets all global counters and registries to initial state.
+// Called before each SSR iteration so IDs start from s0, matching WASM.
+func resetRegistries() {
+	storeCounter = 0
+	storeRegistry = make(map[string]any)
+	handlerRegistry = make(map[string]func())
 }
 
 // handlerRegistry holds all registered event handlers by ID for hydration lookup
