@@ -3,7 +3,6 @@
 package preveltekit
 
 import (
-	"reflect"
 	"syscall/js"
 )
 
@@ -13,9 +12,8 @@ var setupIfBlocks = make(map[string]bool)
 // Track which each-blocks have been set up to avoid duplicates
 var setupEachBlocks = make(map[string]bool)
 
-// componentContainers maps store IDs to their DOM container IDs.
-// Set during hydration, used by the router to bind component store updates.
-var componentContainers = make(map[string]string)
+// Track which route-blocks have been set up to avoid duplicates
+var setupRouteBlocks = make(map[string]bool)
 
 // trimPrefix removes prefix from s if present
 func trimPrefix(s, prefix string) string {
@@ -84,121 +82,54 @@ func Hydrate(app Component) {
 		}
 	}
 
-	// Call Render() on all components to register handlers via WithOn()
-	app.Render()
+	// Call Render() on all components to register handlers via WithOn().
+	// Must recurse into nested ComponentNodes so their WithOn calls fire too.
+	renderRecursive(app)
 	for _, child := range children {
-		child.Render()
+		renderRecursive(child)
 	}
 
 	// Use the full hydration which handles If-blocks, Each-blocks, etc.
 	hydrateWASM(app, children)
 }
 
-// hydrateFromRegistry walks the DOM and binds stores/handlers using the global registries.
-// This is the new simplified hydration that doesn't need bindings JSON.
-func hydrateFromRegistry() {
-	cleanup := &Cleanup{}
-
-	// 1. Bind text nodes: Walk all comment nodes, use comment text as store ID
-	bindTextNodesFromRegistry()
-
-	// 2. Bind event handlers: Walk elements with data-on attribute
-	bindEventsFromRegistry(cleanup)
-
-	// 3. Bind inputs: Walk input/textarea elements, use ID as store ID
-	bindInputsFromRegistry(cleanup)
+// renderRecursive calls Render() on a component and recursively on any
+// nested ComponentNodes. This ensures all WithOn() calls fire to register
+// handlers in the global registry.
+func renderRecursive(comp Component) {
+	node := comp.Render()
+	walkNodeForComponents(node)
 }
 
-// bindTextNodesFromRegistry walks all comment nodes and binds stores from the registry.
-func bindTextNodesFromRegistry() {
-	// First, collect all comment node IDs (don't bind yet, as binding removes comments)
-	var storeIDs []string
-	walker := Document.Call("createTreeWalker",
-		Document.Get("body"),
-		nodeFilterShowComment,
-		js.Null(),
-	)
-	for {
-		node := walker.Call("nextNode")
-		if node.IsNull() {
-			break
-		}
-		storeID := node.Get("nodeValue").String()
-		js.Global().Get("console").Call("log", "[DEBUG] Comment node:", storeID)
-		storeIDs = append(storeIDs, storeID)
+// walkNodeForComponents walks a Node tree and calls renderRecursive on
+// any ComponentNode instances found.
+func walkNodeForComponents(n Node) {
+	if n == nil {
+		return
 	}
-
-	// Now bind each store (this removes the comment nodes, but we've already collected them all)
-	for _, storeID := range storeIDs {
-		store := GetStore(storeID)
-		if store != nil {
-			js.Global().Get("console").Call("log", "[DEBUG] Binding store:", storeID)
-			bindTextDynamic(storeID, store, false)
-		}
-	}
-}
-
-// bindEventsFromRegistry walks elements with data-on and binds handlers from the registry.
-func bindEventsFromRegistry(cleanup *Cleanup) {
-	elements := Document.Call("querySelectorAll", "[data-on]")
-	length := elements.Get("length").Int()
-	for i := 0; i < length; i++ {
-		el := elements.Call("item", i)
-		handlerID := el.Get("id").String()
-		events := el.Call("getAttribute", "data-on").String()
-
-		handler := GetHandler(handlerID)
-		if handler == nil {
-			js.Global().Get("console").Call("log", "[DEBUG] No handler for:", handlerID)
-			continue
-		}
-
-		// Parse event names (comma-separated)
-		for _, event := range splitEvents(events) {
-			bindEventDynamic(cleanup, handlerID, event, handler)
-		}
-	}
-}
-
-// splitEvents splits a comma-separated event string into individual events.
-func splitEvents(events string) []string {
-	var result []string
-	start := 0
-	for i := 0; i <= len(events); i++ {
-		if i == len(events) || events[i] == ',' {
-			if i > start {
-				result = append(result, events[start:i])
+	switch node := n.(type) {
+	case *HtmlNode:
+		for _, part := range node.Parts {
+			if child, ok := part.(Node); ok {
+				walkNodeForComponents(child)
 			}
-			start = i + 1
 		}
-	}
-	return result
-}
-
-// bindInputsFromRegistry walks input/textarea elements and binds stores from the registry.
-func bindInputsFromRegistry(cleanup *Cleanup) {
-	// Bind text inputs
-	inputs := Document.Call("querySelectorAll", "input[id], textarea[id]")
-	length := inputs.Get("length").Int()
-	for i := 0; i < length; i++ {
-		el := inputs.Call("item", i)
-		storeID := el.Get("id").String()
-		store := GetStore(storeID)
-		if store == nil {
-			continue
+	case *Fragment:
+		for _, child := range node.Children {
+			walkNodeForComponents(child)
 		}
-
-		inputType := el.Call("getAttribute", "type").String()
-		if inputType == "checkbox" {
-			if s, ok := store.(*Store[bool]); ok {
-				cleanup.Add(BindCheckbox(storeID, s))
+	case *IfNode:
+		for _, branch := range node.Branches {
+			for _, child := range branch.Children {
+				walkNodeForComponents(child)
 			}
-		} else {
-			if s, ok := store.(*Store[string]); ok {
-				cleanup.Add(BindInput(storeID, s))
-			} else if s, ok := store.(*Store[int]); ok {
-				cleanup.Add(BindInputInt(storeID, s))
-			}
+		}
+		for _, child := range node.ElseNode {
+			walkNodeForComponents(child)
+		}
+	case *ComponentNode:
+		if comp, ok := node.Instance.(Component); ok {
+			renderRecursive(comp)
 		}
 	}
 }
@@ -223,12 +154,6 @@ func hydrateWASM(app Component, children map[string]Component) {
 		return
 	}
 
-	// Store component containers for router to use
-	for _, c := range bindings.ComponentContainers {
-		componentContainers[c.ID] = c.ContainerID
-		js.Global().Get("console").Call("log", "[DEBUG] componentContainer:", c.ID, "->", c.ContainerID)
-	}
-
 	// Build component map: "component" -> app, "basics" -> child, etc.
 	components := map[string]Component{
 		"component": app,
@@ -241,67 +166,9 @@ func hydrateWASM(app Component, children map[string]Component) {
 	// Run OnCreate phase
 	runOnCreate(app, children)
 
-	// Collect event handlers from component Render() trees
-	collectHandlers(app, "")
-	// Deduplicate children by pointer to avoid collecting same component twice
-	// (e.g., "/" and "/basics" may both point to the same Basics component)
-	// We need to use the non-empty name for collection
-	collected := make(map[uintptr]string) // maps pointer to the name used for collection
-	for path, child := range children {
-		ptr := reflect.ValueOf(child).Pointer()
-		name := trimPrefix(path, "/")
-
-		// If already collected with a non-empty name, skip
-		if existingName, exists := collected[ptr]; exists && existingName != "" {
-			continue
-		}
-
-		// If this is the root path ("/"), record it but don't collect yet
-		// (we prefer the named path like "/basics" for the prefix)
-		if name == "" {
-			if _, exists := collected[ptr]; !exists {
-				collected[ptr] = "" // Mark as seen, but with empty name
-			}
-			continue
-		}
-
-		// Collect with this name
-		collected[ptr] = name
-		collectHandlers(child, name)
-	}
-
-	// Now collect any that were only registered with empty name (shouldn't happen normally)
-	for path, child := range children {
-		ptr := reflect.ValueOf(child).Pointer()
-		if collected[ptr] == "" {
-			name := trimPrefix(path, "/")
-			if name != "" {
-				collected[ptr] = name
-				collectHandlers(child, name)
-			}
-		}
-	}
-
 	// Apply all bindings
 	cleanup := &Cleanup{}
-
-	// Debug: check bindings and DOM elements
-	js.Global().Get("console").Call("log", "[DEBUG] bindings.Events count:", len(bindings.Events))
-	js.Global().Get("console").Call("log", "[DEBUG] Before applyBindings - checking DOM elements:")
-	for _, ev := range bindings.Events {
-		el := Document.Call("getElementById", ev.ElementID)
-		exists := !el.IsNull() && !el.IsUndefined()
-		js.Global().Get("console").Call("log", "[DEBUG] DOM element", ev.ElementID, "exists:", exists, "event:", ev.Event)
-	}
-
 	applyBindings(bindings, components, cleanup)
-
-	// Bind text nodes by walking DOM for comment markers with store IDs
-	// This is needed because text bindings now use store IDs as markers directly
-	bindTextNodesFromRegistry()
-
-	// Bind inputs by walking DOM for elements with store IDs
-	bindInputsFromRegistry(cleanup)
 
 	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
 	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
@@ -315,6 +182,12 @@ func hydrateWASM(app Component, children map[string]Component) {
 	// Router will handle component store binding for SPA navigation
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
+	}
+
+	// Apply route blocks AFTER OnMount, since the router's path store
+	// is created during OnMount -> NewRouter -> New(id+".path", "")
+	for _, rb := range bindings.RouteBlocks {
+		bindRouteBlock(rb, components)
 	}
 
 	// Keep WASM running
@@ -363,119 +236,10 @@ func resolveStore(storeID string, components map[string]Component) any {
 	return store
 }
 
-// handlerMap stores element ID -> handler function mappings collected from Render()
-var handlerMap = make(map[string]func())
-
-// collectHandlers walks a component's Render() tree and extracts event handlers.
-// It uses the same ID generation logic as SSR to ensure IDs match.
-func collectHandlers(comp Component, prefix string) {
-	js.Global().Get("console").Call("log", "[DEBUG] collectHandlers prefix:", prefix, "comp:", componentNameWasm(comp))
-	node := comp.Render()
-	ctx := &handlerCollectCtx{IDCounter: IDCounter{Prefix: prefix}}
-	collectHandlersFromNode(node, ctx)
-	js.Global().Get("console").Call("log", "[DEBUG] collectHandlers done, handlerMap size:", len(handlerMap))
-}
-
-// handlerCollectCtx tracks state while collecting handlers.
-// Embeds IDCounter to share ID generation logic with SSR (BuildContext).
-type handlerCollectCtx struct {
-	IDCounter // Shared ID generation logic from id.go
-}
-
-// collectHandlersFromNode recursively walks a node tree collecting event handlers.
-func collectHandlersFromNode(n Node, ctx *handlerCollectCtx) {
-	if n == nil {
-		return
-	}
-
-	switch node := n.(type) {
-	case *HtmlNode:
-		// IMPORTANT: Process parts FIRST, then events - must match SSR order!
-		// SSR's HtmlNode.ToHTML calls renderParts() first, then injectChainedAttrs().
-		// This ensures counter synchronization for nested nodes.
-
-		// First: process Parts (may contain nested nodes with events, stores, etc.)
-		for _, part := range node.Parts {
-			if ev, ok := part.(*eventAttr); ok {
-				localID := ctx.NextEventID()
-				fullID := ctx.FullElementID(localID)
-				handlerMap[fullID] = ev.Handler
-			} else if childNode, ok := part.(Node); ok {
-				collectHandlersFromNode(childNode, ctx)
-			} else if isStore(part) {
-				// Store values are auto-bound by SSR, which increments text counter
-				// We need to increment here too to stay in sync
-				ctx.Text++
-			}
-		}
-
-		// Second: process chained Events (via WithOn) - use user-provided handler ID
-		if len(node.Events) > 0 {
-			// Use the user-provided ID from WithOn
-			for _, ev := range node.Events {
-				handlerMap[ev.ID] = ev.Handler
-			}
-		} else if len(node.AttrConds) > 0 {
-			// SSR calls NextClassID for AttrConds without Events - must stay in sync
-			ctx.NextClassID()
-		}
-
-	case *Fragment:
-		for _, child := range node.Children {
-			collectHandlersFromNode(child, ctx)
-		}
-
-	case *BindNode:
-		// SSR increments Text counter for BindNode
-		ctx.Text++
-
-	case *BindValueNode:
-		// SSR increments Bind counter for BindValueNode
-		ctx.Bind++
-
-	case *BindCheckedNode:
-		// SSR increments Bind counter for BindCheckedNode
-		ctx.Bind++
-
-	case *IfNode:
-		// SSR increments If counter for IfNode marker
-		ctx.If++
-		// Collect from all branches (handlers exist in all possible paths)
-		for _, branch := range node.Branches {
-			for _, child := range branch.Children {
-				collectHandlersFromNode(child, ctx)
-			}
-		}
-		for _, child := range node.ElseNode {
-			collectHandlersFromNode(child, ctx)
-		}
-
-	case *EachNode:
-		// SSR increments Each counter for EachNode marker
-		ctx.Each++
-		// Each nodes have a body function - we can't easily extract handlers from it
-		// since it requires an item. For now, skip (each items are re-rendered anyway)
-
-	case *ComponentNode:
-		// Nested component - recurse with new prefix
-		compMarker := "comp" + intToStr(ctx.Comp)
-		ctx.Comp++
-		fullPrefix := ctx.FullElementID(compMarker)
-		if comp, ok := node.Instance.(Component); ok {
-			collectHandlers(comp, fullPrefix)
-		}
-	}
-}
-
 // getHandler looks up a handler by ID from the global handler registry.
 // Handlers are registered via WithOn() which calls RegisterHandler().
 func getHandler(elementID string) func() {
-	// First try the global handler registry (for WithOn handlers)
-	if handler := GetHandler(elementID); handler != nil {
-		return handler
-	}
-	// Fall back to handlerMap for legacy event handling
-	return handlerMap[elementID]
+	return GetHandler(elementID)
 }
 
 // bindTextDynamic sets up a text binding for any store type.
@@ -585,6 +349,7 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 
 	// Subscribe to store changes for all dependencies (deduplicated)
 	seenDeps := make(map[string]bool)
+	subscribedAny := false
 	for _, dep := range ifb.Deps {
 		if seenDeps[dep] {
 			continue
@@ -600,12 +365,17 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		}
 		if store != nil {
 			subscribeToStore(store, updateIfBlock)
+			subscribedAny = true
 		}
 	}
 
-	// Call updateIfBlock to sync DOM with current state
-	// This handles nested if-blocks where state may have changed after SSR
-	updateIfBlock()
+	// Call updateIfBlock to sync DOM with current state.
+	// But only if we successfully subscribed to at least one dep store.
+	// If no deps could be resolved (e.g., internal stores with no ID),
+	// trust the SSR-rendered content rather than replacing it with a wrong branch.
+	if subscribedAny {
+		updateIfBlock()
+	}
 }
 
 // clearBoundMarkers clears marker tracking for bindings that will be re-applied.
@@ -630,89 +400,127 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 		// Also clear the if-block's own setup status so it can be re-setup
 		delete(setupIfBlocks, ifb.MarkerID)
 	}
+	// Recursively clear route-block markers
+	for _, rb := range bindings.RouteBlocks {
+		for _, branch := range rb.Branches {
+			if branch.Bindings != nil {
+				clearBoundMarkers(branch.Bindings)
+			}
+		}
+		delete(setupRouteBlocks, rb.MarkerID)
+	}
+
 	// NOTE: Do NOT clear setupEachBlocks here. Each-blocks subscribe to list.OnChange
 	// which persists across if-block changes. Clearing would cause duplicate subscriptions.
 	// The list callbacks will re-find the marker when needed.
 }
 
-// bindComponentStore subscribes to a Store[Component] and re-renders on change.
-// This enables SPA navigation where clicking a link updates the component store
-// and WASM re-renders the new component into the container.
-func bindComponentStore(store *Store[Component], containerID string) {
-	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStore called, containerID:", containerID)
-	initialCompName := ""
-	if initialComp := store.Get(); initialComp != nil {
-		initialCompName = componentNameWasm(initialComp)
-	}
-	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStore initialCompName:", initialCompName)
-	bindComponentStoreWithInitial(store, containerID, initialCompName)
-}
-
-// bindComponentStoreWithInitial is like bindComponentStore but takes the pre-rendered component name.
-func bindComponentStoreWithInitial(store *Store[Component], containerID string, initialPrerenderedName string) {
-	if store == nil {
-		js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: store is nil")
+// bindRouteBlock sets up a route-block with pre-baked HTML swap on path change.
+// Modeled on bindIfBlock but with path-matching instead of store-condition evaluation.
+func bindRouteBlock(rb HydrateRouteBlock, components map[string]Component) {
+	if setupRouteBlocks[rb.MarkerID] {
 		return
 	}
+	setupRouteBlocks[rb.MarkerID] = true
 
-	// Track current cleanup for the rendered component
+	// Find existing SSR content (the <span> before the comment marker)
+	currentEl := FindExistingIfContent(rb.MarkerID)
+
 	currentCleanup := &Cleanup{}
 
-	// Get the container element
-	container := GetEl(containerID)
-	if !ok(container) {
-		js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: container NOT FOUND:", containerID)
-		return
-	}
-	js.Global().Get("console").Call("log", "[DEBUG] bindComponentStoreWithInitial: container found, registering OnChange")
+	currentBranchPath := ""
+	firstCall := true
 
-	// Track if this is the first change
-	firstChange := true
+	updateRouteBlock := func() {
+		js.Global().Get("console").Call("log", "[ROUTE] updateRouteBlock called, firstCall:", firstCall, "currentBranchPath:", currentBranchPath)
 
-	// Subscribe to component changes
-	store.OnChange(func(comp Component) {
-		js.Global().Get("console").Call("log", "[DEBUG] componentStore.OnChange triggered")
-		// On first change, only skip if we're staying on the same component that was pre-rendered
-		if firstChange {
-			firstChange = false
-			if comp != nil && componentNameWasm(comp) == initialPrerenderedName {
-				js.Global().Get("console").Call("log", "[DEBUG] skipping first change, same component:", initialPrerenderedName)
-				return
+		// Get current path from the path store
+		pathStore := resolveStore(rb.PathStoreID, components)
+		path := ""
+		if ps, ok2 := pathStore.(*Store[string]); ok2 {
+			path = ps.Get()
+		}
+		if path == "" {
+			path = js.Global().Get("location").Get("pathname").String()
+		}
+		if path == "" {
+			path = "/"
+		}
+		js.Global().Get("console").Call("log", "[ROUTE] resolved path:", path)
+
+		// Find matching branch using route matching
+		var activeHTML string
+		var activeBindings *HydrateBindings
+		activePath := ""
+		bestSpecificity := -1
+
+		for _, branch := range rb.Branches {
+			_, specificity, ok3 := matchRoute(branch.Path, path)
+			js.Global().Get("console").Call("log", "[ROUTE] branch:", branch.Path, "match:", ok3, "specificity:", specificity, "hasBindings:", branch.Bindings != nil)
+			if branch.Bindings != nil {
+				js.Global().Get("console").Call("log", "[ROUTE]   branch events:", len(branch.Bindings.Events), "text:", len(branch.Bindings.TextBindings))
+			}
+			if ok3 && specificity > bestSpecificity {
+				activeHTML = branch.HTML
+				activeBindings = branch.Bindings
+				activePath = branch.Path
+				bestSpecificity = specificity
 			}
 		}
-		js.Global().Get("console").Call("log", "[DEBUG] rendering new component")
-		if comp == nil {
-			container.Set("innerHTML", "")
-			currentCleanup.Release()
+
+		js.Global().Get("console").Call("log", "[ROUTE] activePath:", activePath, "activeHTML len:", len(activeHTML), "hasActiveBindings:", activeBindings != nil)
+
+		// Skip if same route is already active (but not on first call)
+		if activePath == currentBranchPath && !firstCall {
+			js.Global().Get("console").Call("log", "[ROUTE] SKIP: same route already active")
 			return
 		}
 
-		// Get component name for prefix
-		name := componentNameWasm(comp)
-
-		// NOTE: Do NOT call OnCreate/OnMount here!
-		// These were already called during initial hydration (runOnCreate/runOnMount).
-		// The component stores already have their proper values.
-		// We just need to re-render with current state.
-
-		// Inject component styles (idempotent - won't duplicate)
-		if hs, ok := comp.(HasStyle); ok {
-			InjectStyle(name, hs.Style())
+		if firstCall {
+			firstCall = false
+			currentBranchPath = activePath
+			js.Global().Get("console").Call("log", "[ROUTE] FIRST CALL: skipping DOM swap, applying bindings only")
+			// On initial load, SSR already rendered the correct HTML.
+			// Don't swap the DOM, but DO apply the branch's bindings
+			// so that event listeners, text bindings, etc. are wired up.
+			if activeBindings != nil {
+				js.Global().Get("console").Call("log", "[ROUTE] applying initial bindings, events:", len(activeBindings.Events))
+				clearBoundMarkers(activeBindings)
+				applyBindings(activeBindings, components, currentCleanup)
+			} else {
+				js.Global().Get("console").Call("log", "[ROUTE] WARNING: no bindings for initial route")
+			}
+			return
 		}
 
-		// Render with current store values
-		html, ctx := RenderComponentWasm(comp, name)
+		js.Global().Get("console").Call("log", "[ROUTE] SWAP: replacing DOM, old:", currentBranchPath, "new:", activePath)
+		currentBranchPath = activePath
 
-		// Replace container content
-		container.Set("innerHTML", html)
+		// Swap HTML (same mechanism as IfBlock)
+		currentEl = FindExistingIfContent(rb.MarkerID)
+		currentEl = ReplaceContent(rb.MarkerID, currentEl, activeHTML)
 
-		// Release old bindings and create new cleanup
+		// Release old bindings, apply new
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
 
-		// Apply collected bindings to make it reactive
-		ApplyWasmBindings(ctx.Bindings, currentCleanup)
-	})
+		if activeBindings != nil {
+			js.Global().Get("console").Call("log", "[ROUTE] applying swap bindings, events:", len(activeBindings.Events))
+			clearBoundMarkers(activeBindings)
+			applyBindings(activeBindings, components, currentCleanup)
+		} else {
+			js.Global().Get("console").Call("log", "[ROUTE] WARNING: no bindings for swapped route")
+		}
+	}
+
+	// Subscribe to the router's currentPath store
+	pathStore := resolveStore(rb.PathStoreID, components)
+	if pathStore != nil {
+		subscribeToStore(pathStore, updateRouteBlock)
+	}
+
+	// Initial sync (handles SSR → WASM handoff)
+	updateRouteBlock()
 }
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.
@@ -777,6 +585,10 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 	for _, eb := range bindings.EachBlocks {
 		bindEachBlock(eb, components)
 	}
+
+	// NOTE: Route blocks are NOT applied here. They require the router's path store
+	// which is created during OnMount (after applyBindings runs). Route blocks are
+	// applied explicitly after OnMount in hydrateWASM.
 
 }
 
@@ -997,24 +809,6 @@ func bindListItems[T comparable](list *List[T], markerID string, itemIDPrefix st
 	// Don't render initially - SSR already rendered the items
 	// Just subscribe to changes for future updates
 	list.OnChange(renderItems)
-}
-
-// componentNameWasm returns the lowercase type name of a component.
-func componentNameWasm(c Component) string {
-	if c == nil {
-		return ""
-	}
-	t := reflect.TypeOf(c)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	name := t.Name()
-	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
-		b := []byte(name)
-		b[0] = b[0] + 32
-		return string(b)
-	}
-	return name
 }
 
 // escapeHTMLWasm escapes HTML special characters
@@ -1271,6 +1065,7 @@ type HydrateBindings struct {
 	AttrBindings        []HydrateAttrBinding        `json:"AttrBindings"`
 	AttrCondBindings    []HydrateAttrCondBinding    `json:"AttrCondBindings"`
 	ComponentContainers []HydrateComponentContainer `json:"ComponentContainers,omitempty"`
+	RouteBlocks         []HydrateRouteBlock         `json:"RouteBlocks,omitempty"`
 }
 
 // HydrateComponentContainer maps a route group ID to its DOM container ID
@@ -1342,4 +1137,19 @@ type HydrateEachBlock struct {
 	ListID   string `json:"ListID"`
 	ItemVar  string `json:"ItemVar"`
 	IndexVar string `json:"IndexVar"`
+}
+
+// HydrateRouteBlock is the WASM-side representation of a RouteBlock.
+// Like HydrateIfBlock but with path-based conditions instead of store conditions.
+type HydrateRouteBlock struct {
+	MarkerID    string               `json:"MarkerID"`
+	PathStoreID string               `json:"PathStoreID"`
+	Branches    []HydrateRouteBranch `json:"Branches"`
+}
+
+// HydrateRouteBranch represents one route's pre-baked content.
+type HydrateRouteBranch struct {
+	Path     string           `json:"Path"`
+	HTML     string           `json:"HTML"`
+	Bindings *HydrateBindings `json:"Bindings,omitempty"`
 }

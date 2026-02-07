@@ -86,9 +86,16 @@ func Hydrate(app Component) {
 		// Build app store map
 		appStoreMap := buildStoreMap(freshApp, "component")
 
+		// Get routes for RouteBlock generation
+		var allRoutes []Route
+		if hr, ok := freshApp.(HasRoutes); ok {
+			allRoutes = hr.Routes()
+		}
+
 		// Render the full tree - router already set the correct component
 		result := RenderHTMLWithContextFull(freshApp.Render(),
 			WithRouteGroupIDCtx(routerID),
+			WithRoutesCtx(allRoutes),
 		)
 
 		// Resolve bindings (needed for If-blocks, Each-blocks, AttrConds)
@@ -201,6 +208,17 @@ func mergeBindings(dst, src *CollectedBindings) {
 		if !seenContainer[c.ID] {
 			dst.ComponentContainers = append(dst.ComponentContainers, c)
 			seenContainer[c.ID] = true
+		}
+	}
+
+	seenRoute := make(map[string]bool)
+	for _, rb := range dst.RouteBlocks {
+		seenRoute[rb.MarkerID] = true
+	}
+	for _, rb := range src.RouteBlocks {
+		if !seenRoute[rb.MarkerID] {
+			dst.RouteBlocks = append(dst.RouteBlocks, rb)
+			seenRoute[rb.MarkerID] = true
 		}
 	}
 }
@@ -329,15 +347,14 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 		bindings.AttrBindings[i].StoreIDs = storeIDs
 	}
 
-	// Resolve each block list references - lists don't have IDs, use reflection fallback
+	// Resolve each block list references - use list's ID directly
 	for i := range bindings.EachBlocks {
 		if bindings.EachBlocks[i].ListID != "" {
 			continue
 		}
 		if bindings.EachBlocks[i].ListRef != nil {
-			addr := reflect.ValueOf(bindings.EachBlocks[i].ListRef).Pointer()
-			if name, ok := storeMap[addr]; ok {
-				bindings.EachBlocks[i].ListID = name
+			if id := getStoreID(bindings.EachBlocks[i].ListRef); id != "" {
+				bindings.EachBlocks[i].ListID = id
 			}
 		}
 	}

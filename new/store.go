@@ -121,6 +121,7 @@ type Edit[T any] struct {
 
 // List is a reactive slice with methods that trigger updates
 type List[T comparable] struct {
+	id       string
 	items    []T
 	lenStore *Store[int] // cached length store for reactive conditions
 	onEdit   []func(Edit[T])
@@ -128,11 +129,20 @@ type List[T comparable] struct {
 	onChange []func([]T) // called on any change
 }
 
-// NewList creates a reactive list
-func NewList[T comparable](initial ...T) *List[T] {
-	return &List[T]{
+// NewList creates a reactive list with a unique ID.
+// The ID is used for JSON binding resolution and store registry lookup.
+func NewList[T comparable](id string, initial ...T) *List[T] {
+	l := &List[T]{
+		id:    id,
 		items: initial,
 	}
+	storeRegistry[id] = l
+	return l
+}
+
+// ID returns the list's unique identifier.
+func (l *List[T]) ID() string {
+	return l.id
 }
 
 // Get returns a copy of the slice (safe, no mutation leaks)
@@ -146,7 +156,7 @@ func (l *List[T]) Get() []T {
 // The store auto-updates when the list changes.
 func (l *List[T]) Len() *Store[int] {
 	if l.lenStore == nil {
-		l.lenStore = newInternal(len(l.items))
+		l.lenStore = New(l.id+".len", len(l.items))
 		l.OnChange(func(_ []T) {
 			l.lenStore.Set(len(l.items))
 		})

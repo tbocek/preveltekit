@@ -53,6 +53,8 @@ func (p *jsonParser) parseHydrateBindings() *HydrateBindings {
 			p.skipValue()
 		case "ComponentContainers":
 			b.ComponentContainers = p.parseComponentContainers()
+		case "RouteBlocks":
+			b.RouteBlocks = p.parseRouteBlocks()
 		default:
 			p.skipValue()
 		}
@@ -646,6 +648,137 @@ func (p *jsonParser) parseComponentContainers() []HydrateComponentContainer {
 			}
 		}
 		result = append(result, cc)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseRouteBlocks() []HydrateRouteBlock {
+	var result []HydrateRouteBlock
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		rb := p.parseRouteBlock()
+		result = append(result, rb)
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume(']')
+			break
+		}
+	}
+	return result
+}
+
+func (p *jsonParser) parseRouteBlock() HydrateRouteBlock {
+	rb := HydrateRouteBlock{}
+	p.consume('{')
+	for {
+		p.skipWS()
+		if p.peek() == '}' {
+			p.pos++
+			break
+		}
+		key := p.parseString()
+		p.skipWS()
+		p.consume(':')
+		p.skipWS()
+
+		switch key {
+		case "MarkerID":
+			rb.MarkerID = p.parseString()
+		case "PathStoreID":
+			rb.PathStoreID = p.parseString()
+		case "Branches":
+			rb.Branches = p.parseRouteBranches()
+		default:
+			p.skipValue()
+		}
+
+		p.skipWS()
+		if !p.consume(',') {
+			p.skipWS()
+			p.consume('}')
+			break
+		}
+	}
+	return rb
+}
+
+func (p *jsonParser) parseRouteBranches() []HydrateRouteBranch {
+	var result []HydrateRouteBranch
+	p.skipWS()
+	if p.peek() == 'n' {
+		p.pos += 4 // skip null
+		return result
+	}
+	if !p.consume('[') {
+		return result
+	}
+
+	for {
+		p.skipWS()
+		if p.peek() == ']' {
+			p.pos++
+			break
+		}
+
+		br := HydrateRouteBranch{}
+		p.consume('{')
+		for {
+			p.skipWS()
+			if p.peek() == '}' {
+				p.pos++
+				break
+			}
+			key := p.parseString()
+			p.skipWS()
+			p.consume(':')
+			p.skipWS()
+
+			switch key {
+			case "Path":
+				br.Path = p.parseString()
+			case "HTML":
+				br.HTML = p.parseString()
+			case "Bindings":
+				if p.peek() == 'n' {
+					p.skipValue() // null
+				} else {
+					br.Bindings = p.parseHydrateBindings()
+				}
+			default:
+				p.skipValue()
+			}
+
+			p.skipWS()
+			if !p.consume(',') {
+				p.skipWS()
+				p.consume('}')
+				break
+			}
+		}
+		result = append(result, br)
 
 		p.skipWS()
 		if !p.consume(',') {

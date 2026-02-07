@@ -14,6 +14,7 @@ type IDCounter struct {
 	Class  int    // Counter for class/attr binding element IDs
 	Attr   int    // Counter for dynamic attribute element IDs
 	Comp   int    // Counter for component markers
+	Route  int    // Counter for route-block markers
 	Prefix string // Prefix for nested components (e.g., "basics", "components_comp0")
 }
 
@@ -85,6 +86,14 @@ func (c *IDCounter) NextCompMarker() string {
 	return id
 }
 
+// NextRouteMarker returns the next marker ID for route-blocks.
+// Used in: <!--basics_r0--> (comment marker for route-block boundary)
+func (c *IDCounter) NextRouteMarker() string {
+	id := "route" + itoa(c.Route)
+	c.Route++
+	return id
+}
+
 // --- ID formatting functions ---
 
 // FullElementID returns the full element ID with prefix for use in HTML id="..." attributes.
@@ -127,6 +136,10 @@ func shortenMarkerPart(part string) string {
 	// each0 -> e0
 	if len(part) > 4 && part[:4] == "each" && isDigits(part[4:]) {
 		return "e" + part[4:]
+	}
+	// route0 -> r0
+	if len(part) > 5 && part[:5] == "route" && isDigits(part[5:]) {
+		return "r" + part[5:]
 	}
 	// if0 -> i0
 	if len(part) > 2 && part[:2] == "if" && isDigits(part[2:]) {

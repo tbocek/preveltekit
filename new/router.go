@@ -25,7 +25,7 @@ func NewRouter(componentStore *Store[Component], routes []Route, id string) *Rou
 		componentStore: componentStore,
 		routes:         routes,
 		id:             id,
-		currentPath:    newInternal(""),
+		currentPath:    New(id+".path", ""),
 	}
 }
 
@@ -51,13 +51,8 @@ func (r *Router) Start() {
 	js.Global().Get("console").Call("log", "[DEBUG] componentStore is nil:", r.componentStore == nil)
 	js.Global().Get("console").Call("log", "[DEBUG] routes count:", len(r.routes))
 
-	// Bind component store to DOM container for reactive updates
-	containerID := componentContainers[r.id]
-	if containerID == "" {
-		containerID = "component-root" // fallback
-	}
-	js.Global().Get("console").Call("log", "[DEBUG] binding router", r.id, "to container:", containerID)
-	bindComponentStore(r.componentStore, containerID)
+	// RouteBlock handles DOM updates via pre-baked HTML swap.
+	// No need to bind component store to DOM container.
 
 	// Handle initial route
 	path := js.Global().Get("location").Get("pathname").String()

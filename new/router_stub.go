@@ -23,7 +23,7 @@ func NewRouter(componentStore *Store[Component], routes []Route, id string) *Rou
 		componentStore: componentStore,
 		routes:         routes,
 		id:             id,
-		currentPath:    newInternal(""),
+		currentPath:    New(id+".path", ""),
 	}
 }
 

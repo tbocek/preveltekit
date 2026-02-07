@@ -153,19 +153,6 @@ func renderHtmlNodeWasm(h *HtmlNode, ctx *WasmRenderContext) string {
 			result = append(result, renderStoreBindingWasm(v, false, ctx)...)
 		case *Store[float64]:
 			result = append(result, renderStoreBindingWasm(v, false, ctx)...)
-		case *eventAttr:
-			localID := ctx.NextEventID()
-			fullID := ctx.FullElementID(localID)
-			result = append(result, `id="`...)
-			result = append(result, fullID...)
-			result = append(result, `" data-event="`...)
-			result = append(result, v.Event...)
-			result = append(result, `"`...)
-			ctx.Bindings.Events = append(ctx.Bindings.Events, WasmEventBinding{
-				ElementID: fullID,
-				Event:     v.Event,
-				Handler:   v.Handler,
-			})
 		default:
 			result = append(result, escapeHTMLWasm(anyToString(v))...)
 		}

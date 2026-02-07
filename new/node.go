@@ -301,8 +301,6 @@ func Comp(instance any, content ...any) *ComponentNode {
 		switch v := item.(type) {
 		case *PropAttr:
 			c.Props[v.Name] = v.Value
-		case *eventAttr:
-			c.Events[v.Event] = v.Handler
 		case Node:
 			c.Children = append(c.Children, v)
 		}
@@ -390,16 +388,6 @@ func DynAttr(name, template string, stores ...any) *DynAttrAttr {
 		Stores:   stores,
 	}
 }
-
-// eventAttr represents an event handler binding (internal use).
-// Users should prefer HtmlNode.WithOn() for event handling.
-type eventAttr struct {
-	Event     string
-	Handler   func()   // Handler function (wrap args in closure)
-	Modifiers []string // ["preventDefault", "stopPropagation"]
-}
-
-func (e *eventAttr) attrType() string { return "event" }
 
 // BindValueNode represents a two-way binding to an input's value.
 // It wraps a complete HTML element and injects id/value attributes.
