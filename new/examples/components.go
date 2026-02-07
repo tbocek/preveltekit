@@ -87,10 +87,10 @@ func (c *Components) Render() p.Node {
 			<h2>Conditional Styling Component</h2>
 			<p>Components with dynamic classes based on props:</p>
 			<div class="alert-buttons">
-				`, p.Html(`<button>Info</button>`).WithOn("click", "components.SetAlertInfo", c.SetAlertInfo), `
-				`, p.Html(`<button>Success</button>`).WithOn("click", "components.SetAlertSuccess", c.SetAlertSuccess), `
-				`, p.Html(`<button>Warning</button>`).WithOn("click", "components.SetAlertWarning", c.SetAlertWarning), `
-				`, p.Html(`<button>Error</button>`).WithOn("click", "components.SetAlertError", c.SetAlertError), `
+				`, p.Html(`<button>Info</button>`).WithOn("click", c.SetAlertInfo), `
+				`, p.Html(`<button>Success</button>`).WithOn("click", c.SetAlertSuccess), `
+				`, p.Html(`<button>Warning</button>`).WithOn("click", c.SetAlertWarning), `
+				`, p.Html(`<button>Error</button>`).WithOn("click", c.SetAlertError), `
 			</div>`,
 		p.Comp(&Alert{Type: c.AlertType, Message: c.AlertMessage}),
 		`</section>
@@ -142,9 +142,7 @@ type Button struct {
 
 func (b *Button) Render() p.Node {
 	if b.OnClick != nil {
-		// Use the label's ID as part of the handler ID for uniqueness
-		handlerID := b.Label.ID() + ".click"
-		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).WithOn("click", handlerID, b.OnClick)
+		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).WithOn("click", b.OnClick)
 	}
 	return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`)
 }

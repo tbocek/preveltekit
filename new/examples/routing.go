@@ -79,10 +79,10 @@ func (r *Routing) Render() p.Node {
 
 			<div class="tabs">`,
 		// NEW SYNTAX: AttrIf + WithOn
-		p.Html(`<button>Home</button>`).AttrIf("class", r.CurrentTab.Eq("home"), "active").WithOn("click", "routing.GoHome", func() { r.GoHome() }),
-		p.Html(`<button>Profile</button>`).AttrIf("class", r.CurrentTab.Eq("profile"), "active").WithOn("click", "routing.GoProfile", func() { r.GoProfile() }),
-		p.Html(`<button>Settings</button>`).AttrIf("class", r.CurrentTab.Eq("settings"), "active").WithOn("click", "routing.GoSettings", func() { r.GoSettings() }),
-		p.Html(`<button>Notifications</button>`).AttrIf("class", r.CurrentTab.Eq("notifications"), "active").WithOn("click", "routing.GoNotifications", func() { r.GoNotifications() }),
+		p.Html(`<button>Home</button>`).AttrIf("class", r.CurrentTab.Eq("home"), "active").WithOn("click", func() { r.GoHome() }),
+		p.Html(`<button>Profile</button>`).AttrIf("class", r.CurrentTab.Eq("profile"), "active").WithOn("click", func() { r.GoProfile() }),
+		p.Html(`<button>Settings</button>`).AttrIf("class", r.CurrentTab.Eq("settings"), "active").WithOn("click", func() { r.GoSettings() }),
+		p.Html(`<button>Notifications</button>`).AttrIf("class", r.CurrentTab.Eq("notifications"), "active").WithOn("click", func() { r.GoNotifications() }),
 		`</div>
 
 			<div class="tab-content">`,
@@ -110,7 +110,7 @@ func (r *Routing) Render() p.Node {
 				</div>`).
 			AttrIf("class", r.CurrentStep.Gt(1), "completed").
 			AttrIf("class", r.CurrentStep.Eq(1), "active").
-			WithOn("click", "routing.Step1", func() { r.Step1() }),
+			WithOn("click", func() { r.Step1() }),
 		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(1), "completed"),
 		p.Html(`<div class="step">
 					<button>2</button>
@@ -118,7 +118,7 @@ func (r *Routing) Render() p.Node {
 				</div>`).
 			AttrIf("class", r.CurrentStep.Gt(2), "completed").
 			AttrIf("class", r.CurrentStep.Eq(2), "active").
-			WithOn("click", "routing.Step2", func() { r.Step2() }),
+			WithOn("click", func() { r.Step2() }),
 		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(2), "completed"),
 		p.Html(`<div class="step">
 					<button>3</button>
@@ -126,14 +126,14 @@ func (r *Routing) Render() p.Node {
 				</div>`).
 			AttrIf("class", r.CurrentStep.Gt(3), "completed").
 			AttrIf("class", r.CurrentStep.Eq(3), "active").
-			WithOn("click", "routing.Step3", func() { r.Step3() }),
+			WithOn("click", func() { r.Step3() }),
 		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(3), "completed"),
 		p.Html(`<div class="step">
 					<button>4</button>
 					<span>Confirm</span>
 				</div>`).
 			AttrIf("class", r.CurrentStep.Eq(4), "active").
-			WithOn("click", "routing.Step4", func() { r.Step4() }),
+			WithOn("click", func() { r.Step4() }),
 		`</div>
 
 			<div class="step-content">`,
@@ -152,11 +152,11 @@ func (r *Routing) Render() p.Node {
 		// NEW SYNTAX: WithOn with AttrIf for disabled state
 		p.Html(`<button>Previous</button>`).
 			AttrIf("class", r.CurrentStep.Eq(1), "disabled").
-			WithOn("click", "routing.PrevStep", func() { r.PrevStep() }),
+			WithOn("click", func() { r.PrevStep() }),
 		`<span>Step `, p.Bind(r.CurrentStep), ` of 4</span>`,
 		p.Html(`<button>Next</button>`).
 			AttrIf("class", r.CurrentStep.Eq(4), "disabled").
-			WithOn("click", "routing.NextStep", func() { r.NextStep() }),
+			WithOn("click", func() { r.NextStep() }),
 		`</div>
 		</section>
 	</div>`)

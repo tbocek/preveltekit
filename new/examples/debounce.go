@@ -91,7 +91,7 @@ func (d *Debounce) Render() p.Node {
 			<h2>Throttled Clicks</h2>
 			<p>Button action throttled to max once per 500ms.</p>
 
-			`, p.Html(`<button>Click me rapidly!</button>`).WithOn("click", "debounce.OnClick", d.OnClick), `
+			`, p.Html(`<button>Click me rapidly!</button>`).WithOn("click", d.OnClick), `
 
 			<div class="stats">
 				<span>Total clicks: <strong>`, p.Bind(d.ClickCount), `</strong></span>
@@ -102,7 +102,7 @@ func (d *Debounce) Render() p.Node {
 		</section>
 
 		<section>
-			`, p.Html(`<button>Reset All</button>`).WithOn("click", "debounce.Reset", d.Reset), `
+			`, p.Html(`<button>Reset All</button>`).WithOn("click", d.Reset), `
 		</section>
 	</div>`),
 	)

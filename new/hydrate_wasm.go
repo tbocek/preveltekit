@@ -82,12 +82,17 @@ func Hydrate(app Component) {
 		}
 	}
 
+	// Call OnMount before Render to match SSR order.
+	// This creates the router (which calls WithOptions on Store[Component]),
+	// so options are populated when renderRecursive walks the tree.
+	if om, ok := app.(HasOnMount); ok {
+		om.OnMount()
+	}
+
 	// Call Render() on all components to register handlers via WithOn().
 	// Must recurse into nested ComponentNodes so their WithOn calls fire too.
+	// Store[Component] options are also walked to keep handler counter in sync with SSR.
 	renderRecursive(app)
-	for _, child := range children {
-		renderRecursive(child)
-	}
 
 	// Use the full hydration which handles If-blocks, Each-blocks, etc.
 	hydrateWASM(app, children)
@@ -112,6 +117,20 @@ func walkNodeForComponents(n Node) {
 		for _, part := range node.Parts {
 			if child, ok := part.(Node); ok {
 				walkNodeForComponents(child)
+			}
+			// Store[Component] with options: render all options to keep
+			// handler counter in sync with SSR (which renders all branches)
+			if cs, ok := part.(*Store[Component]); ok {
+				seen := make(map[string]bool)
+				for _, opt := range cs.Options() {
+					if comp, ok := opt.(Component); ok {
+						name := componentName(comp)
+						if !seen[name] {
+							seen[name] = true
+							renderRecursive(comp)
+						}
+					}
+				}
 			}
 		}
 	case *Fragment:
@@ -178,14 +197,10 @@ func hydrateWASM(app Component, children map[string]Component) {
 		}
 	}
 
-	// NOW run app's OnMount which starts the router
-	// Router will handle component store binding for SPA navigation
-	if om, ok := app.(HasOnMount); ok {
-		om.OnMount()
-	}
+	// app.OnMount() already called in Hydrate() before renderRecursive,
+	// so Store[Component] options are populated for handler counter sync.
 
-	// Apply component blocks AFTER OnMount, since the component store's
-	// options are registered during OnMount -> NewRouter -> WithOptions()
+	// Apply component blocks (options already registered via OnMount -> NewRouter -> WithOptions)
 	for _, cb := range bindings.ComponentBlocks {
 		bindComponentBlock(cb, components)
 	}
@@ -208,11 +223,10 @@ func runOnCreate(app Component, children map[string]Component) {
 	}
 }
 
-// runOnMount calls OnMount for app and all children.
+// runOnMount calls OnMount for all children.
+// Note: app.OnMount() is called earlier in Hydrate() before renderRecursive,
+// so it is not called here to avoid double invocation.
 func runOnMount(app Component, children map[string]Component) {
-	if om, ok := app.(HasOnMount); ok {
-		om.OnMount()
-	}
 	for _, child := range children {
 		if om, ok := child.(HasOnMount); ok {
 			om.OnMount()

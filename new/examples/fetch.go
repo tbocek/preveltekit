@@ -124,10 +124,10 @@ func (f *Fetch) Render() p.Node {
 			<p>Fetch data with automatic JSON decoding into Go structs:</p>
 
 			<div class="buttons">
-				`, p.Html(`<button>Fetch Todo</button>`).WithOn("click", "fetch.FetchTodo", f.FetchTodo), `
-				`, p.Html(`<button>Fetch User</button>`).WithOn("click", "fetch.FetchUser", f.FetchUser), `
-				`, p.Html(`<button>Fetch Post</button>`).WithOn("click", "fetch.FetchPost", f.FetchPost), `
-				`, p.Html(`<button>Create Post (POST)</button>`).WithOn("click", "fetch.CreatePost", f.CreatePost), `
+				`, p.Html(`<button>Fetch Todo</button>`).WithOn("click", f.FetchTodo), `
+				`, p.Html(`<button>Fetch User</button>`).WithOn("click", f.FetchUser), `
+				`, p.Html(`<button>Fetch Post</button>`).WithOn("click", f.FetchPost), `
+				`, p.Html(`<button>Create Post (POST)</button>`).WithOn("click", f.CreatePost), `
 			</div>`,
 
 		p.If(f.RawData.Ne(""),

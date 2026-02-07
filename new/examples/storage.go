@@ -60,8 +60,8 @@ func (s *Storage) Render() p.Node {
 			<p>Theme preference is automatically saved to localStorage.</p>
 			<p>Current theme: <strong>`, p.Bind(s.Theme.Store), `</strong></p>
 			<div class="buttons">
-				`, p.Html(`<button>Light</button>`).WithOn("click", "storage.SetLight", s.SetLight), `
-				`, p.Html(`<button>Dark</button>`).WithOn("click", "storage.SetDark", s.SetDark), `
+				`, p.Html(`<button>Light</button>`).WithOn("click", s.SetLight), `
+				`, p.Html(`<button>Dark</button>`).WithOn("click", s.SetDark), `
 			</div>
 			<p class="hint">Refresh the page - theme will persist!</p>
 		</section>
@@ -71,14 +71,14 @@ func (s *Storage) Render() p.Node {
 			<p>Notes are saved manually when you click Save.</p>
 			`, p.BindValue(`<textarea placeholder="Type your notes here..."></textarea>`, s.Notes), `
 			<div class="buttons">
-				`, p.Html(`<button>Save Notes</button>`).WithOn("click", "storage.SaveNotes", s.SaveNotes), `
-				`, p.Html(`<button>Clear Notes</button>`).WithOn("click", "storage.ClearNotes", s.ClearNotes), `
+				`, p.Html(`<button>Save Notes</button>`).WithOn("click", s.SaveNotes), `
+				`, p.Html(`<button>Clear Notes</button>`).WithOn("click", s.ClearNotes), `
 			</div>
 		</section>
 
 		<section>
 			<h2>Clear All Storage</h2>
-			`, p.Html(`<button class="danger">Clear All Storage</button>`).WithOn("click", "storage.ClearAll", s.ClearAll), `
+			`, p.Html(`<button class="danger">Clear All Storage</button>`).WithOn("click", s.ClearAll), `
 		</section>
 
 		<p class="status">`, p.Bind(s.Status), `</p>

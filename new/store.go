@@ -59,12 +59,23 @@ func nextStoreID() string {
 // Called before each SSR iteration so IDs start from s0, matching WASM.
 func resetRegistries() {
 	storeCounter = 0
+	handlerCounter = 0
 	storeRegistry = make(map[string]any)
 	handlerRegistry = make(map[string]func())
 }
 
 // handlerRegistry holds all registered event handlers by ID for hydration lookup
 var handlerRegistry = make(map[string]func())
+
+// handlerCounter generates unique auto-IDs for event handlers
+var handlerCounter int
+
+// nextHandlerID returns the next auto-generated handler ID (h0, h1, h2, ...)
+func nextHandlerID() string {
+	id := "h" + itoa(handlerCounter)
+	handlerCounter++
+	return id
+}
 
 // GetStore looks up a store by ID from the global registry
 func GetStore(id string) any {
@@ -76,9 +87,12 @@ func GetHandler(id string) func() {
 	return handlerRegistry[id]
 }
 
-// RegisterHandler registers an event handler with a unique ID
-func RegisterHandler(id string, handler func()) {
+// RegisterHandler registers an event handler, auto-generating a unique ID.
+// Returns the generated ID.
+func RegisterHandler(handler func()) string {
+	id := nextHandlerID()
 	handlerRegistry[id] = handler
+	return id
 }
 
 // LocalStore is a Store[string] that automatically syncs with localStorage.

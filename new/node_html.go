@@ -22,10 +22,6 @@ type BuildContext struct {
 	// SlotContent holds HTML to be rendered in place of <slot/> elements
 	SlotContent string
 
-	// ParentStoreMap maps store pointers to their IDs in the parent component
-	// Used to resolve dynamic props that share parent stores
-	ParentStoreMap map[uintptr]string
-
 	// RouteGroupID is the ID of the current route group (for component container binding)
 	RouteGroupID string
 
@@ -193,10 +189,9 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 		prefix = ctx.Prefix + "_" + compID
 	}
 	return &BuildContext{
-		IDCounter:      IDCounter{Prefix: prefix},
-		Parent:         ctx,
-		Bindings:       &CollectedBindings{},
-		ParentStoreMap: ctx.ParentStoreMap,
+		IDCounter: IDCounter{Prefix: prefix},
+		Parent:    ctx,
+		Bindings:  &CollectedBindings{},
 	}
 }
 
@@ -308,11 +303,11 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 
 					// Render in isolated child context (like IfBlock branches)
 					branchCtx := ctx.Child(name)
+					branchCtx.CollectedStyles = ctx.CollectedStyles
 					branchHTML := nodeToHTML(optComp.Render(), branchCtx)
 
 					// Resolve bindings within this branch
-					childStoreMap := buildStoreMap(optComp, name)
-					resolveBindings(branchCtx.Bindings, childStoreMap, name, optComp)
+					resolveBindings(branchCtx.Bindings)
 
 					block.Branches = append(block.Branches, ComponentBranch{
 						Name:     name,
@@ -338,8 +333,7 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 				html := nodeToHTML(comp.Render(), childCtx)
 				sb.WriteString(html)
 
-				childStoreMap := buildStoreMap(comp, name)
-				resolveBindings(childCtx.Bindings, childStoreMap, name, comp)
+				resolveBindings(childCtx.Bindings)
 				mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
 			}
 		default:
@@ -768,9 +762,8 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	for _, branch := range i.Branches {
 		// Create a child context to capture this branch's bindings
 		branchCtx := &BuildContext{
-			IDCounter:      ctx.IDCounter, // Copy all counters
-			Bindings:       &CollectedBindings{},
-			ParentStoreMap: ctx.ParentStoreMap,
+			IDCounter: ctx.IDCounter, // Copy all counters
+			Bindings:  &CollectedBindings{},
 		}
 		branchHTML := childrenToHTML(branch.Children, branchCtx)
 
@@ -792,9 +785,8 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// Else branch
 	if len(i.ElseNode) > 0 {
 		elseCtx := &BuildContext{
-			IDCounter:      ctx.IDCounter, // Copy all counters
-			Bindings:       &CollectedBindings{},
-			ParentStoreMap: ctx.ParentStoreMap,
+			IDCounter: ctx.IDCounter, // Copy all counters
+			Bindings:  &CollectedBindings{},
 		}
 		elseHTML := childrenToHTML(i.ElseNode, elseCtx)
 
@@ -899,30 +891,13 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 		Parent:          ctx,
 		Bindings:        &CollectedBindings{},
 		SlotContent:     slotHTML,
-		ParentStoreMap:  ctx.ParentStoreMap,
 		CollectedStyles: ctx.CollectedStyles, // Share styles map with parent
 	}
 
 	// Render the component
 	html := nodeToHTML(comp.Render(), childCtx)
 
-	// Build store map for the nested component
-	// This maps store pointers to their field names (e.g., "components_comp0.Label")
-	storeMap := buildStoreMap(comp, fullCompPrefix)
-
-	// For dynamic props (shared stores), prefer parent's store ID over child's
-	// This ensures reactivity works through the parent component
-	if ctx.ParentStoreMap != nil {
-		for addr, parentName := range ctx.ParentStoreMap {
-			// If this store address exists in child's map, it's a shared store (dynamic prop)
-			// Replace the child's name with the parent's name for proper resolution
-			if _, exists := storeMap[addr]; exists {
-				storeMap[addr] = parentName
-			}
-		}
-	}
-
-	resolveBindings(childCtx.Bindings, storeMap, fullCompPrefix, comp)
+	resolveBindings(childCtx.Bindings)
 
 	// Merge child bindings into parent
 	mergeNestedBindings(ctx.Bindings, childCtx.Bindings)
@@ -1170,13 +1145,6 @@ func RenderHTMLWithContextFull(root Node, opts ...func(*BuildContext)) *RenderRe
 func WithPrefixCtx(prefix string) func(*BuildContext) {
 	return func(ctx *BuildContext) {
 		ctx.Prefix = prefix
-	}
-}
-
-// WithParentStoreMapCtx sets the parent store map on the build context.
-func WithParentStoreMapCtx(storeMap map[uintptr]string) func(*BuildContext) {
-	return func(ctx *BuildContext) {
-		ctx.ParentStoreMap = storeMap
 	}
 }
 

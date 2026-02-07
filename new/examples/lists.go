@@ -95,23 +95,23 @@ func (l *Lists) Render() p.Node {
 
 			<div class="button-group">
 				<h3>Add</h3>
-				`, p.Html(`<button>Prepend</button>`).WithOn("click", "lists.PrependItem", l.PrependItem), `
-				`, p.Html(`<button>Insert Middle</button>`).WithOn("click", "lists.InsertMiddle", l.InsertMiddle), `
-				`, p.Html(`<button>Append</button>`).WithOn("click", "lists.AddItem", l.AddItem), `
+				`, p.Html(`<button>Prepend</button>`).WithOn("click", l.PrependItem), `
+				`, p.Html(`<button>Insert Middle</button>`).WithOn("click", l.InsertMiddle), `
+				`, p.Html(`<button>Append</button>`).WithOn("click", l.AddItem), `
 			</div>
 
 			<div class="button-group">
 				<h3>Remove</h3>
-				`, p.Html(`<button>First</button>`).WithOn("click", "lists.RemoveFirst", l.RemoveFirst), `
-				`, p.Html(`<button>Middle</button>`).WithOn("click", "lists.RemoveMiddle", l.RemoveMiddle), `
-				`, p.Html(`<button>Last</button>`).WithOn("click", "lists.RemoveLast", l.RemoveLast), `
-				`, p.Html(`<button>Clear All</button>`).WithOn("click", "lists.ClearAll", l.ClearAll), `
+				`, p.Html(`<button>First</button>`).WithOn("click", l.RemoveFirst), `
+				`, p.Html(`<button>Middle</button>`).WithOn("click", l.RemoveMiddle), `
+				`, p.Html(`<button>Last</button>`).WithOn("click", l.RemoveLast), `
+				`, p.Html(`<button>Clear All</button>`).WithOn("click", l.ClearAll), `
 			</div>
 
 			<div class="button-group">
 				<h3>Replace All (simulates fetch)</h3>
-				`, p.Html(`<button>Load Fruits</button>`).WithOn("click", "lists.LoadFruits", l.LoadFruits), `
-				`, p.Html(`<button>Load Numbers</button>`).WithOn("click", "lists.LoadNumbers", l.LoadNumbers), `
+				`, p.Html(`<button>Load Fruits</button>`).WithOn("click", l.LoadFruits), `
+				`, p.Html(`<button>Load Numbers</button>`).WithOn("click", l.LoadNumbers), `
 			</div>
 
 			<div class="list-container">

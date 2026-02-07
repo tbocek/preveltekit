@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
-	"strings"
 )
 
 // HasRoutes is implemented by components that define routes.
@@ -87,9 +85,6 @@ func Hydrate(app Component) {
 			appStyle = hs.Style()
 		}
 
-		// Build app store map
-		appStoreMap := buildStoreMap(freshApp, "component")
-
 		// Render the full tree - router already set the correct component
 		// Routes are now auto-registered as store options via NewRouter,
 		// so no need to pass them through context.
@@ -98,7 +93,7 @@ func Hydrate(app Component) {
 		)
 
 		// Resolve bindings (needed for If-blocks, Each-blocks, AttrConds)
-		resolveBindings(result.Bindings, appStoreMap, "component", freshApp)
+		resolveBindings(result.Bindings)
 
 		// Build full HTML document
 		fullHTML := buildHTMLDocument(result.HTML, appStyle, "", result.CollectedStyles)
@@ -234,34 +229,9 @@ func getStoreID(v any) string {
 	return ""
 }
 
-// buildStoreMap builds a map from store pointer addresses to field paths.
-// DEPRECATED: Use getStoreID instead to get store IDs directly.
-func buildStoreMap(comp Component, prefix string) map[uintptr]string {
-	storeMap := make(map[uintptr]string)
-	rv := reflect.ValueOf(comp).Elem()
-	rt := rv.Type()
-
-	for i := 0; i < rt.NumField(); i++ {
-		f := rv.Field(i)
-		if f.Kind() == reflect.Ptr && !f.IsNil() {
-			storeMap[f.Pointer()] = prefix + "." + rt.Field(i).Name
-		}
-	}
-	return storeMap
-}
-
-// componentVarName returns the variable name for a component (lowercase first letter of type name).
-func componentVarName(comp Component) string {
-	t := reflect.TypeOf(comp).Elem().Name()
-	if len(t) == 0 {
-		return "comp"
-	}
-	return strings.ToLower(t[:1]) + t[1:]
-}
-
 // resolveBindings resolves store references in bindings using store IDs directly.
 // Stores have auto-generated IDs from New(), so we use those directly.
-func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, prefix string, comp Component) {
+func resolveBindings(bindings *CollectedBindings) {
 	// Resolve text bindings - use store's ID directly
 	for i := range bindings.TextBindings {
 		if bindings.TextBindings[i].StoreID != "" {
@@ -288,7 +258,7 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 			// Skip if already resolved
 			if bindings.IfBlocks[i].Branches[j].StoreID != "" {
 				if bindings.IfBlocks[i].Branches[j].Bindings != nil {
-					resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
+					resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings)
 				}
 				continue
 			}
@@ -323,12 +293,12 @@ func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, p
 			}
 
 			if bindings.IfBlocks[i].Branches[j].Bindings != nil {
-				resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings, storeMap, prefix, comp)
+				resolveBindings(bindings.IfBlocks[i].Branches[j].Bindings)
 			}
 		}
 
 		if bindings.IfBlocks[i].ElseBindings != nil {
-			resolveBindings(bindings.IfBlocks[i].ElseBindings, storeMap, prefix, comp)
+			resolveBindings(bindings.IfBlocks[i].ElseBindings)
 		}
 	}
 

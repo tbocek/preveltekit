@@ -101,17 +101,17 @@ func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode 
 	return h
 }
 
-// WithOn attaches an event handler with a unique ID to the first HTML tag.
-// The ID is used as the element's id attribute and for registry lookup during hydration.
+// WithOn attaches an event handler to the first HTML tag.
+// The handler ID is auto-generated for registry lookup during hydration.
 // Returns the HtmlNode for chaining with modifiers.
 //
 // Example:
 //
-//	Html(`<button>Click</button>`).WithOn("click", "myapp.Increment", handler)
-//	Html(`<form>`).WithOn("submit", "myapp.Submit", handler).PreventDefault()
-func (h *HtmlNode) WithOn(event string, id string, handler func()) *HtmlNode {
+//	Html(`<button>Click</button>`).WithOn("click", handler)
+//	Html(`<form>`).WithOn("submit", handler).PreventDefault()
+func (h *HtmlNode) WithOn(event string, handler func()) *HtmlNode {
 	// Register handler in global registry for WASM hydration
-	RegisterHandler(id, handler)
+	id := RegisterHandler(handler)
 	h.Events = append(h.Events, &HtmlEvent{
 		ID:      id,
 		Event:   event,
