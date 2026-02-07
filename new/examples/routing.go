@@ -10,8 +10,8 @@ type Routing struct {
 
 func (r *Routing) New() p.Component {
 	return &Routing{
-		CurrentTab:  p.New("routing.CurrentTab", "home"),
-		CurrentStep: p.New("routing.CurrentStep", 1),
+		CurrentTab:  p.New("home"),
+		CurrentStep: p.New(1),
 	}
 }
 

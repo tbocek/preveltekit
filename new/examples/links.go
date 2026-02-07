@@ -9,7 +9,7 @@ type Links struct {
 
 func (l *Links) New() p.Component {
 	return &Links{
-		LastNavigation: p.New("links.LastNavigation", ""),
+		LastNavigation: p.New(""),
 	}
 }
 

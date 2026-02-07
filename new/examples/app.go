@@ -21,7 +21,7 @@ func (a *App) New() p.Component {
 
 	// Create fresh app with initialized stores
 	app := &App{
-		CurrentComponent: p.New("app.CurrentComponent", basics),
+		CurrentComponent: p.New(basics),
 		routes: []p.Route{
 			{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
 			{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},

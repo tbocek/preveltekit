@@ -28,8 +28,8 @@ type Fetch struct {
 
 func (f *Fetch) New() p.Component {
 	return &Fetch{
-		Status:  p.New("fetch.Status", "ready"),
-		RawData: p.New("fetch.RawData", ""),
+		Status:  p.New("ready"),
+		RawData: p.New(""),
 	}
 }
 

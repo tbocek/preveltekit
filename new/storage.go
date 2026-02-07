@@ -41,7 +41,7 @@ func NewLocalStore(key string, defaultValue string) *LocalStore {
 		stored = defaultValue
 	}
 
-	store := New(key, stored)
+	store := NewWithID(key, stored)
 	store.OnChange(func(v string) {
 		SetStorage(key, v)
 	})

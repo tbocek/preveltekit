@@ -13,11 +13,11 @@ type Components struct {
 
 func (c *Components) New() p.Component {
 	return &Components{
-		Message:      p.New("components.Message", "Hello from parent!"),
-		ClickCount:   p.New("components.ClickCount", 0),
-		CardTitle:    p.New("components.CardTitle", "Dynamic Card"),
-		AlertType:    p.New("components.AlertType", "info"),
-		AlertMessage: p.New("components.AlertMessage", "This is an alert message"),
+		Message:      p.New("Hello from parent!"),
+		ClickCount:   p.New(0),
+		CardTitle:    p.New("Dynamic Card"),
+		AlertType:    p.New("info"),
+		AlertMessage: p.New("This is an alert message"),
 	}
 }
 
@@ -52,9 +52,9 @@ func (c *Components) Render() p.Node {
 		<section>
 			<h2>Basic Component with Props</h2>
 			<p>Pass data to child components via props:</p>`,
-		p.Comp(&Badge{Label: p.New("badge.New", "New")}),
-		p.Comp(&Badge{Label: p.New("badge.Featured", "Featured")}),
-		p.Comp(&Badge{Label: p.New("badge.Sale", "Sale")}),
+		p.Comp(&Badge{Label: p.New("New")}),
+		p.Comp(&Badge{Label: p.New("Featured")}),
+		p.Comp(&Badge{Label: p.New("Sale")}),
 		`</section>
 
 		<section>
@@ -69,7 +69,7 @@ func (c *Components) Render() p.Node {
 		<section>
 			<h2>Component with Slot</h2>
 			<p>Components can accept child content via slots:</p>`,
-		p.Comp(&Card{Title: p.New("card.Slot", "Card with Slot")},
+		p.Comp(&Card{Title: p.New("Card with Slot")},
 			p.Html(`<p>This content is passed through the <strong>slot</strong>.</p>
 				<p>You can put any HTML here!</p>`),
 		),
@@ -79,8 +79,8 @@ func (c *Components) Render() p.Node {
 			<h2>Component Events</h2>
 			<p>Child components can emit events to parent:</p>
 			<p>Click count: <strong>`, p.Bind(c.ClickCount), `</strong></p>`,
-		p.Comp(&Button{Label: p.New("button.ClickMe", "Click Me"), OnClick: c.HandleButtonClick}),
-		p.Comp(&Button{Label: p.New("button.AlsoClickMe", "Also Click Me"), OnClick: c.HandleButtonClick}),
+		p.Comp(&Button{Label: p.New("Click Me"), OnClick: c.HandleButtonClick}),
+		p.Comp(&Button{Label: p.New("Also Click Me"), OnClick: c.HandleButtonClick}),
 		`</section>
 
 		<section>

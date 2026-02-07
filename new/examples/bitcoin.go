@@ -22,11 +22,11 @@ type Bitcoin struct {
 
 func (b *Bitcoin) New() p.Component {
 	return &Bitcoin{
-		Price:      p.New("bitcoin.Price", ""),
-		Symbol:     p.New("bitcoin.Symbol", ""),
-		UpdateTime: p.New("bitcoin.UpdateTime", ""),
-		Loading:    p.New("bitcoin.Loading", true),
-		Error:      p.New("bitcoin.Error", ""),
+		Price:      p.New(""),
+		Symbol:     p.New(""),
+		UpdateTime: p.New(""),
+		Loading:    p.New(true),
+		Error:      p.New(""),
 	}
 }
 

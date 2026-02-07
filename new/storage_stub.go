@@ -32,5 +32,5 @@ func NewLocalStore(key string, defaultValue string) *LocalStore {
 	if stored == "" {
 		stored = defaultValue
 	}
-	return &LocalStore{Store: New(key, stored)}
+	return &LocalStore{Store: NewWithID(key, stored)}
 }

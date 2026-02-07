@@ -226,8 +226,8 @@ func runLifecycle(app Component, children map[string]Component) {
 	runOnMount(app, children)
 }
 
-// resolveStore looks up a store by its user-defined ID from the global registry.
-// Stores register themselves via New("myapp.Count", 0) which adds them to storeRegistry.
+// resolveStore looks up a store by ID from the global registry.
+// Stores register themselves via New(0) which auto-generates an ID and adds them to storeRegistry.
 func resolveStore(storeID string, components map[string]Component) any {
 	store := GetStore(storeID)
 	if store == nil {

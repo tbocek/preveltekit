@@ -59,6 +59,12 @@ func Hydrate(app Component) {
 
 	// Second pass: generate HTML for each SSR path with fresh state
 	for _, route := range ssrPaths {
+		// Reset global counters so each iteration starts from s0,
+		// matching the single app.New() call in WASM.
+		storeCounter = 0
+		storeRegistry = make(map[string]any)
+		handlerRegistry = make(map[string]func())
+
 		// Set the SSR path before lifecycle methods
 		SetSSRPath(route.SSRPath)
 
@@ -261,7 +267,7 @@ func componentVarName(comp Component) string {
 }
 
 // resolveBindings resolves store references in bindings using store IDs directly.
-// Stores have user-defined IDs set via New("myapp.Count", 0), so we use those directly.
+// Stores have auto-generated IDs from New(), so we use those directly.
 func resolveBindings(bindings *CollectedBindings, storeMap map[uintptr]string, prefix string, comp Component) {
 	// Resolve text bindings - use store's ID directly
 	for i := range bindings.TextBindings {

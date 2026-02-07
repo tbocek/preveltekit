@@ -17,12 +17,12 @@ type Debounce struct {
 
 func (d *Debounce) New() p.Component {
 	return &Debounce{
-		SearchInput:   p.New("debounce.SearchInput", ""),
-		SearchResult:  p.New("debounce.SearchResult", ""),
-		SearchCount:   p.New("debounce.SearchCount", 0),
-		ClickCount:    p.New("debounce.ClickCount", 0),
-		ThrottleCount: p.New("debounce.ThrottleCount", 0),
-		Status:        p.New("debounce.Status", "Type to search..."),
+		SearchInput:   p.New(""),
+		SearchResult:  p.New(""),
+		SearchCount:   p.New(0),
+		ClickCount:    p.New(0),
+		ThrottleCount: p.New(0),
+		Status:        p.New("Type to search..."),
 	}
 }
 

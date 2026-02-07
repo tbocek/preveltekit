@@ -13,12 +13,12 @@ type Basics struct {
 
 func (b *Basics) New() p.Component {
 	return &Basics{
-		Count:    p.New("basics.Count", 0),
-		Name:     p.New("basics.Name", ""),
-		Message:  p.New("basics.Message", "Fill out the form above"),
-		DarkMode: p.New("basics.DarkMode", false),
-		Agreed:   p.New("basics.Agreed", false),
-		Score:    p.New("basics.Score", 75),
+		Count:    p.New(0),
+		Name:     p.New(""),
+		Message:  p.New("Fill out the form above"),
+		DarkMode: p.New(false),
+		Agreed:   p.New(false),
+		Score:    p.New(75),
 	}
 }
 

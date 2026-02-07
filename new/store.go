@@ -29,6 +29,16 @@ type Store[T any] struct {
 // storeRegistry holds all registered stores by ID for hydration lookup
 var storeRegistry = make(map[string]any)
 
+// storeCounter generates unique auto-IDs for stores and lists
+var storeCounter int
+
+// nextStoreID returns the next auto-generated store ID (s0, s1, s2, ...)
+func nextStoreID() string {
+	id := "s" + itoa(storeCounter)
+	storeCounter++
+	return id
+}
+
 // handlerRegistry holds all registered event handlers by ID for hydration lookup
 var handlerRegistry = make(map[string]func())
 
@@ -57,10 +67,19 @@ type LocalStore struct {
 	*Store[string]
 }
 
-// New creates a reactive store with a unique ID and initial value.
-// The ID is used as the comment marker in HTML for hydration.
-// Example: p.New("myapp.Count", 0) creates <!--myapp.Count--> in HTML
-func New[T any](id string, initial T) *Store[T] {
+// New creates a reactive store with an auto-generated ID and initial value.
+// The ID is deterministic (counter-based) so SSR and WASM produce matching IDs
+// when stores are created in the same order.
+func New[T any](initial T) *Store[T] {
+	id := nextStoreID()
+	s := &Store[T]{id: id, value: initial}
+	storeRegistry[id] = s
+	return s
+}
+
+// NewWithID creates a reactive store with an explicit ID and initial value.
+// Use this only when a specific ID is required (e.g. router path store, localStorage).
+func NewWithID[T any](id string, initial T) *Store[T] {
 	s := &Store[T]{id: id, value: initial}
 	storeRegistry[id] = s
 	return s
@@ -129,9 +148,11 @@ type List[T comparable] struct {
 	onChange []func([]T) // called on any change
 }
 
-// NewList creates a reactive list with a unique ID.
-// The ID is used for JSON binding resolution and store registry lookup.
-func NewList[T comparable](id string, initial ...T) *List[T] {
+// NewList creates a reactive list with an auto-generated ID.
+// The ID is deterministic (counter-based) so SSR and WASM produce matching IDs
+// when lists are created in the same order.
+func NewList[T comparable](initial ...T) *List[T] {
+	id := nextStoreID()
 	l := &List[T]{
 		id:    id,
 		items: initial,
@@ -156,7 +177,7 @@ func (l *List[T]) Get() []T {
 // The store auto-updates when the list changes.
 func (l *List[T]) Len() *Store[int] {
 	if l.lenStore == nil {
-		l.lenStore = New(l.id+".len", len(l.items))
+		l.lenStore = NewWithID(l.id+".len", len(l.items))
 		l.OnChange(func(_ []T) {
 			l.lenStore.Set(len(l.items))
 		})

@@ -282,7 +282,7 @@ func (c *ComponentNode) nodeType() string { return "component" }
 
 // Comp creates a nested component node from a component instance.
 // The component name is derived from the type via reflection.
-// Example: Comp(&Badge{Label: p.New("badge.label", "New")})
+// Example: Comp(&Badge{Label: p.New("New")})
 func Comp(instance any, content ...any) *ComponentNode {
 	// Derive name from type
 	t := reflect.TypeOf(instance)

@@ -11,8 +11,8 @@ type Storage struct {
 func (s *Storage) New() p.Component {
 	return &Storage{
 		Theme:  p.NewLocalStore("theme", "light"),
-		Notes:  p.New("storage.Notes", ""),
-		Status: p.New("storage.Status", "Ready"),
+		Notes:  p.New(""),
+		Status: p.New("Ready"),
 	}
 }
 
