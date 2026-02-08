@@ -43,11 +43,6 @@ type HasStyle interface {
 	Style() string
 }
 
-// HasGlobalStyle is implemented by components that have unscoped global CSS styles.
-type HasGlobalStyle interface {
-	GlobalStyle() string
-}
-
 // HasNew is implemented by components that can create fresh instances.
 type HasNew interface {
 	New() Component
@@ -195,36 +190,9 @@ func hydrateWASM(app Component, children map[string]Component) {
 	select {}
 }
 
-// runOnCreate injects styles for app and all children.
-// Note: New() was already called to initialize stores.
-func runOnCreate(app Component, children map[string]Component) {
-	// Inject global styles (unscoped) first
-	if hgs, ok := app.(HasGlobalStyle); ok {
-		if gs := hgs.GlobalStyle(); gs != "" {
-			InjectStyle("_global_app", gs)
-		}
-	}
-	// Inject scoped styles for app
-	if hs, ok := app.(HasStyle); ok {
-		scopeAttr := GetOrCreateScope("app")
-		InjectStyle("app", scopeCSS(hs.Style(), scopeAttr))
-	}
-	// Inject styles for all children
-	for path, child := range children {
-		name := trimPrefix(path, "/")
-		// Global styles (unscoped)
-		if hgs, ok := child.(HasGlobalStyle); ok {
-			if gs := hgs.GlobalStyle(); gs != "" {
-				InjectStyle("_global_"+name, gs)
-			}
-		}
-		// Scoped styles
-		if hs, ok := child.(HasStyle); ok {
-			scopeAttr := GetOrCreateScope(name)
-			InjectStyle(name, scopeCSS(hs.Style(), scopeAttr))
-		}
-	}
-}
+// runOnCreate is a no-op — styles are pre-baked into the SSR HTML <style> tag.
+// Scope counter sync happens in walkNodeForComponents.
+func runOnCreate(app Component, children map[string]Component) {}
 
 // runOnMount calls OnMount for all children.
 // Note: app.OnMount() is called earlier in Hydrate() before walkNodeForComponents,
@@ -467,19 +435,7 @@ func bindComponentBlock(cb HydrateComponentBlock) {
 
 		currentBranchName = activeName
 
-		// Inject styles for the new component (idempotent via InjectStyle)
-		if cs, ok2 := compStore.(*Store[Component]); ok2 {
-			comp := cs.Get()
-			if hgs, ok3 := comp.(HasGlobalStyle); ok3 {
-				if gs := hgs.GlobalStyle(); gs != "" {
-					InjectStyle("_global_"+activeName, gs)
-				}
-			}
-			if hs, ok3 := comp.(HasStyle); ok3 {
-				scopeAttr := GetOrCreateScope(activeName)
-				InjectStyle(activeName, scopeCSS(hs.Style(), scopeAttr))
-			}
-		}
+		// Styles are pre-baked into the SSR HTML <style> tag — no injection needed.
 
 		// Swap HTML (same mechanism as IfBlock)
 		currentEl = FindExistingIfContent(cb.MarkerID)
@@ -708,28 +664,34 @@ func bindEachBlock(eb HydrateEachBlock) {
 		return
 	}
 
-	// Extract item ID prefix from marker (e.g., "lists_e0" -> "lists_")
-	itemIDPrefix := eb.MarkerID[:len(eb.MarkerID)-1]
-	if len(itemIDPrefix) > 0 && itemIDPrefix[len(itemIDPrefix)-1] == 'e' {
-		itemIDPrefix = itemIDPrefix[:len(itemIDPrefix)-1]
+	// Build span wrapper format from bindings
+	spanFmt := `<span id="{PREFIX}_{INDEX}">{BODY}</span>`
+	if eb.SpanClass != "" {
+		spanFmt = `<span id="{PREFIX}_{INDEX}" class="` + eb.SpanClass + `">{BODY}</span>`
 	}
 
 	// Subscribe to list changes and re-render
-	// Pass markerID so we can re-acquire the parent each time (handles DOM replacement from if-blocks)
 	switch list := listAny.(type) {
 	case *List[string]:
-		bindListItems(list, eb.MarkerID, itemIDPrefix, escapeHTML)
+		bindListItems(list, eb.MarkerID, eb.ItemPrefix, eb.BodyHTML, spanFmt, escapeHTML)
 	case *List[int]:
-		bindListItems(list, eb.MarkerID, itemIDPrefix, itoa)
+		bindListItems(list, eb.MarkerID, eb.ItemPrefix, eb.BodyHTML, spanFmt, itoa)
 	}
 }
 
 // bindListItems sets up list rendering and subscribes to changes.
-func bindListItems[T comparable](list *List[T], markerID string, itemIDPrefix string, format func(T) string) {
+func bindListItems[T comparable](list *List[T], markerID string, itemPrefix string, bodyTemplate string, spanFmt string, format func(T) string) {
 	renderItems := func(items []T) {
 		var html string
 		for i, item := range items {
-			html += `<span id="` + itemIDPrefix + `_` + itoa(i) + `"><li><span class="index">` + itoa(i) + `</span> ` + format(item) + `</li></span>`
+			// Replace sentinels in body template
+			body := replaceAll(bodyTemplate, "\x00I\x00", format(item))
+			body = replaceAll(body, "\x00N\x00", itoa(i))
+			// Build span wrapper
+			span := replaceAll(spanFmt, "{PREFIX}", itemPrefix)
+			span = replaceAll(span, "{INDEX}", itoa(i))
+			span = replaceAll(span, "{BODY}", body)
+			html += span
 		}
 		// Add marker comment at the end so it survives innerHTML replacement
 		html += `<!--` + markerID + `-->`
@@ -1013,8 +975,11 @@ type HydrateAttrCondBinding struct {
 }
 
 type HydrateEachBlock struct {
-	MarkerID string `json:"MarkerID"`
-	ListID   string `json:"ListID"`
+	MarkerID   string `json:"MarkerID"`
+	ListID     string `json:"ListID"`
+	BodyHTML   string `json:"BodyHTML"`
+	ItemPrefix string `json:"ItemPrefix"`
+	SpanClass  string `json:"SpanClass"`
 }
 
 // HydrateComponentBlock is the WASM-side representation of a ComponentBlock.

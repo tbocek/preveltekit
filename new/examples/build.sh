@@ -74,8 +74,11 @@ tinygo build -o "$PROJECT_DIR/dist/main.wasm" $TINYGO_FLAGS "$PROJECT_DIR"
 echo "Copying wasm_exec.js..."
 cp "$PROJECT_DIR/assets/wasm_exec.js" "$PROJECT_DIR/dist/"
 
-if [ "$RELEASE_MODE" = true ]; then
-    echo "String wasm"
+if [ "$RELEASE_MODE" = true ]; then  
+    echo "Stripping HTML strings from WASM..."
+    go run preveltekit/cmd/build strip "$PROJECT_DIR/dist/main.wasm" "$PROJECT_DIR/dist/remove_from_wasm"
+    rm -rf "$PROJECT_DIR/dist/remove_from_wasm"
+    echo "Strip wasm"
     wasm-strip "$PROJECT_DIR/dist/main.wasm"
     echo "Strip wasm_exec"
     strip_wasm_exec "$PROJECT_DIR/dist/main.wasm" "$PROJECT_DIR/dist/wasm_exec.js"

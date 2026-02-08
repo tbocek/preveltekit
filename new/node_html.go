@@ -111,11 +111,13 @@ type IfBlockBranch struct {
 // EachBlock represents a list iteration block at a comment marker.
 // HTML: <span id="basics_each0_0">item</span><!--basics_e0--> where items update reactively.
 type EachBlock struct {
-	MarkerID string `json:"MarkerID"`           // Comment marker, e.g., "basics_e0"
-	ListID   string `json:"ListID"`             // List store path, e.g., "basics.Items"
-	ListRef  any    `json:"-"`                  // Actual list pointer (for resolution)
-	BodyHTML string `json:"BodyHTML,omitempty"` // Template HTML for each item
-	ElseHTML string `json:"ElseHTML,omitempty"` // HTML when list is empty
+	MarkerID   string `json:"MarkerID"`             // Comment marker, e.g., "basics_e0"
+	ListID     string `json:"ListID"`               // List store path, e.g., "basics.Items"
+	ListRef    any    `json:"-"`                    // Actual list pointer (for resolution)
+	BodyHTML   string `json:"BodyHTML,omitempty"`   // Template HTML for each item body (with sentinels)
+	ItemPrefix string `json:"ItemPrefix,omitempty"` // ID prefix for item spans, e.g., "lists_e0"
+	SpanClass  string `json:"SpanClass,omitempty"`  // Scope class for span wrapper, e.g., "v6"
+	ElseHTML   string `json:"ElseHTML,omitempty"`   // HTML when list is empty
 }
 
 // InputBinding binds an input element to a store for two-way data binding.
@@ -928,6 +930,28 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 		spanFmt = `<span id="%s_%d" class="` + ctx.ScopeAttr + `">%s</span>`
 	}
 
+	// Render body template with sentinel values to capture the template HTML.
+	// Use a temporary context so template rendering doesn't affect counter state.
+	// Sentinels: "\x00I\x00" = item value, "\x00N\x00" = index
+	var bodyHTML string
+	const sentinelItemStr = "\x00ITEM_SENTINEL\x00"
+	const sentinelItemInt = 8888888
+	const sentinelIndex = 9999999
+	switch e.ListRef.(type) {
+	case *List[string]:
+		templateCtx := *ctx
+		templateCtx.Bindings = &CollectedBindings{}
+		bodyHTML = nodeToHTML(e.Body(sentinelItemStr, sentinelIndex), &templateCtx)
+		bodyHTML = strings.ReplaceAll(bodyHTML, sentinelItemStr, "\x00I\x00")
+		bodyHTML = strings.ReplaceAll(bodyHTML, "9999999", "\x00N\x00")
+	case *List[int]:
+		templateCtx := *ctx
+		templateCtx.Bindings = &CollectedBindings{}
+		bodyHTML = nodeToHTML(e.Body(sentinelItemInt, sentinelIndex), &templateCtx)
+		bodyHTML = strings.ReplaceAll(bodyHTML, "8888888", "\x00I\x00")
+		bodyHTML = strings.ReplaceAll(bodyHTML, "9999999", "\x00N\x00")
+	}
+
 	switch list := e.ListRef.(type) {
 	case *List[string]:
 		items := list.Get()
@@ -953,9 +977,12 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 
 	// Record each block binding (uses marker ID in HTML comment)
 	ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, EachBlock{
-		MarkerID: markerID,
-		ListID:   e.ListID,
-		ListRef:  e.ListRef,
+		MarkerID:   markerID,
+		ListID:     e.ListID,
+		ListRef:    e.ListRef,
+		BodyHTML:   bodyHTML,
+		ItemPrefix: itemElementPrefix,
+		SpanClass:  ctx.ScopeAttr,
 	})
 
 	return fmt.Sprintf("%s<!--%s-->", itemsHTML.String(), markerID)

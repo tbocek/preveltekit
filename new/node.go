@@ -36,6 +36,11 @@ type TextNode struct {
 
 func (t *TextNode) nodeType() string { return "text" }
 
+// Text creates a text node.
+func Text(content string) *TextNode {
+	return &TextNode{Content: content}
+}
+
 // =============================================================================
 // Raw HTML Node
 // =============================================================================
@@ -68,6 +73,23 @@ type HtmlEvent struct {
 }
 
 func (h *HtmlNode) nodeType() string { return "html" }
+
+// wasmStringsToRemove collects string parts from Html() calls during SSR.
+// A post-build step uses this list to zero them out in the WASM data section.
+var wasmStringsToRemove = make(map[string]int)
+
+// Html creates a raw HTML node from strings and embedded nodes.
+// Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
+func Html(parts ...any) *HtmlNode {
+	if wasmStringsToRemove != nil {
+		for _, p := range parts {
+			if s, ok := p.(string); ok && len(s) > 0 {
+				wasmStringsToRemove[s]++
+			}
+		}
+	}
+	return &HtmlNode{Parts: parts}
+}
 
 // AttrIf adds a conditional attribute to the first HTML tag.
 // Values can be string literals or *Store[T] for reactive values.

@@ -62,10 +62,19 @@ func Hydrate(app Component) {
 	os.MkdirAll("dist", 0755)
 
 	// Second pass: generate HTML for each SSR path with fresh state
-	for _, route := range ssrPaths {
+	var savedStringsToRemove map[string]int
+	for ri, route := range ssrPaths {
 		// Reset global counters so each iteration starts from s0,
 		// matching the single app.New() call in WASM.
 		resetRegistries()
+
+		// Only collect Html() strings on first iteration — one pass through
+		// all component Render() methods is enough to capture all source-level
+		// string literals. Multiple iterations would over-count.
+		if ri == 1 {
+			savedStringsToRemove = wasmStringsToRemove
+			wasmStringsToRemove = nil
+		}
 
 		// Set the SSR path before lifecycle methods
 		SetSSRPath(route.SSRPath)
@@ -120,6 +129,23 @@ func Hydrate(app Component) {
 	binPath := filepath.Join("dist", "bindings.bin")
 	os.WriteFile(binPath, bindingsBin, 0644)
 	fmt.Fprintf(os.Stderr, "Generated: %s\n", binPath)
+
+	// Write strings to remove from WASM
+	// Format: first line is expected count, rest is the raw string
+	removeDir := filepath.Join("dist", "remove_from_wasm")
+	os.RemoveAll(removeDir)
+	os.MkdirAll(removeDir, 0755)
+	// Use saved map (from first iteration) if available, else current
+	if savedStringsToRemove == nil {
+		savedStringsToRemove = wasmStringsToRemove
+	}
+	i := 0
+	for s, count := range savedStringsToRemove {
+		content := fmt.Sprintf("%d\n%s", count, s)
+		os.WriteFile(filepath.Join(removeDir, fmt.Sprintf("%d", i)), []byte(content), 0644)
+		i++
+	}
+	fmt.Fprintf(os.Stderr, "Generated: %d strings to remove from WASM\n", i)
 }
 
 // mergeBindings merges src bindings into dst, avoiding duplicates by marker/element ID.

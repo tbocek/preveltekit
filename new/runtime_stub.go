@@ -8,7 +8,6 @@ package preveltekit
 // Document is a no-op stub for SSR (uses jsValue from js_stub.go)
 var Document = &jsValue{}
 
-func InjectStyle(name, css string)       {}
 func GetEl(id string) *jsValue           { return &jsValue{} }
 func FindComment(marker string) *jsValue { return &jsValue{} }
 

@@ -9,9 +9,6 @@ import (
 // Document is a cached reference to the DOM document
 var Document = js.Global().Get("document")
 
-// injectedStyles tracks which component styles have been injected
-var injectedStyles = make(map[string]bool)
-
 // textNodeRefs stores the current text node reference for each marker (updated on rebind)
 var textNodeRefs = make(map[string]js.Value)
 
@@ -27,17 +24,6 @@ func ClearBoundMarker(marker string) {
 
 // nodeFilterShowComment is cached for TreeWalker (NodeFilter.SHOW_COMMENT = 128)
 var nodeFilterShowComment = js.ValueOf(128)
-
-// InjectStyle injects a component's CSS once (deduplicated by name)
-func InjectStyle(name, css string) {
-	if injectedStyles[name] || css == "" {
-		return
-	}
-	injectedStyles[name] = true
-	style := Document.Call("createElement", "style")
-	style.Set("textContent", css)
-	Document.Get("head").Call("appendChild", style)
-}
 
 // GetEl returns an element by ID
 func GetEl(id string) js.Value {

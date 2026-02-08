@@ -119,6 +119,9 @@ func (d *decoder) readBindings() *HydrateBindings {
 		for i := range b.EachBlocks {
 			b.EachBlocks[i].MarkerID = d.readString()
 			b.EachBlocks[i].ListID = d.readString()
+			b.EachBlocks[i].BodyHTML = d.readString()
+			b.EachBlocks[i].ItemPrefix = d.readString()
+			b.EachBlocks[i].SpanClass = d.readString()
 		}
 	}
 

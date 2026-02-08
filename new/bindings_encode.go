@@ -3,9 +3,8 @@
 package preveltekit
 
 import (
-	"github.com/tdewolff/minify/v2"
-	mcss "github.com/tdewolff/minify/v2/css"
-	mhtml "github.com/tdewolff/minify/v2/html"
+	"regexp"
+	"strings"
 )
 
 // Binary encoder for CollectedBindings.
@@ -15,28 +14,53 @@ import (
 // Slices: varint count + items.
 // Nullable pointers: byte 0=nil, 1=present + data.
 
-var m *minify.M
-
-func init() {
-	m = minify.New()
-	m.AddFunc("text/html", mhtml.Minify)
-	m.AddFunc("text/css", mcss.Minify)
-}
+// minifyHTML collapses whitespace between tags without altering structure.
+var betweenTags = regexp.MustCompile(`>\s+<`)
 
 func minifyHTML(s string) string {
-	out, err := m.String("text/html", s)
-	if err != nil {
-		return s
-	}
-	return out
+	s = betweenTags.ReplaceAllString(s, "><")
+	s = strings.TrimSpace(s)
+	return s
 }
 
+// minifyCSS removes comments, collapses whitespace, and trims unnecessary characters.
 func minifyCSS(s string) string {
-	out, err := m.String("text/css", s)
-	if err != nil {
-		return s
+	// Remove comments
+	for {
+		start := strings.Index(s, "/*")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(s[start+2:], "*/")
+		if end < 0 {
+			break
+		}
+		s = s[:start] + s[start+2+end+2:]
 	}
-	return out
+	// Collapse whitespace
+	var b strings.Builder
+	inSpace := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			inSpace = true
+			continue
+		}
+		if inSpace {
+			// Skip space around these characters
+			if c != '{' && c != '}' && c != ':' && c != ';' && c != ',' && c != '>' && c != '+' && c != '~' {
+				if b.Len() > 0 {
+					prev := b.String()[b.Len()-1]
+					if prev != '{' && prev != '}' && prev != ':' && prev != ';' && prev != ',' && prev != '>' && prev != '+' && prev != '~' {
+						b.WriteByte(' ')
+					}
+				}
+			}
+			inSpace = false
+		}
+		b.WriteByte(c)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func encodeBindings(b *CollectedBindings) []byte {
@@ -135,6 +159,9 @@ func (e *encoder) writeBindings(b *CollectedBindings) {
 	for _, eb := range b.EachBlocks {
 		e.writeString(eb.MarkerID)
 		e.writeString(eb.ListID)
+		e.writeHTML(eb.BodyHTML)
+		e.writeString(eb.ItemPrefix)
+		e.writeString(eb.SpanClass)
 	}
 
 	// InputBindings
