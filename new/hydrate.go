@@ -9,32 +9,6 @@ import (
 	"sort"
 )
 
-// HasRoutes is implemented by components that define routes.
-type HasRoutes interface {
-	Routes() []Route
-}
-
-// HasStyle is implemented by components that have scoped CSS styles.
-type HasStyle interface {
-	Style() string
-}
-
-// HasGlobalStyle is implemented by components that have unscoped global CSS styles.
-// Global styles are emitted without any CSS scoping — useful for base/reset styles.
-type HasGlobalStyle interface {
-	GlobalStyle() string
-}
-
-// HasNew is implemented by components that can create fresh instances.
-type HasNew interface {
-	New() Component
-}
-
-// HasOnMount is implemented by components with OnMount lifecycle.
-type HasOnMount interface {
-	OnMount()
-}
-
 // Hydrate is the main entry point for declarative components.
 // In SSR mode (native build), it generates HTML files and outputs bindings JSON.
 // The ID-based system is used for stores and handlers, but bindings JSON is still

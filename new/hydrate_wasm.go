@@ -15,36 +15,6 @@ var setupEachBlocks = make(map[string]bool)
 // Track which component-blocks have been set up to avoid duplicates
 var setupComponentBlocks = make(map[string]bool)
 
-// containsChar checks if s contains the character c
-func containsChar(s string, c byte) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return true
-		}
-	}
-	return false
-}
-
-// HasRoutes is implemented by components that define routes.
-type HasRoutes interface {
-	Routes() []Route
-}
-
-// HasStyle is implemented by components that have scoped CSS styles.
-type HasStyle interface {
-	Style() string
-}
-
-// HasNew is implemented by components that can create fresh instances.
-type HasNew interface {
-	New() Component
-}
-
-// HasOnMount is implemented by components with OnMount lifecycle.
-type HasOnMount interface {
-	OnMount()
-}
-
 // Hydrate sets up DOM bindings for reactivity.
 // With the ID-based system, stores and handlers register themselves with unique IDs.
 // We still need the bindings JSON for If-blocks, Each-blocks, and AttrCond bindings.
@@ -292,7 +262,14 @@ func bindIfBlock(ifb HydrateIfBlock) {
 		store := GetStore(dep)
 		if store == nil {
 			// Try with component prefix if dep doesn't contain a dot
-			if !containsChar(dep, '.') {
+			hasDot := false
+			for i := 0; i < len(dep); i++ {
+				if dep[i] == '.' {
+					hasDot = true
+					break
+				}
+			}
+			if !hasDot {
 				store = GetStore("component." + dep)
 			}
 		}

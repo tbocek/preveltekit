@@ -14,6 +14,32 @@ type Route struct {
 	Component Component // Component to render for this route
 }
 
+// HasRoutes is implemented by components that define routes.
+type HasRoutes interface {
+	Routes() []Route
+}
+
+// HasStyle is implemented by components that have scoped CSS styles.
+type HasStyle interface {
+	Style() string
+}
+
+// HasGlobalStyle is implemented by components that have unscoped global CSS styles.
+// Global styles are emitted without any CSS scoping — useful for base/reset styles.
+type HasGlobalStyle interface {
+	GlobalStyle() string
+}
+
+// HasNew is implemented by components that can create fresh instances.
+type HasNew interface {
+	New() Component
+}
+
+// HasOnMount is implemented by components with OnMount lifecycle.
+type HasOnMount interface {
+	OnMount()
+}
+
 // HasID is implemented by stores that have a user-defined ID.
 type HasID interface {
 	ID() string
