@@ -1154,15 +1154,6 @@ func isSelfClosing(tag string) bool {
 	return false
 }
 
-// escapeHTML escapes HTML special characters.
-func escapeHTML(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, `"`, "&quot;")
-	return s
-}
-
 // escapeAttr escapes attribute values (quotes and ampersands).
 func escapeAttr(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")

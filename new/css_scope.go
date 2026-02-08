@@ -1,19 +1,16 @@
 package preveltekit
 
-import "strings"
-
 // scopeCSS adds a scope class selector to every CSS rule's selectors.
 // e.g., ".demo button" becomes ".demo.v0 button.v0"
 // Handles @media (recurse), @keyframes (skip), pseudo-classes, combinators.
 func scopeCSS(css, scopeClass string) string {
 	scope := "." + scopeClass
-	var sb strings.Builder
-	sb.Grow(len(css) + len(css)/5)
+	buf := make([]byte, 0, len(css)+len(css)/5)
 	i := 0
 	for i < len(css) {
 		// Skip whitespace
 		if css[i] == ' ' || css[i] == '\t' || css[i] == '\n' || css[i] == '\r' {
-			sb.WriteByte(css[i])
+			buf = append(buf, css[i])
 			i++
 			continue
 		}
@@ -24,15 +21,15 @@ func scopeCSS(css, scopeClass string) string {
 			for j < len(css) && css[j] != '{' && css[j] != ';' {
 				j++
 			}
-			atRule := strings.TrimSpace(css[i:j])
+			atRule := trimSpace(css[i:j])
 			if j < len(css) && css[j] == ';' {
 				// @import or similar — pass through
-				sb.WriteString(css[i : j+1])
+				buf = append(buf, css[i:j+1]...)
 				i = j + 1
 				continue
 			}
 			if j < len(css) && css[j] == '{' {
-				if strings.HasPrefix(atRule, "@keyframes") || strings.HasPrefix(atRule, "@font-face") {
+				if hasPrefix(atRule, "@keyframes") || hasPrefix(atRule, "@font-face") {
 					// Skip scoping — copy the entire block as-is
 					depth := 1
 					k := j + 1
@@ -44,12 +41,12 @@ func scopeCSS(css, scopeClass string) string {
 						}
 						k++
 					}
-					sb.WriteString(css[i:k])
+					buf = append(buf, css[i:k]...)
 					i = k
 					continue
 				}
 				// @media or similar — write the @-rule header, recurse into body
-				sb.WriteString(css[i : j+1]) // "@media (...) {"
+				buf = append(buf, css[i:j+1]...) // "@media (...) {"
 				depth := 1
 				k := j + 1
 				bodyStart := k
@@ -63,16 +60,16 @@ func scopeCSS(css, scopeClass string) string {
 				}
 				// body is css[bodyStart:k-1], closing } is at k-1
 				body := css[bodyStart : k-1]
-				sb.WriteString(scopeCSS(body, scopeClass))
-				sb.WriteByte('}')
+				buf = append(buf, scopeCSS(body, scopeClass)...)
+				buf = append(buf, '}')
 				i = k
 				continue
 			}
 		}
 		// Regular rule: find selector(s) before {
-		braceIdx := strings.IndexByte(css[i:], '{')
+		braceIdx := indexByte(css[i:], '{')
 		if braceIdx == -1 {
-			sb.WriteString(css[i:])
+			buf = append(buf, css[i:]...)
 			break
 		}
 		selectorPart := css[i : i+braceIdx]
@@ -93,18 +90,18 @@ func scopeCSS(css, scopeClass string) string {
 		i = k
 
 		// Scope the selectors
-		selectors := strings.Split(selectorPart, ",")
+		selectors := splitByte(selectorPart, ',')
 		for si, sel := range selectors {
 			if si > 0 {
-				sb.WriteByte(',')
+				buf = append(buf, ',')
 			}
-			sb.WriteString(scopeSelector(strings.TrimSpace(sel), scope))
+			buf = append(buf, scopeSelector(trimSpace(sel), scope)...)
 		}
-		sb.WriteByte('{')
-		sb.WriteString(body)
-		sb.WriteByte('}')
+		buf = append(buf, '{')
+		buf = append(buf, body...)
+		buf = append(buf, '}')
 	}
-	return sb.String()
+	return string(buf)
 }
 
 // scopeSelector adds .vN to each simple selector in a compound selector.
@@ -114,13 +111,12 @@ func scopeSelector(sel, scope string) string {
 		return sel
 	}
 	// Don't scope html/body selectors
-	trimmed := strings.TrimSpace(sel)
+	trimmed := trimSpace(sel)
 	if trimmed == "html" || trimmed == "body" || trimmed == "*" {
 		return sel
 	}
 
-	var sb strings.Builder
-	// Split by combinators (space, >, +, ~) preserving them
+	buf := make([]byte, 0, len(sel)+len(scope)*2)
 	i := 0
 	for i < len(sel) {
 		// Skip leading whitespace
@@ -133,16 +129,16 @@ func scopeSelector(sel, scope string) string {
 
 		// Check for combinator characters
 		if sel[i] == '>' || sel[i] == '+' || sel[i] == '~' {
-			sb.WriteByte(' ')
-			sb.WriteByte(sel[i])
-			sb.WriteByte(' ')
+			buf = append(buf, ' ')
+			buf = append(buf, sel[i])
+			buf = append(buf, ' ')
 			i++
 			continue
 		}
 
 		// Implicit descendant combinator (space between segments)
-		if sb.Len() > 0 {
-			sb.WriteByte(' ')
+		if len(buf) > 0 {
+			buf = append(buf, ' ')
 		}
 
 		// Read a simple selector segment (up to space or combinator)
@@ -157,7 +153,7 @@ func scopeSelector(sel, scope string) string {
 
 		// Don't scope html/body
 		if segment == "html" || segment == "body" {
-			sb.WriteString(segment)
+			buf = append(buf, segment...)
 			continue
 		}
 
@@ -169,9 +165,57 @@ func scopeSelector(sel, scope string) string {
 				break
 			}
 		}
-		sb.WriteString(segment[:insertPos])
-		sb.WriteString(scope)
-		sb.WriteString(segment[insertPos:])
+		buf = append(buf, segment[:insertPos]...)
+		buf = append(buf, scope...)
+		buf = append(buf, segment[insertPos:]...)
 	}
-	return sb.String()
+	return string(buf)
+}
+
+// trimSpace removes leading and trailing whitespace.
+func trimSpace(s string) string {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
+}
+
+// hasPrefix reports whether s starts with prefix.
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// indexByte returns the index of the first occurrence of c in s, or -1.
+func indexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// splitByte splits s by separator byte, returning all parts.
+func splitByte(s string, sep byte) []string {
+	n := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			n++
+		}
+	}
+	parts := make([]string, 0, n)
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
 }

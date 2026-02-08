@@ -3,7 +3,6 @@
 package preveltekit
 
 import (
-	"strconv"
 	"syscall/js"
 )
 
@@ -17,9 +16,9 @@ type FetchError struct {
 func (e *FetchError) Error() string {
 	s := "fetch " + e.URL + ": "
 	if e.StatusText != "" {
-		return s + strconv.Itoa(e.Status) + " " + e.StatusText
+		return s + itoa(e.Status) + " " + e.StatusText
 	}
-	return s + "HTTP " + strconv.Itoa(e.Status)
+	return s + "HTTP " + itoa(e.Status)
 }
 
 // FetchOptions configures a fetch request

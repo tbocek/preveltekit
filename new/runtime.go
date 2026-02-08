@@ -3,7 +3,6 @@
 package preveltekit
 
 import (
-	"strconv"
 	"syscall/js"
 )
 
@@ -86,21 +85,21 @@ func toString[T any](v T) string {
 	case string:
 		return val
 	case int:
-		return strconv.Itoa(val)
+		return itoa(val)
 	case int64:
-		return strconv.FormatInt(val, 10)
+		return itoa(int(val))
 	case int32:
-		return strconv.FormatInt(int64(val), 10)
+		return itoa(int(val))
 	case uint:
-		return strconv.FormatUint(uint64(val), 10)
+		return itoa(int(val))
 	case uint64:
-		return strconv.FormatUint(val, 10)
+		return itoa(int(val))
 	case uint32:
-		return strconv.FormatUint(uint64(val), 10)
+		return itoa(int(val))
 	case float64:
-		return strconv.FormatFloat(val, 'f', -1, 64)
+		return floatToStr(val)
 	case float32:
-		return strconv.FormatFloat(float64(val), 'f', -1, 32)
+		return floatToStr(float64(val))
 	case bool:
 		if val {
 			return "true"
@@ -214,13 +213,11 @@ func BindInputInt(id string, store Settable[int]) js.Func {
 		return js.Func{}
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-		if v, err := strconv.Atoi(this.Get("value").String()); err == nil {
-			store.Set(v)
-		}
+		store.Set(atoiSafe(this.Get("value").String()))
 		return nil
 	})
 	el.Call("addEventListener", "input", fn)
-	store.OnChange(func(v int) { el.Set("value", strconv.Itoa(v)) })
+	store.OnChange(func(v int) { el.Set("value", itoa(v)) })
 	return fn
 }
 

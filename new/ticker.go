@@ -4,8 +4,12 @@ package preveltekit
 
 import (
 	"syscall/js"
-	"time"
 )
+
+// nowMs returns the current time in milliseconds using JS Date.now().
+func nowMs() int64 {
+	return int64(js.Global().Get("Date").Call("now").Float())
+}
 
 // SetInterval creates a JavaScript interval that calls the callback every ms milliseconds.
 // Returns a function to clear the interval.
@@ -118,7 +122,7 @@ func Throttle(ms int, callback func()) func() {
 	msInt64 := int64(ms)
 
 	return func() {
-		now := time.Now().UnixMilli()
+		now := nowMs()
 		if now-lastRun >= msInt64 {
 			lastRun = now
 			callback()
@@ -127,7 +131,7 @@ func Throttle(ms int, callback func()) func() {
 			remaining := int(msInt64 - (now - lastRun))
 			SetTimeout(remaining, func() {
 				scheduled = false
-				lastRun = time.Now().UnixMilli()
+				lastRun = nowMs()
 				callback()
 			})
 		}

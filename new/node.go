@@ -546,6 +546,26 @@ func ftoa(f float64) string {
 	return s
 }
 
+// escapeHTML escapes HTML special characters.
+func escapeHTML(s string) string {
+	var result []byte
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '&':
+			result = append(result, []byte("&amp;")...)
+		case '<':
+			result = append(result, []byte("&lt;")...)
+		case '>':
+			result = append(result, []byte("&gt;")...)
+		case '"':
+			result = append(result, []byte("&quot;")...)
+		default:
+			result = append(result, s[i])
+		}
+	}
+	return string(result)
+}
+
 // BoolCondition wraps a bool store for use in If nodes.
 type BoolCondition struct {
 	Store   *Store[bool] // Exported for address-based resolution

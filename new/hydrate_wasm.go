@@ -582,7 +582,7 @@ func bindAttr(ab HydrateAttrBinding) {
 	updateAttr := func() {
 		value := ab.Template
 		for i, store := range stores {
-			placeholder := "{" + intToStr(i) + "}"
+			placeholder := "{" + itoa(i) + "}"
 			value = replaceAll(value, placeholder, storeToString(store))
 		}
 		el.Call("setAttribute", ab.AttrName, value)
@@ -733,9 +733,9 @@ func bindEachBlock(eb HydrateEachBlock) {
 	// Pass markerID so we can re-acquire the parent each time (handles DOM replacement from if-blocks)
 	switch list := listAny.(type) {
 	case *List[string]:
-		bindListItems(list, eb.MarkerID, itemIDPrefix, escapeHTMLWasm)
+		bindListItems(list, eb.MarkerID, itemIDPrefix, escapeHTML)
 	case *List[int]:
-		bindListItems(list, eb.MarkerID, itemIDPrefix, intToStr)
+		bindListItems(list, eb.MarkerID, itemIDPrefix, itoa)
 	}
 }
 
@@ -744,7 +744,7 @@ func bindListItems[T comparable](list *List[T], markerID string, itemIDPrefix st
 	renderItems := func(items []T) {
 		var html string
 		for i, item := range items {
-			html += `<span id="` + itemIDPrefix + `_` + intToStr(i) + `"><li><span class="index">` + intToStr(i) + `</span> ` + format(item) + `</li></span>`
+			html += `<span id="` + itemIDPrefix + `_` + itoa(i) + `"><li><span class="index">` + itoa(i) + `</span> ` + format(item) + `</li></span>`
 		}
 		// Add marker comment at the end so it survives innerHTML replacement
 		html += `<!--` + markerID + `-->`
@@ -762,49 +762,6 @@ func bindListItems[T comparable](list *List[T], markerID string, itemIDPrefix st
 	// Don't render initially - SSR already rendered the items
 	// Just subscribe to changes for future updates
 	list.OnChange(renderItems)
-}
-
-// escapeHTMLWasm escapes HTML special characters
-func escapeHTMLWasm(s string) string {
-	var result []byte
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '&':
-			result = append(result, []byte("&amp;")...)
-		case '<':
-			result = append(result, []byte("&lt;")...)
-		case '>':
-			result = append(result, []byte("&gt;")...)
-		case '"':
-			result = append(result, []byte("&quot;")...)
-		default:
-			result = append(result, s[i])
-		}
-	}
-	return string(result)
-}
-
-// intToStr converts int to string without fmt
-func intToStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }
 
 // replaceAll replaces all occurrences of old with new in s
@@ -959,7 +916,7 @@ func storeToString(store any) string {
 	case *Store[string]:
 		return s.Get()
 	case *Store[int]:
-		return intToStr(s.Get())
+		return itoa(s.Get())
 	case *Store[bool]:
 		if s.Get() {
 			return "true"
@@ -984,7 +941,7 @@ func floatToStr(f float64) string {
 	// Integer part
 	intPart := int(f)
 	fracPart := f - float64(intPart)
-	result := intToStr(intPart)
+	result := itoa(intPart)
 	// Fractional part (up to 6 digits)
 	if fracPart > 0.0000001 {
 		result += "."
