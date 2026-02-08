@@ -111,7 +111,7 @@ func (h *HtmlNode) On(event string, handler func()) *HtmlNode {
 
 // PreventDefault adds the preventDefault modifier to the last event.
 // Must be called after On. The modifier is stored in the handler registry
-// so WASM can apply event.preventDefault() without needing it in bindings.json.
+// so WASM can apply event.preventDefault() without needing it in bindings.
 func (h *HtmlNode) PreventDefault() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]
@@ -122,7 +122,7 @@ func (h *HtmlNode) PreventDefault() *HtmlNode {
 
 // StopPropagation adds the stopPropagation modifier to the last event.
 // Must be called after On. The modifier is stored in the handler registry
-// so WASM can apply event.stopPropagation() without needing it in bindings.json.
+// so WASM can apply event.stopPropagation() without needing it in bindings.
 func (h *HtmlNode) StopPropagation() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]

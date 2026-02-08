@@ -3,7 +3,6 @@
 package preveltekit
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ func Hydrate(app Component) {
 		}
 	}
 
-	// Collect all bindings (merged from all routes for single bindings.json)
+	// Collect all bindings (merged from all routes for single bindings.bin)
 	var allBindings CollectedBindings
 
 	// Create output directory
@@ -108,7 +107,7 @@ func Hydrate(app Component) {
 		mergeBindings(&allBindings, ctx.Bindings)
 
 		// Build full HTML document
-		fullHTML := buildHTMLDocument(html, ctx.CollectedGlobalStyles, ctx.CollectedStyles)
+		fullHTML := buildHTMLDocument(minifyHTML(html), ctx.CollectedGlobalStyles, ctx.CollectedStyles)
 
 		// Write HTML file
 		htmlPath := filepath.Join("dist", route.HTMLFile)
@@ -116,9 +115,11 @@ func Hydrate(app Component) {
 		fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
 	}
 
-	// Output merged bindings as JSON
-	bindingsJSON, _ := json.Marshal(allBindings)
-	fmt.Fprintf(os.Stderr, "BINDINGS:%s\n", bindingsJSON)
+	// Write bindings as binary
+	bindingsBin := encodeBindings(&allBindings)
+	binPath := filepath.Join("dist", "bindings.bin")
+	os.WriteFile(binPath, bindingsBin, 0644)
+	fmt.Fprintf(os.Stderr, "Generated: %s\n", binPath)
 }
 
 // mergeBindings merges src bindings into dst, avoiding duplicates by marker/element ID.
@@ -387,7 +388,7 @@ func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[s
 	}
 
 	if allStyles != "" {
-		styles = "<style>" + allStyles + "</style>\n"
+		styles = "<style>" + minifyCSS(allStyles) + "</style>\n"
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
@@ -400,10 +401,10 @@ func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[s
 %s
 <script src="wasm_exec.js"></script>
 <script>
-fetch("bindings.json")
-  .then(r => r.json())
-  .then(bindings => {
-    window._preveltekit_bindings = JSON.stringify(bindings);
+fetch("bindings.bin")
+  .then(r => r.arrayBuffer())
+  .then(buf => {
+    window._preveltekit_bindings = new Uint8Array(buf);
     const go = new Go();
     return WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
       .then(result => go.run(result.instance));

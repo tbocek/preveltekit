@@ -154,19 +154,22 @@ func walkNodeForComponents(n Node) {
 	}
 }
 
-// hydrateWASM sets up DOM bindings from the embedded bindings JSON.
+// hydrateWASM sets up DOM bindings from the embedded bindings binary.
 func hydrateWASM(app Component, children map[string]Component) {
 
-	// Get bindings from global variable (set by CLI-generated code)
+	// Get bindings from global variable (set as Uint8Array by loader)
 	bindingsJS := js.Global().Get("_preveltekit_bindings")
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
 		runLifecycle(app, children)
 		select {}
 	}
 
-	bindingsJSON := bindingsJS.String()
+	// Copy Uint8Array into Go []byte
+	length := bindingsJS.Get("byteLength").Int()
+	data := make([]byte, length)
+	js.CopyBytesToGo(data, bindingsJS)
 
-	bindings := parseBindings(bindingsJSON)
+	bindings := decodeBindings(data)
 	if bindings == nil {
 		runLifecycle(app, children)
 		select {}
@@ -625,25 +628,7 @@ func bindAttrCondBinding(acb HydrateAttrCondBinding) {
 
 	// Function to evaluate condition and update attribute
 	updateAttr := func() {
-		// Evaluate condition
-		var active bool
-		if acb.IsBool {
-			if s, ok := condStore.(*Store[bool]); ok {
-				active = s.Get()
-			}
-		} else if acb.Op != "" {
-			switch s := condStore.(type) {
-			case *Store[int]:
-				active = compare(s.Get(), acb.Op, atoiSafe(acb.Operand))
-			case *Store[string]:
-				active = compare(s.Get(), acb.Op, acb.Operand)
-			case *Store[float64]:
-				active = compare(s.Get(), acb.Op, atofSafe(acb.Operand))
-			case *Store[bool]:
-				operandBool := acb.Operand == "true"
-				active = compareBool(s.Get(), acb.Op, operandBool)
-			}
-		}
+		active := evaluateStore(condStore, acb.IsBool, acb.Op, acb.Operand)
 
 		// Determine value to use
 		var value string
@@ -782,35 +767,37 @@ func replaceAll(s, old, new string) string {
 	return string(result)
 }
 
-// evalCondition evaluates a branch condition using structured data.
-func evalCondition(branch HydrateIfBranch) bool {
-	if branch.StoreID == "" {
-		return false
-	}
-
-	store := GetStore(branch.StoreID)
-	if store == nil {
-		return false
-	}
-
-	if branch.IsBool {
+// evaluateStore evaluates a condition against a store's current value.
+func evaluateStore(store any, isBool bool, op, operand string) bool {
+	if isBool {
 		if s, ok := store.(*Store[bool]); ok {
 			return s.Get()
 		}
 		return false
 	}
-
-	// Compare based on operator
 	switch s := store.(type) {
 	case *Store[int]:
-		return compare(s.Get(), branch.Op, atoiSafe(branch.Operand))
+		return compare(s.Get(), op, atoiSafe(operand))
 	case *Store[string]:
-		return compare(s.Get(), branch.Op, branch.Operand)
+		return compare(s.Get(), op, operand)
 	case *Store[float64]:
-		return compare(s.Get(), branch.Op, atofSafe(branch.Operand))
+		return compare(s.Get(), op, atofSafe(operand))
+	case *Store[bool]:
+		return compareBool(s.Get(), op, operand == "true")
 	}
-
 	return false
+}
+
+// evalCondition evaluates a branch condition using structured data.
+func evalCondition(branch HydrateIfBranch) bool {
+	if branch.StoreID == "" {
+		return false
+	}
+	store := GetStore(branch.StoreID)
+	if store == nil {
+		return false
+	}
+	return evaluateStore(store, branch.IsBool, branch.Op, branch.Operand)
 }
 
 // compare compares two ordered values with the given operator.
