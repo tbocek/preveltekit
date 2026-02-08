@@ -253,10 +253,10 @@ p.Html(`<p>Hello, `, p.Bind(nameStore), `!</p>`)
 ```mermaid
 graph LR
     subgraph SSR
-        A["Bind(nameStore)"] --> B["&lt;!--t0s--&gt;World&lt;!--t0--&gt;"]
+        A["Bind(nameStore)"] --> B["marker pair: t0s...t0"]
     end
     subgraph WASM
-        C["nameStore.OnChange"] --> D["replaceMarkerContent('t0', newValue)"]
+        C["nameStore.OnChange"] --> D["replaceMarkerContent(t0, val)"]
     end
 ```
 
@@ -287,11 +287,11 @@ p.Html(`<button>+1</button>`).On("click", c.Increment)
 ```mermaid
 graph LR
     subgraph SSR
-        A[".On('click', handler)"] --> B["RegisterHandler → h0"]
-        B --> C['&lt;button id="h0" data-on="click"&gt;']
+        A[".On(click, handler)"] --> B["RegisterHandler → h0"]
+        B --> C["button id=h0 data-on=click"]
     end
     subgraph WASM
-        D["GetHandler('h0')"] --> E["addEventListener('click', wrapper)"]
+        D["GetHandler(h0)"] --> E["addEventListener(click, wrapper)"]
     end
 ```
 
@@ -334,10 +334,10 @@ p.Html(`<input type="checkbox">`).Bind(boolStore)
 ```mermaid
 graph LR
     subgraph SSR
-        A[".Bind(nameStore)"] --> B['&lt;input id="s1" value="World"&gt;']
+        A[".Bind(nameStore)"] --> B["input id=s1 value=World"]
     end
     subgraph WASM
-        C["addEventListener('input')"] --> D["store.Set(el.value)"]
+        C["addEventListener(input)"] --> D["store.Set(el.value)"]
         E["store.OnChange"] --> F["el.value = newVal"]
     end
 ```
@@ -385,19 +385,15 @@ p.If(score.Ge(90),
 ```mermaid
 graph TD
     subgraph "SSR Output"
-        A["&lt;!--i0s--&gt;"] --> B["&lt;p class='a'&gt;Grade: A&lt;/p&gt;"]
-        B --> C["&lt;!--i0--&gt;"]
+        A["start marker i0s"] --> B["p.a Grade: A"]
+        B --> C["end marker i0"]
     end
     subgraph "bindings.bin"
-        D["IfBlock {
-            MarkerID: 'i0'
-            Branches: [
-                {HTML: '&lt;p class=a&gt;...', StoreID: 's0', Op: '>=', Operand: '90'},
-                {HTML: '&lt;p class=b&gt;...', StoreID: 's0', Op: '>=', Operand: '80'}
-            ]
-            ElseHTML: '&lt;p class=f&gt;...'
-            Deps: ['s0']
-        }"]
+        D["IfBlock
+            MarkerID: i0
+            Branches: A, B conditions
+            ElseHTML: Grade: F
+            Deps: s0"]
     end
 ```
 
@@ -421,10 +417,10 @@ All branch HTMLs are pre-baked into `bindings.bin`. Only the active branch is re
 ```mermaid
 graph LR
     subgraph "Before (score=95)"
-        A1["&lt;!--i0s--&gt;"] --- B1["&lt;p class=a&gt;A&lt;/p&gt;"] --- C1["&lt;!--i0--&gt;"]
+        A1["i0s marker"] --- B1["Grade: A"] --- C1["i0 marker"]
     end
     subgraph "After score.Set(50)"
-        A2["&lt;!--i0s--&gt;"] --- B2["&lt;p class=f&gt;F&lt;/p&gt;"] --- C2["&lt;!--i0--&gt;"]
+        A2["i0s marker"] --- B2["Grade: F"] --- C2["i0 marker"]
     end
     B1 -.->|replaceMarkerContent| B2
 ```
@@ -455,11 +451,10 @@ graph TD
         A --> D["Render actual items for HTML output"]
     end
     subgraph "bindings.bin"
-        E["EachBlock {
-            MarkerID: 'e0'
-            ListID: 's3'
-            BodyHTML: '&lt;li&gt;\x00N\x00: \x00I\x00&lt;/li&gt;'
-        }"]
+        E["EachBlock
+            MarkerID: e0
+            ListID: s3
+            BodyHTML: li template with sentinels"]
     end
 ```
 
@@ -493,10 +488,10 @@ Items are rendered directly — no wrapper elements.
 ```mermaid
 graph LR
     subgraph "Before"
-        A1["&lt;!--e0s--&gt;"] --- B1["&lt;li&gt;Apple&lt;/li&gt;&lt;li&gt;Banana&lt;/li&gt;"] --- C1["&lt;!--e0--&gt;"]
+        A1["e0s marker"] --- B1["Apple, Banana"] --- C1["e0 marker"]
     end
-    subgraph "After items.Set(['X','Y'])"
-        A2["&lt;!--e0s--&gt;"] --- B2["&lt;li&gt;X&lt;/li&gt;&lt;li&gt;Y&lt;/li&gt;"] --- C2["&lt;!--e0--&gt;"]
+    subgraph "After items.Set X,Y"
+        A2["e0s marker"] --- B2["X, Y"] --- C2["e0 marker"]
     end
     B1 -.->|replaceMarkerContent| B2
 ```
@@ -538,15 +533,10 @@ graph TD
         A --> F["Output active branch between markers"]
     end
     subgraph "bindings.bin"
-        G["ComponentBlock {
-            MarkerID: 'r0'
-            StoreID: 's5'
-            Branches: [
-                {Name: 'basics', HTML: '...', Bindings: {...}},
-                {Name: 'lists', HTML: '...', Bindings: {...}},
-                ...
-            ]
-        }"]
+        G["ComponentBlock
+            MarkerID: r0, StoreID: s5
+            Branches: basics, lists, ...
+            Each with HTML + nested Bindings"]
     end
 ```
 
@@ -568,10 +558,10 @@ All component branch HTMLs and their nested bindings are stored in `bindings.bin
 ```mermaid
 graph LR
     subgraph "Before (route: /basics)"
-        A1["&lt;!--r0s--&gt;"] --- B1["Basics component HTML"] --- C1["&lt;!--r0--&gt;"]
+        A1["r0s marker"] --- B1["Basics component HTML"] --- C1["r0 marker"]
     end
     subgraph "After navigate(/lists)"
-        A2["&lt;!--r0s--&gt;"] --- B2["Lists component HTML"] --- C2["&lt;!--r0--&gt;"]
+        A2["r0s marker"] --- B2["Lists component HTML"] --- C2["r0 marker"]
     end
     B1 -.->|replaceMarkerContent| B2
 ```
