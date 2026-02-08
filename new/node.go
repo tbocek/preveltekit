@@ -19,8 +19,6 @@ type NodeAttr interface {
 type Condition interface {
 	// Eval returns the current boolean value
 	Eval() bool
-	// Expr returns the Go expression string for code generation (e.g., "component.Score.Get() >= 90")
-	Expr() string
 	// Deps returns the field names this condition depends on
 	Deps() []string
 }
@@ -67,9 +65,8 @@ type AttrCond struct {
 // HtmlEvent represents an event binding for HtmlNode.
 // Used by HtmlNode.On() to attach event handlers.
 type HtmlEvent struct {
-	ID      string // unique handler ID for registry lookup
-	Event   string // event name (e.g., "click", "submit")
-	Handler func() // event handler
+	ID    string // unique handler ID for registry lookup
+	Event string // event name (e.g., "click", "submit")
 }
 
 func (h *HtmlNode) nodeType() string { return "html" }
@@ -124,9 +121,8 @@ func (h *HtmlNode) On(event string, handler func()) *HtmlNode {
 	// Register handler in global registry for WASM hydration
 	id := RegisterHandler(handler)
 	h.Events = append(h.Events, &HtmlEvent{
-		ID:      id,
-		Event:   event,
-		Handler: handler,
+		ID:    id,
+		Event: event,
 	})
 	return h
 }
@@ -189,9 +185,8 @@ func Frag(children ...Node) *Fragment {
 
 // BindNode represents a reactive binding to a store value.
 type BindNode struct {
-	StoreRef any    // The actual store reference (for evaluation)
-	StoreID  string // The Go expression for code generation (e.g., "component.Count")
-	IsHTML   bool   // true for raw HTML binding
+	StoreRef any  // The actual store reference (for evaluation)
+	IsHTML   bool // true for raw HTML binding
 }
 
 func (b *BindNode) nodeType() string { return "bind" }
@@ -257,7 +252,6 @@ func (i *IfNode) Else(children ...Node) *IfNode {
 // EachNode represents list iteration with optional else for empty list.
 type EachNode struct {
 	ListRef  any                            // The actual list reference
-	ListID   string                         // Go expression for code generation
 	Body     func(item any, index int) Node // Template function for each item
 	ElseNode []Node                         // Content for empty list
 }
@@ -388,9 +382,8 @@ func StaticAttribute(name, value string) *StaticAttr {
 // DynAttrAttr represents a dynamic attribute with store bindings.
 type DynAttrAttr struct {
 	Name     string
-	Template string   // e.g., "/user/{UserID}"
-	Stores   []any    // Store references
-	StoreIDs []string // Store expressions for code generation
+	Template string // e.g., "/user/{UserID}"
+	Stores   []any  // Store references
 }
 
 func (d *DynAttrAttr) attrType() string { return "dynattr" }
@@ -427,16 +420,11 @@ type StoreCondition struct {
 	Store    any    // Exported for address-based resolution
 	Op       string // Exported for class binding resolution
 	Operand  any    // Exported for class binding resolution
-	storeID  string
-	deps     []string
 	evalFunc func() bool
 }
 
-func (c *StoreCondition) Eval() bool { return c.evalFunc() }
-func (c *StoreCondition) Expr() string {
-	return c.storeID + ".Get() " + c.Op + " " + anyToString(c.Operand)
-}
-func (c *StoreCondition) Deps() []string { return c.deps }
+func (c *StoreCondition) Eval() bool     { return c.evalFunc() }
+func (c *StoreCondition) Deps() []string { return nil }
 
 // Ge creates a >= condition on a store.
 func (s *Store[T]) Ge(value T) Condition {
@@ -590,10 +578,8 @@ func escapeHTML(s string) string {
 
 // BoolCondition wraps a bool store for use in If nodes.
 type BoolCondition struct {
-	Store   *Store[bool] // Exported for address-based resolution
-	storeID string
-	negate  bool
-	deps    []string
+	Store  *Store[bool] // Exported for address-based resolution
+	negate bool
 }
 
 func (c *BoolCondition) Eval() bool {
@@ -603,13 +589,7 @@ func (c *BoolCondition) Eval() bool {
 	}
 	return v
 }
-func (c *BoolCondition) Expr() string {
-	if c.negate {
-		return "!" + c.storeID + ".Get()"
-	}
-	return c.storeID + ".Get()"
-}
-func (c *BoolCondition) Deps() []string { return c.deps }
+func (c *BoolCondition) Deps() []string { return nil }
 
 // IsTrue creates a condition that's true when the bool store is true.
 func IsTrue(s *Store[bool]) Condition {

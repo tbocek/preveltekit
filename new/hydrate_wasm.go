@@ -15,14 +15,6 @@ var setupEachBlocks = make(map[string]bool)
 // Track which component-blocks have been set up to avoid duplicates
 var setupComponentBlocks = make(map[string]bool)
 
-// trimPrefix removes prefix from s if present
-func trimPrefix(s, prefix string) string {
-	if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
-		return s[len(prefix):]
-	}
-	return s
-}
-
 // containsChar checks if s contains the character c
 func containsChar(s string, c byte) bool {
 	for i := 0; i < len(s); i++ {
@@ -155,7 +147,7 @@ func hydrateWASM(app Component, children map[string]Component) {
 	// Get bindings from global variable (set as Uint8Array by loader)
 	bindingsJS := js.Global().Get("_preveltekit_bindings")
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
-		runLifecycle(app, children)
+		runOnMount(children)
 		select {}
 	}
 
@@ -166,12 +158,9 @@ func hydrateWASM(app Component, children map[string]Component) {
 
 	bindings := decodeBindings(data)
 	if bindings == nil {
-		runLifecycle(app, children)
+		runOnMount(children)
 		select {}
 	}
-
-	// Run OnCreate phase
-	runOnCreate(app, children)
 
 	// Apply all bindings
 	cleanup := &Cleanup{}
@@ -179,7 +168,7 @@ func hydrateWASM(app Component, children map[string]Component) {
 
 	// Run OnMount for all children to initialize their stores (e.g., CurrentTab = "home").
 	// app.OnMount() already called in Hydrate() before walkNodeForComponents.
-	runOnMount(app, children)
+	runOnMount(children)
 
 	// Apply component blocks (options already registered via OnMount -> NewRouter -> WithOptions)
 	for _, cb := range bindings.ComponentBlocks {
@@ -190,25 +179,15 @@ func hydrateWASM(app Component, children map[string]Component) {
 	select {}
 }
 
-// runOnCreate is a no-op — styles are pre-baked into the SSR HTML <style> tag.
-// Scope counter sync happens in walkNodeForComponents.
-func runOnCreate(app Component, children map[string]Component) {}
-
 // runOnMount calls OnMount for all children.
 // Note: app.OnMount() is called earlier in Hydrate() before walkNodeForComponents,
 // so it is not called here to avoid double invocation.
-func runOnMount(app Component, children map[string]Component) {
+func runOnMount(children map[string]Component) {
 	for _, child := range children {
 		if om, ok := child.(HasOnMount); ok {
 			om.OnMount()
 		}
 	}
-}
-
-// runLifecycle runs full lifecycle (OnCreate + styles + OnMount) for all components.
-func runLifecycle(app Component, children map[string]Component) {
-	runOnCreate(app, children)
-	runOnMount(app, children)
 }
 
 // bindTextDynamic sets up a text binding for any store type.
@@ -258,9 +237,6 @@ func bindIfBlock(ifb HydrateIfBlock) {
 	}
 	setupIfBlocks[ifb.MarkerID] = true
 
-	// Find the existing SSR content
-	currentEl := FindExistingIfContent(ifb.MarkerID)
-
 	// Track current cleanup for bindings
 	currentCleanup := &Cleanup{}
 
@@ -289,14 +265,11 @@ func bindIfBlock(ifb HydrateIfBlock) {
 		}
 
 		// Skip re-rendering if the active branch hasn't changed
-		// This prevents overwriting list content when only the list items changed
 		if currentBranchIdx == activeBranchIdx && currentBranchIdx != -2 {
 			return
 		}
 		currentBranchIdx = activeBranchIdx
-
-		currentEl = FindExistingIfContent(ifb.MarkerID)
-		currentEl = ReplaceContent(ifb.MarkerID, currentEl, activeHTML)
+		replaceMarkerContent(ifb.MarkerID, activeHTML)
 
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
@@ -338,8 +311,39 @@ func bindIfBlock(ifb HydrateIfBlock) {
 	}
 }
 
+// replaceMarkerContent replaces all DOM nodes between <!--{markerID}s--> and <!--{markerID}-->
+// with new HTML content. Used by IfBlocks, ComponentBlocks, and EachBlocks.
+func replaceMarkerContent(markerID string, html string) {
+	endMarker := FindComment(markerID)
+	if endMarker.IsNull() {
+		return
+	}
+	startMarker := FindComment(markerID + "s")
+	if startMarker.IsNull() {
+		return
+	}
+	parent := endMarker.Get("parentNode")
+
+	// Remove all nodes between start and end markers
+	for {
+		next := startMarker.Get("nextSibling")
+		if next.IsNull() || next.Equal(endMarker) {
+			break
+		}
+		parent.Call("removeChild", next)
+	}
+
+	// Parse new HTML and insert before end marker
+	if html != "" {
+		tmpl := Document.Call("createElement", "template")
+		tmpl.Set("innerHTML", html)
+		frag := tmpl.Get("content")
+		parent.Call("insertBefore", frag, endMarker)
+	}
+}
+
 // clearBoundMarkers clears marker tracking for bindings that will be re-applied.
-// This is needed when if-block content is replaced via ReplaceContent.
+// This is needed when block content is replaced via replaceMarkerContent.
 func clearBoundMarkers(bindings *HydrateBindings) {
 	if bindings == nil {
 		return
@@ -382,9 +386,6 @@ func bindComponentBlock(cb HydrateComponentBlock) {
 		return
 	}
 	setupComponentBlocks[cb.MarkerID] = true
-
-	// Find existing SSR content (the <span> before the comment marker)
-	currentEl := FindExistingIfContent(cb.MarkerID)
 
 	currentCleanup := &Cleanup{}
 
@@ -435,11 +436,7 @@ func bindComponentBlock(cb HydrateComponentBlock) {
 
 		currentBranchName = activeName
 
-		// Styles are pre-baked into the SSR HTML <style> tag — no injection needed.
-
-		// Swap HTML (same mechanism as IfBlock)
-		currentEl = FindExistingIfContent(cb.MarkerID)
-		currentEl = ReplaceContent(cb.MarkerID, currentEl, activeHTML)
+		replaceMarkerContent(cb.MarkerID, activeHTML)
 
 		// Release old bindings, apply new
 		currentCleanup.Release()
@@ -652,63 +649,32 @@ func bindEachBlock(eb HydrateEachBlock) {
 	}
 	setupEachBlocks[eb.MarkerID] = true
 
-	// Find the marker comment
-	marker := FindComment(eb.MarkerID)
-	if marker.IsNull() {
-		return
-	}
-
 	// Resolve the list
 	listAny := GetStore(eb.ListID)
 	if listAny == nil {
 		return
 	}
 
-	// Build span wrapper format from bindings
-	spanFmt := `<span id="{PREFIX}_{INDEX}">{BODY}</span>`
-	if eb.SpanClass != "" {
-		spanFmt = `<span id="{PREFIX}_{INDEX}" class="` + eb.SpanClass + `">{BODY}</span>`
-	}
-
 	// Subscribe to list changes and re-render
 	switch list := listAny.(type) {
 	case *List[string]:
-		bindListItems(list, eb.MarkerID, eb.ItemPrefix, eb.BodyHTML, spanFmt, escapeHTML)
+		bindListItems(list, eb.MarkerID, eb.BodyHTML, escapeHTML)
 	case *List[int]:
-		bindListItems(list, eb.MarkerID, eb.ItemPrefix, eb.BodyHTML, spanFmt, itoa)
+		bindListItems(list, eb.MarkerID, eb.BodyHTML, itoa)
 	}
 }
 
 // bindListItems sets up list rendering and subscribes to changes.
-func bindListItems[T comparable](list *List[T], markerID string, itemPrefix string, bodyTemplate string, spanFmt string, format func(T) string) {
-	renderItems := func(items []T) {
+func bindListItems[T comparable](list *List[T], markerID string, bodyTemplate string, format func(T) string) {
+	list.OnChange(func(items []T) {
 		var html string
 		for i, item := range items {
-			// Replace sentinels in body template
 			body := replaceAll(bodyTemplate, "\x00I\x00", format(item))
 			body = replaceAll(body, "\x00N\x00", itoa(i))
-			// Build span wrapper
-			span := replaceAll(spanFmt, "{PREFIX}", itemPrefix)
-			span = replaceAll(span, "{INDEX}", itoa(i))
-			span = replaceAll(span, "{BODY}", body)
-			html += span
+			html += body
 		}
-		// Add marker comment at the end so it survives innerHTML replacement
-		html += `<!--` + markerID + `-->`
-		// Re-acquire parent from marker each time to handle DOM replacement (e.g., from if-blocks)
-		marker := FindComment(markerID)
-		if marker.IsNull() {
-			return
-		}
-		parent := marker.Get("parentNode")
-		if !parent.IsNull() && parent.Get("nodeType").Int() == 1 {
-			parent.Set("innerHTML", html)
-		}
-	}
-
-	// Don't render initially - SSR already rendered the items
-	// Just subscribe to changes for future updates
-	list.OnChange(renderItems)
+		replaceMarkerContent(markerID, html)
+	})
 }
 
 // replaceAll replaces all occurrences of old with new in s
@@ -907,92 +873,88 @@ func floatToStr(f float64) string {
 	return result
 }
 
-// HydrateBindings is the JSON representation of bindings for WASM.
+// HydrateBindings holds decoded bindings for WASM hydration.
 type HydrateBindings struct {
-	TextBindings     []HydrateTextBinding     `json:"TextBindings"`
-	Events           []HydrateEvent           `json:"Events"`
-	IfBlocks         []HydrateIfBlock         `json:"IfBlocks"`
-	EachBlocks       []HydrateEachBlock       `json:"EachBlocks"`
-	InputBindings    []HydrateInputBinding    `json:"InputBindings"`
-	AttrBindings     []HydrateAttrBinding     `json:"AttrBindings"`
-	AttrCondBindings []HydrateAttrCondBinding `json:"AttrCondBindings"`
-	ComponentBlocks  []HydrateComponentBlock  `json:"ComponentBlocks,omitempty"`
+	TextBindings     []HydrateTextBinding
+	Events           []HydrateEvent
+	IfBlocks         []HydrateIfBlock
+	EachBlocks       []HydrateEachBlock
+	InputBindings    []HydrateInputBinding
+	AttrBindings     []HydrateAttrBinding
+	AttrCondBindings []HydrateAttrCondBinding
+	ComponentBlocks  []HydrateComponentBlock
 }
 
 type HydrateTextBinding struct {
-	MarkerID string `json:"marker_id"`
-	StoreID  string `json:"store_id"`
-	IsHTML   bool   `json:"is_html"`
+	MarkerID string
+	StoreID  string
+	IsHTML   bool
 }
 
 type HydrateEvent struct {
-	ElementID string `json:"ElementID"`
-	Event     string `json:"Event"`
+	ElementID string
+	Event     string
 }
 
 type HydrateIfBlock struct {
-	MarkerID     string            `json:"MarkerID"`
-	Branches     []HydrateIfBranch `json:"Branches"`
-	ElseHTML     string            `json:"ElseHTML"`
-	ElseBindings *HydrateBindings  `json:"ElseBindings,omitempty"`
-	Deps         []string          `json:"Deps"`
+	MarkerID     string
+	Branches     []HydrateIfBranch
+	ElseHTML     string
+	ElseBindings *HydrateBindings
+	Deps         []string
 }
 
 type HydrateIfBranch struct {
-	HTML     string           `json:"HTML"`
-	Bindings *HydrateBindings `json:"Bindings,omitempty"`
-	StoreID  string           `json:"store_id,omitempty"`
-	Op       string           `json:"op,omitempty"`
-	Operand  string           `json:"operand,omitempty"`
-	IsBool   bool             `json:"is_bool,omitempty"`
+	HTML     string
+	Bindings *HydrateBindings
+	StoreID  string
+	Op       string
+	Operand  string
+	IsBool   bool
 }
 
 type HydrateInputBinding struct {
-	StoreID  string `json:"store_id"`
-	BindType string `json:"bind_type"`
+	StoreID  string
+	BindType string
 }
 
 type HydrateAttrBinding struct {
-	ElementID string   `json:"element_id"`
-	AttrName  string   `json:"attr_name"`
-	Template  string   `json:"template"`
-	StoreIDs  []string `json:"store_ids"`
+	ElementID string
+	AttrName  string
+	Template  string
+	StoreIDs  []string
 }
 
 // HydrateAttrCondBinding represents a conditional attribute binding for WASM.
-// Used by HtmlNode.AttrIf() for conditional attribute values.
 type HydrateAttrCondBinding struct {
-	ElementID    string   `json:"element_id"`
-	AttrName     string   `json:"attr_name"`
-	TrueValue    string   `json:"true_value"`
-	FalseValue   string   `json:"false_value,omitempty"`
-	TrueStoreID  string   `json:"true_store_id,omitempty"`
-	FalseStoreID string   `json:"false_store_id,omitempty"`
-	Op           string   `json:"op,omitempty"`
-	Operand      string   `json:"operand,omitempty"`
-	IsBool       bool     `json:"is_bool,omitempty"`
-	Deps         []string `json:"deps,omitempty"`
+	ElementID    string
+	AttrName     string
+	TrueValue    string
+	FalseValue   string
+	TrueStoreID  string
+	FalseStoreID string
+	Op           string
+	Operand      string
+	IsBool       bool
+	Deps         []string
 }
 
 type HydrateEachBlock struct {
-	MarkerID   string `json:"MarkerID"`
-	ListID     string `json:"ListID"`
-	BodyHTML   string `json:"BodyHTML"`
-	ItemPrefix string `json:"ItemPrefix"`
-	SpanClass  string `json:"SpanClass"`
+	MarkerID string
+	ListID   string
+	BodyHTML string
 }
 
 // HydrateComponentBlock is the WASM-side representation of a ComponentBlock.
-// Like HydrateIfBlock but keyed by component type name instead of store conditions.
 type HydrateComponentBlock struct {
-	MarkerID string                   `json:"MarkerID"`
-	StoreID  string                   `json:"StoreID"`
-	Branches []HydrateComponentBranch `json:"Branches"`
+	MarkerID string
+	StoreID  string
+	Branches []HydrateComponentBranch
 }
 
 // HydrateComponentBranch represents one component's pre-baked content.
 type HydrateComponentBranch struct {
-	Name     string           `json:"Name"`
-	HTML     string           `json:"HTML"`
-	Bindings *HydrateBindings `json:"Bindings,omitempty"`
+	Name     string
+	HTML     string
+	Bindings *HydrateBindings
 }

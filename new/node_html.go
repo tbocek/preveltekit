@@ -13,9 +13,6 @@ type BuildContext struct {
 	// Embed shared ID counter logic (used by both SSR and WASM)
 	IDCounter
 
-	// Parent context for nested components
-	Parent *BuildContext
-
 	// Collected bindings during tree walk
 	Bindings *CollectedBindings
 
@@ -35,30 +32,30 @@ type BuildContext struct {
 
 // CollectedBindings stores all bindings found during tree walking.
 type CollectedBindings struct {
-	TextBindings     []TextBinding     `json:"TextBindings"`
-	Events           []EventBinding    `json:"Events"`
-	IfBlocks         []IfBlock         `json:"IfBlocks"`
-	EachBlocks       []EachBlock       `json:"EachBlocks"`
-	InputBindings    []InputBinding    `json:"InputBindings"`
-	AttrBindings     []AttrBinding     `json:"AttrBindings"`
-	AttrCondBindings []AttrCondBinding `json:"AttrCondBindings"`
-	ComponentBlocks  []ComponentBlock  `json:"ComponentBlocks,omitempty"`
+	TextBindings     []TextBinding
+	Events           []EventBinding
+	IfBlocks         []IfBlock
+	EachBlocks       []EachBlock
+	InputBindings    []InputBinding
+	AttrBindings     []AttrBinding
+	AttrCondBindings []AttrCondBinding
+	ComponentBlocks  []ComponentBlock
 }
 
 // ComponentBlock represents a Store[Component]'s pre-baked branches.
 // Like IfBlock but keyed by component type name instead of store conditions.
-// HTML: <span>active component content</span><!--r0--> where content swaps on store change.
+// HTML: <!--r0s-->active component content<!--r0--> where content swaps on store change.
 type ComponentBlock struct {
-	MarkerID string            `json:"MarkerID"` // Comment marker, e.g., "r0"
-	StoreID  string            `json:"StoreID"`  // Store ID of the component store
-	Branches []ComponentBranch `json:"Branches"`
+	MarkerID string // Comment marker, e.g., "r0"
+	StoreID  string // Store ID of the component store
+	Branches []ComponentBranch
 }
 
 // ComponentBranch represents one component's pre-baked content.
 type ComponentBranch struct {
-	Name     string             `json:"Name"`               // Component type name, e.g., "basics", "components"
-	HTML     string             `json:"HTML"`               // Pre-rendered HTML for this component
-	Bindings *CollectedBindings `json:"Bindings,omitempty"` // Nested bindings for this component's content
+	Name     string             // Component type name, e.g., "basics", "components"
+	HTML     string             // Pre-rendered HTML for this component
+	Bindings *CollectedBindings // Nested bindings for this component's content
 }
 
 // =============================================================================
@@ -73,10 +70,10 @@ type ComponentBranch struct {
 // TextBinding binds a store value to text content at a comment marker.
 // HTML: "Hello <!--basics_t0-->" where the text before the marker updates reactively.
 type TextBinding struct {
-	MarkerID string `json:"marker_id"` // Comment marker, e.g., "basics_t0"
-	StoreID  string `json:"store_id"`  // Store path, e.g., "basics.Name"
-	StoreRef any    `json:"-"`         // Actual store pointer (for address-based resolution)
-	IsHTML   bool   `json:"is_html"`   // If true, render as HTML not text
+	MarkerID string // Comment marker, e.g., "basics_t0"
+	StoreID  string // Store path, e.g., "basics.Name"
+	StoreRef any    // Actual store pointer (for address-based resolution)
+	IsHTML   bool   // If true, render as HTML not text
 }
 
 // EventBinding binds an event handler to a DOM element by its id attribute.
@@ -87,74 +84,71 @@ type EventBinding struct {
 }
 
 // IfBlock represents a conditional block with branches at a comment marker.
-// HTML: <span>active content</span><!--basics_i0--> where content swaps reactively.
+// HTML: <!--i0s-->active content<!--i0--> where content swaps reactively.
 type IfBlock struct {
 	MarkerID     string             // Comment marker, e.g., "basics_i0"
 	Branches     []IfBlockBranch    // Condition branches (if/else-if)
 	ElseHTML     string             // HTML for else branch
-	ElseBindings *CollectedBindings `json:"ElseBindings,omitempty"` // Bindings for else branch
+	ElseBindings *CollectedBindings // Bindings for else branch
 	Deps         []string           // Store dependencies for reactivity
 }
 
 // IfBlockBranch represents one branch (if or else-if) of an IfBlock.
 type IfBlockBranch struct {
-	CondRef  any                `json:"-"`                  // Condition reference for store resolution
-	HTML     string             `json:"html"`               // Pre-rendered HTML for this branch
-	Bindings *CollectedBindings `json:"Bindings,omitempty"` // Nested bindings within this branch
+	CondRef  any                // Condition reference for store resolution
+	HTML     string             // Pre-rendered HTML for this branch
+	Bindings *CollectedBindings // Nested bindings within this branch
 	// Structured condition data for WASM evaluation
-	StoreID string `json:"store_id,omitempty"` // Store path, e.g., "basics.Score"
-	Op      string `json:"op,omitempty"`       // Comparison operator, e.g., ">="
-	Operand string `json:"operand,omitempty"`  // Comparison value, e.g., "90"
-	IsBool  bool   `json:"is_bool,omitempty"`  // True if simple boolean condition
+	StoreID string // Store path, e.g., "basics.Score"
+	Op      string // Comparison operator, e.g., ">="
+	Operand string // Comparison value, e.g., "90"
+	IsBool  bool   // True if simple boolean condition
 }
 
-// EachBlock represents a list iteration block at a comment marker.
-// HTML: <span id="basics_each0_0">item</span><!--basics_e0--> where items update reactively.
+// EachBlock represents a list iteration block between comment markers.
+// HTML: <!--e0s-->items<!--e0--> where items update reactively.
 type EachBlock struct {
-	MarkerID   string `json:"MarkerID"`             // Comment marker, e.g., "basics_e0"
-	ListID     string `json:"ListID"`               // List store path, e.g., "basics.Items"
-	ListRef    any    `json:"-"`                    // Actual list pointer (for resolution)
-	BodyHTML   string `json:"BodyHTML,omitempty"`   // Template HTML for each item body (with sentinels)
-	ItemPrefix string `json:"ItemPrefix,omitempty"` // ID prefix for item spans, e.g., "lists_e0"
-	SpanClass  string `json:"SpanClass,omitempty"`  // Scope class for span wrapper, e.g., "v6"
-	ElseHTML   string `json:"ElseHTML,omitempty"`   // HTML when list is empty
+	MarkerID string // Comment marker, e.g., "basics_e0"
+	ListID   string // List store path, e.g., "basics.Items"
+	ListRef  any    // Actual list pointer (for resolution)
+	BodyHTML string // Template HTML for each item body (with sentinels)
 }
 
 // InputBinding binds an input element to a store for two-way data binding.
 // HTML: <input id="basics_b0"> syncs value with store.
 type InputBinding struct {
-	StoreID  string `json:"store_id"`  // Store ID (also used as element id), e.g., "s3"
-	StoreRef any    `json:"-"`         // Actual store pointer (for resolution)
-	BindType string `json:"bind_type"` // Binding type: "value" or "checked"
+	StoreID  string // Store ID (also used as element id), e.g., "s3"
+	StoreRef any    // Actual store pointer (for resolution)
+	BindType string // Binding type: "value" or "checked"
 }
 
 // AttrBinding binds a dynamic attribute value to stores.
 // HTML: <div data-attrbind="basics_a0" data-value="{0}"> where {0} is replaced.
 type AttrBinding struct {
-	ElementID string   `json:"element_id"` // Element id (via data-attrbind), e.g., "basics_a0"
-	AttrName  string   `json:"attr_name"`  // Attribute name, e.g., "data-value"
-	Template  string   `json:"template"`   // Template with placeholders, e.g., "{0}"
-	StoreIDs  []string `json:"store_ids"`  // Store paths for placeholders
-	StoreRefs []any    `json:"-"`          // Actual store pointers (for resolution)
+	ElementID string   // Element id (via data-attrbind), e.g., "basics_a0"
+	AttrName  string   // Attribute name, e.g., "data-value"
+	Template  string   // Template with placeholders, e.g., "{0}"
+	StoreIDs  []string // Store paths for placeholders
+	StoreRefs []any    // Actual store pointers (for resolution)
 }
 
 // AttrCondBinding binds a conditional attribute value to a condition.
 // Used by HtmlNode.AttrIf() for conditional attribute rendering.
 // HTML: <div id="basics_cl0" class="active"> where attribute value changes reactively.
 type AttrCondBinding struct {
-	ElementID     string   `json:"element_id"`               // Element id attribute
-	AttrName      string   `json:"attr_name"`                // Attribute name (e.g., "class", "href")
-	TrueValue     string   `json:"true_value"`               // Value when condition is true
-	FalseValue    string   `json:"false_value,omitempty"`    // Value when condition is false
-	TrueStoreRef  any      `json:"-"`                        // Store for true value (if dynamic)
-	FalseStoreRef any      `json:"-"`                        // Store for false value (if dynamic)
-	TrueStoreID   string   `json:"true_store_id,omitempty"`  // Store path for true value
-	FalseStoreID  string   `json:"false_store_id,omitempty"` // Store path for false value
-	CondStoreRef  any      `json:"-"`                        // Store for condition evaluation
-	Op            string   `json:"op,omitempty"`             // Comparison operator
-	Operand       string   `json:"operand,omitempty"`        // Comparison operand
-	IsBool        bool     `json:"is_bool,omitempty"`        // True if simple boolean condition
-	Deps          []string `json:"deps,omitempty"`           // Store dependencies for reactivity
+	ElementID     string   // Element id attribute
+	AttrName      string   // Attribute name (e.g., "class", "href")
+	TrueValue     string   // Value when condition is true
+	FalseValue    string   // Value when condition is false
+	TrueStoreRef  any      // Store for true value (if dynamic)
+	FalseStoreRef any      // Store for false value (if dynamic)
+	TrueStoreID   string   // Store path for true value
+	FalseStoreID  string   // Store path for false value
+	CondStoreRef  any      // Store for condition evaluation
+	Op            string   // Comparison operator
+	Operand       string   // Comparison operand
+	IsBool        bool     // True if simple boolean condition
+	Deps          []string // Store dependencies for reactivity
 }
 
 // NewBuildContext creates a new build context for HTML generation.
@@ -174,7 +168,6 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 	}
 	return &BuildContext{
 		IDCounter: IDCounter{Prefix: prefix},
-		Parent:    ctx,
 		Bindings:  &CollectedBindings{},
 	}
 }
@@ -380,13 +373,8 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 
 				ctx.Bindings.ComponentBlocks = append(ctx.Bindings.ComponentBlocks, block)
 
-				// Emit: <span>{activeHTML}</span><!--markerID-->
-				// Same pattern as IfBlock output
-				if ctx.ScopeAttr != "" {
-					sb.WriteString(fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, activeHTML, markerID))
-				} else {
-					sb.WriteString(fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID))
-				}
+				// Emit with start+end comment markers for safe DOM replacement
+				sb.WriteString(fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, activeHTML, markerID))
 			} else if comp != nil {
 				// Fallback: no options, render current component directly
 				name := componentName(comp)
@@ -905,11 +893,8 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// in ifBlock.Branches[].Bindings and will be applied by bindIfBlock during
 	// initial hydration. This prevents duplicate bindings.
 
-	// Output the active branch wrapped in a span (uses marker ID in HTML comment)
-	if ctx.ScopeAttr != "" {
-		return fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, activeHTML, markerID)
-	}
-	return fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID)
+	// Output with start+end comment markers for safe DOM replacement
+	return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, activeHTML, markerID)
 }
 
 // ToHTML generates HTML for an each node (list iteration).
@@ -917,18 +902,8 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 	localMarker := ctx.NextEachMarker()
 	markerID := ctx.FullID(localMarker)
 
-	// Each item needs an element ID for DOM manipulation (not a marker)
-	// Use full element ID format for the span wrapper
-	itemElementPrefix := ctx.FullID(localMarker)
-
 	// Get list items for SSR
 	var itemsHTML strings.Builder
-
-	// Build span format with scope attribute if active
-	spanFmt := `<span id="%s_%d">%s</span>`
-	if ctx.ScopeAttr != "" {
-		spanFmt = `<span id="%s_%d" class="` + ctx.ScopeAttr + `">%s</span>`
-	}
 
 	// Render body template with sentinel values to capture the template HTML.
 	// Use a temporary context so template rendering doesn't affect counter state.
@@ -959,8 +934,7 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 			itemsHTML.WriteString(childrenToHTML(e.ElseNode, ctx))
 		} else {
 			for i, item := range items {
-				itemHTML := nodeToHTML(e.Body(item, i), ctx)
-				itemsHTML.WriteString(fmt.Sprintf(spanFmt, itemElementPrefix, i, itemHTML))
+				itemsHTML.WriteString(nodeToHTML(e.Body(item, i), ctx))
 			}
 		}
 	case *List[int]:
@@ -969,23 +943,20 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 			itemsHTML.WriteString(childrenToHTML(e.ElseNode, ctx))
 		} else {
 			for i, item := range items {
-				itemHTML := nodeToHTML(e.Body(item, i), ctx)
-				itemsHTML.WriteString(fmt.Sprintf(spanFmt, itemElementPrefix, i, itemHTML))
+				itemsHTML.WriteString(nodeToHTML(e.Body(item, i), ctx))
 			}
 		}
 	}
 
 	// Record each block binding (uses marker ID in HTML comment)
 	ctx.Bindings.EachBlocks = append(ctx.Bindings.EachBlocks, EachBlock{
-		MarkerID:   markerID,
-		ListID:     e.ListID,
-		ListRef:    e.ListRef,
-		BodyHTML:   bodyHTML,
-		ItemPrefix: itemElementPrefix,
-		SpanClass:  ctx.ScopeAttr,
+		MarkerID: markerID,
+		ListRef:  e.ListRef,
+		BodyHTML: bodyHTML,
 	})
 
-	return fmt.Sprintf("%s<!--%s-->", itemsHTML.String(), markerID)
+	// Start marker + items + end marker for safe DOM replacement
+	return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, itemsHTML.String(), markerID)
 }
 
 // ToHTML generates HTML for a component node (nested component).
@@ -1033,7 +1004,6 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 	// Create child context for the component with its own prefix
 	childCtx := &BuildContext{
 		IDCounter:             IDCounter{Prefix: fullCompPrefix},
-		Parent:                ctx,
 		Bindings:              &CollectedBindings{},
 		SlotContent:           slotHTML,
 		CollectedStyles:       ctx.CollectedStyles,       // Share styles map with parent
@@ -1172,40 +1142,9 @@ func childrenToHTML(nodes []Node, ctx *BuildContext) string {
 	return sb.String()
 }
 
-// isSelfClosing returns true for self-closing HTML tags.
-func isSelfClosing(tag string) bool {
-	switch tag {
-	case "br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "param", "source", "track", "wbr":
-		return true
-	}
-	return false
-}
-
 // escapeAttr escapes attribute values (quotes and ampersands).
 func escapeAttr(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, `"`, "&quot;")
 	return s
-}
-
-// extractLastID finds the last id="..." value in an HTML string.
-// Returns empty string if no id attribute found.
-func extractLastID(html string) string {
-	// Find all id="..." patterns and return the last one
-	lastID := ""
-	for i := 0; i < len(html); i++ {
-		// Look for id="
-		if i+4 < len(html) && html[i:i+4] == `id="` {
-			start := i + 4
-			end := start
-			for end < len(html) && html[end] != '"' {
-				end++
-			}
-			if end < len(html) {
-				lastID = html[start:end]
-			}
-			i = end
-		}
-	}
-	return lastID
 }

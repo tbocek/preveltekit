@@ -55,16 +55,8 @@ func (r *Router) CurrentPath() *Store[string] {
 
 // Start initializes the router and handles the current URL
 func (r *Router) Start() {
-	js.Global().Get("console").Call("log", "[DEBUG] Router.Start called")
-	js.Global().Get("console").Call("log", "[DEBUG] componentStore is nil:", r.componentStore == nil)
-	js.Global().Get("console").Call("log", "[DEBUG] routes count:", len(r.routes))
-
-	// ComponentBlock handles DOM updates via pre-baked HTML swap.
-	// No need to bind component store to DOM container.
-
 	// Handle initial route
 	path := js.Global().Get("location").Get("pathname").String()
-	js.Global().Get("console").Call("log", "[DEBUG] initial path:", path)
 	r.currentPath.Set(path)
 	r.handleRoute(path)
 
@@ -185,8 +177,6 @@ func (r *Router) Replace(path string) {
 }
 
 func (r *Router) handleRoute(path string) {
-	js.Global().Get("console").Call("log", "[DEBUG] handleRoute called with path:", path)
-
 	// Normalize path
 	if path == "" {
 		path = "/"
@@ -204,21 +194,13 @@ func (r *Router) handleRoute(path string) {
 	for i := range r.routes {
 		route := &r.routes[i]
 		_, specificity, ok := matchRoute(route.Path, path)
-		js.Global().Get("console").Call("log", "[DEBUG] checking route:", route.Path, "specificity:", specificity, "ok:", ok)
 		if ok && specificity > bestSpecificity {
 			bestMatch = route
 			bestSpecificity = specificity
 		}
 	}
 
-	js.Global().Get("console").Call("log", "[DEBUG] bestMatch found:", bestMatch != nil)
-	if bestMatch != nil {
-		js.Global().Get("console").Call("log", "[DEBUG] bestMatch.Path:", bestMatch.Path)
-		js.Global().Get("console").Call("log", "[DEBUG] bestMatch.Component is nil:", bestMatch.Component == nil)
-	}
-
 	if bestMatch != nil && bestMatch.Component != nil {
-		js.Global().Get("console").Call("log", "[DEBUG] setting componentStore")
 		r.componentStore.Set(bestMatch.Component)
 	} else if r.notFound != nil {
 		r.notFound()

@@ -160,8 +160,6 @@ func (e *encoder) writeBindings(b *CollectedBindings) {
 		e.writeString(eb.MarkerID)
 		e.writeString(eb.ListID)
 		e.writeHTML(eb.BodyHTML)
-		e.writeString(eb.ItemPrefix)
-		e.writeString(eb.SpanClass)
 	}
 
 	// InputBindings

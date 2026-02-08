@@ -231,38 +231,6 @@ func ToggleClass(el js.Value, class string, add bool) {
 	}
 }
 
-// ReplaceContent replaces if-block content: removes old, inserts new HTML before anchor comment
-func ReplaceContent(anchorMarker string, current js.Value, html string) js.Value {
-	anchor := FindComment(anchorMarker)
-	if !ok(anchor) {
-		return js.Null()
-	}
-	parentNode := anchor.Get("parentNode")
-	newEl := Document.Call("createElement", "span")
-	newEl.Set("innerHTML", html)
-	if current.Truthy() {
-		current.Call("remove")
-	}
-	parentNode.Call("insertBefore", newEl, anchor)
-	return newEl
-}
-
-// FindExistingIfContent finds the existing SSR-rendered content before an if-block anchor comment.
-// Returns the element if found, or js.Null() if not found.
-// This is used during hydration to avoid replacing pre-rendered content.
-func FindExistingIfContent(anchorMarker string) js.Value {
-	anchor := FindComment(anchorMarker)
-	if !ok(anchor) {
-		return js.Null()
-	}
-	// The SSR content is the previous sibling (a span element)
-	prev := anchor.Get("previousSibling")
-	if !prev.IsNull() && prev.Get("nodeType").Int() == 1 { // Element node
-		return prev
-	}
-	return js.Null()
-}
-
 // === Batch Binding Types (for smaller WASM) ===
 
 // Evt represents an event binding for batch processing
@@ -299,19 +267,6 @@ func BindEvents(c *Cleanup, events []Evt) {
 		})
 		el.Call("addEventListener", e.Event, fn)
 		c.Add(fn)
-	}
-}
-
-// Txt represents a text binding for batch processing
-type Txt[T any] struct {
-	Marker string
-	Store  Bindable[T]
-}
-
-// BindTexts binds multiple text nodes in a loop
-func BindTexts[T any](bindings []Txt[T]) {
-	for _, b := range bindings {
-		BindText(b.Marker, b.Store)
 	}
 }
 

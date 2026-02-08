@@ -23,9 +23,6 @@ func (c *Cleanup) Release() {}
 // jsFunc is a stub for js.Func in non-WASM builds
 type jsFunc struct{}
 
-// On is a no-op for SSR, returns zero-value jsFunc.
-func On(el *jsValue, event string, handler func()) jsFunc { return jsFunc{} }
-
 // Bindable is implemented by types that can be bound to DOM elements.
 type Bindable[T any] interface {
 	Get() T
@@ -38,14 +35,12 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-func BindText[T any](marker string, store Bindable[T])                           {}
-func BindHTML[T any](marker string, store Bindable[T])                           {}
-func BindInput(id string, store Settable[string]) jsFunc                         { return jsFunc{} }
-func BindInputInt(id string, store Settable[int]) jsFunc                         { return jsFunc{} }
-func BindCheckbox(id string, store Settable[bool]) jsFunc                        { return jsFunc{} }
-func ToggleClass(el *jsValue, class string, add bool)                            {}
-func ReplaceContent(anchorMarker string, current *jsValue, html string) *jsValue { return &jsValue{} }
-func FindExistingIfContent(anchorMarker string) *jsValue                         { return &jsValue{} }
+func BindText[T any](marker string, store Bindable[T])    {}
+func BindHTML[T any](marker string, store Bindable[T])    {}
+func BindInput(id string, store Settable[string]) jsFunc  { return jsFunc{} }
+func BindInputInt(id string, store Settable[int]) jsFunc  { return jsFunc{} }
+func BindCheckbox(id string, store Settable[bool]) jsFunc { return jsFunc{} }
+func ToggleClass(el *jsValue, class string, add bool)     {}
 
 // Batch binding types and functions (stubs for SSR)
 type Evt struct {
@@ -55,13 +50,6 @@ type Evt struct {
 }
 
 func BindEvents(c *Cleanup, events []Evt) {}
-
-type Txt[T any] struct {
-	Marker string
-	Store  Bindable[T]
-}
-
-func BindTexts[T any](bindings []Txt[T]) {}
 
 type Inp struct {
 	ID    string

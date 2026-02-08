@@ -94,9 +94,3 @@ func (r *Router) Navigate(path string) {}
 
 // Replace navigates without adding to history (no-op for SSR)
 func (r *Router) Replace(path string) {}
-
-// Navigate is a standalone function for simple navigation (no-op for SSR)
-func Navigate(path string) {}
-
-// Link sets up an anchor element for SPA navigation (no-op for SSR)
-func Link(el *jsValue, router *Router) {}

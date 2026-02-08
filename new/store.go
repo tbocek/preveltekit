@@ -155,12 +155,6 @@ func NewWithID[T any](id string, initial T) *Store[T] {
 	return s
 }
 
-// newInternal creates a store without registering it.
-// Used for internal stores like List.Len() that don't need DOM bindings.
-func newInternal[T any](initial T) *Store[T] {
-	return &Store[T]{value: initial}
-}
-
 // ID returns the store's unique identifier
 func (s *Store[T]) ID() string {
 	return s.id
@@ -214,7 +208,6 @@ type List[T comparable] struct {
 	items    []T
 	lenStore *Store[int] // cached length store for reactive conditions
 	onEdit   []func(Edit[T])
-	onRender []func([]T) // for initial render only
 	onChange []func([]T) // called on any change
 }
 
@@ -328,29 +321,9 @@ func (l *List[T]) OnEdit(cb func(Edit[T])) {
 	l.onEdit = append(l.onEdit, cb)
 }
 
-// OnRender adds a callback for initial render
-func (l *List[T]) OnRender(cb func([]T)) {
-	l.onRender = append(l.onRender, cb)
-}
-
 // OnChange adds a callback for any change to the list
 func (l *List[T]) OnChange(cb func([]T)) {
 	l.onChange = append(l.onChange, cb)
-}
-
-// ClearCallbacks removes all registered callbacks.
-// Used when re-rendering if-blocks to prevent callback accumulation.
-func (l *List[T]) ClearCallbacks() {
-	l.onEdit = nil
-	l.onRender = nil
-	l.onChange = nil
-}
-
-// Render triggers initial render callbacks
-func (l *List[T]) Render() {
-	for _, cb := range l.onRender {
-		cb(l.items)
-	}
 }
 
 // diff computes edit operations to transform old into new using O(n) set comparison.
