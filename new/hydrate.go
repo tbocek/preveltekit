@@ -65,46 +65,38 @@ func Hydrate(app Component) {
 		SetSSRPath(route.SSRPath)
 
 		// Create fresh app instance
-		freshApp := app.(HasNew).New()
+		var freshApp Component
+		if hn, ok := app.(HasNew); ok {
+			freshApp = hn.New()
+		}
 
 		// Call OnMount (creates router which reads path and sets component)
 		if om, ok := freshApp.(HasOnMount); ok {
 			om.OnMount()
 		}
 
-		// Get the registered router IDs (from OnMount -> NewRouter)
-		routerIDs := GetPendingRouterIDs()
-		routerID := ""
-		if len(routerIDs) > 0 {
-			routerID = routerIDs[0]
-		}
-
-		// Get app style
-		var appStyle string
-		if hs, ok := freshApp.(HasStyle); ok {
-			appStyle = hs.Style()
-		}
-
 		// Render the full tree - router already set the correct component
 		// Routes are now auto-registered as store options via NewRouter,
 		// so no need to pass them through context.
-		result := RenderHTMLWithContextFull(freshApp.Render(),
-			WithRouteGroupIDCtx(routerID),
-		)
+		ctx := NewBuildContext()
+		html := nodeToHTML(freshApp.Render(), ctx)
 
-		// Resolve bindings (needed for If-blocks, Each-blocks, AttrConds)
-		resolveBindings(result.Bindings)
+		// Add app-level style to collected styles
+		if hs, ok := freshApp.(HasStyle); ok {
+			ctx.CollectedStyles["app"] = hs.Style()
+		}
+
+		// Resolve store references to string IDs, then merge into shared bindings
+		resolveBindings(ctx.Bindings)
+		mergeBindings(&allBindings, ctx.Bindings)
 
 		// Build full HTML document
-		fullHTML := buildHTMLDocument(result.HTML, appStyle, "", result.CollectedStyles)
+		fullHTML := buildHTMLDocument(html, ctx.CollectedStyles)
 
 		// Write HTML file
 		htmlPath := filepath.Join("dist", route.HTMLFile)
 		os.WriteFile(htmlPath, []byte(fullHTML), 0644)
 		fmt.Fprintf(os.Stderr, "Generated: %s\n", htmlPath)
-
-		// Merge bindings for this route into allBindings
-		mergeBindings(&allBindings, result.Bindings)
 	}
 
 	// Output merged bindings as JSON
@@ -194,17 +186,6 @@ func mergeBindings(dst, src *CollectedBindings) {
 		}
 	}
 
-	seenContainer := make(map[string]bool)
-	for _, c := range dst.ComponentContainers {
-		seenContainer[c.ID] = true
-	}
-	for _, c := range src.ComponentContainers {
-		if !seenContainer[c.ID] {
-			dst.ComponentContainers = append(dst.ComponentContainers, c)
-			seenContainer[c.ID] = true
-		}
-	}
-
 	seenCompBlock := make(map[string]bool)
 	for _, cb := range dst.ComponentBlocks {
 		seenCompBlock[cb.MarkerID] = true
@@ -268,11 +249,6 @@ func resolveBindings(bindings *CollectedBindings) {
 					// Use store's ID directly instead of reflection
 					storeID := getStoreID(sc.Store)
 					if storeID != "" {
-						operand := fmt.Sprintf("%v", sc.Operand)
-						if !isNumeric(operand) && operand != "true" && operand != "false" {
-							operand = `"` + operand + `"`
-						}
-						bindings.IfBlocks[i].Branches[j].CondExpr = storeID + ".Get() " + sc.Op + " " + operand
 						bindings.IfBlocks[i].Branches[j].StoreID = storeID
 						bindings.IfBlocks[i].Branches[j].Op = sc.Op
 						bindings.IfBlocks[i].Branches[j].Operand = fmt.Sprintf("%v", sc.Operand)
@@ -284,7 +260,6 @@ func resolveBindings(bindings *CollectedBindings) {
 					// Use store's ID directly instead of reflection
 					storeID := getStoreID(bc.Store)
 					if storeID != "" {
-						bindings.IfBlocks[i].Branches[j].CondExpr = storeID + ".Get()"
 						bindings.IfBlocks[i].Branches[j].StoreID = storeID
 						bindings.IfBlocks[i].Branches[j].IsBool = true
 						bindings.IfBlocks[i].Deps = append(bindings.IfBlocks[i].Deps, storeID)
@@ -300,6 +275,17 @@ func resolveBindings(bindings *CollectedBindings) {
 		if bindings.IfBlocks[i].ElseBindings != nil {
 			resolveBindings(bindings.IfBlocks[i].ElseBindings)
 		}
+
+		// Deduplicate deps
+		seen := make(map[string]bool)
+		unique := bindings.IfBlocks[i].Deps[:0]
+		for _, d := range bindings.IfBlocks[i].Deps {
+			if !seen[d] {
+				seen[d] = true
+				unique = append(unique, d)
+			}
+		}
+		bindings.IfBlocks[i].Deps = unique
 	}
 
 	// Resolve attr bindings - use store IDs directly
@@ -354,41 +340,15 @@ func resolveBindings(bindings *CollectedBindings) {
 	}
 }
 
-// isNumeric checks if a string represents a number.
-func isNumeric(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for i, c := range s {
-		if c == '-' && i == 0 {
-			continue
-		}
-		if c == '.' {
-			continue
-		}
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func buildHTMLDocument(body, appStyle, childStyle string, collectedStyles map[string]string) string {
+func buildHTMLDocument(body string, collectedStyles map[string]string) string {
 	var styles string
-	if appStyle != "" {
-		styles += "<style>" + appStyle + "</style>\n"
-	}
-	if childStyle != "" {
-		styles += "<style>" + childStyle + "</style>\n"
-	}
-	// Add auto-collected styles from nested components
 	if len(collectedStyles) > 0 {
-		var nestedStyles string
+		var allStyles string
 		for _, style := range collectedStyles {
-			nestedStyles += style + "\n"
+			allStyles += style + "\n"
 		}
-		if nestedStyles != "" {
-			styles += "<style>" + nestedStyles + "</style>\n"
+		if allStyles != "" {
+			styles = "<style>" + allStyles + "</style>\n"
 		}
 	}
 

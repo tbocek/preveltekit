@@ -73,7 +73,7 @@ func (d *Debounce) Render() p.Node {
 			<h2>Debounced Search</h2>
 			<p>Search triggers 300ms after you stop typing.</p>
 
-			`, p.BindValue(`<input type="text" placeholder="Type to search...">`, d.SearchInput), `
+			`, p.Html(`<input type="text" placeholder="Type to search...">`).Bind(d.SearchInput), `
 
 			<div class="stats">
 				<span>Status: <strong>`, p.Bind(d.Status), `</strong></span>
@@ -91,7 +91,7 @@ func (d *Debounce) Render() p.Node {
 			<h2>Throttled Clicks</h2>
 			<p>Button action throttled to max once per 500ms.</p>
 
-			`, p.Html(`<button>Click me rapidly!</button>`).WithOn("click", d.OnClick), `
+			`, p.Html(`<button>Click me rapidly!</button>`).On("click", d.OnClick), `
 
 			<div class="stats">
 				<span>Total clicks: <strong>`, p.Bind(d.ClickCount), `</strong></span>
@@ -102,7 +102,7 @@ func (d *Debounce) Render() p.Node {
 		</section>
 
 		<section>
-			`, p.Html(`<button>Reset All</button>`).WithOn("click", d.Reset), `
+			`, p.Html(`<button>Reset All</button>`).On("click", d.Reset), `
 		</section>
 	</div>`),
 	)

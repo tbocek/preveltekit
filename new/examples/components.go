@@ -9,6 +9,7 @@ type Components struct {
 	CardTitle    *p.Store[string]
 	AlertType    *p.Store[string]
 	AlertMessage *p.Store[string]
+	ViewMode     *p.Store[string]
 }
 
 func (c *Components) New() p.Component {
@@ -18,6 +19,7 @@ func (c *Components) New() p.Component {
 		CardTitle:    p.New("Dynamic Card"),
 		AlertType:    p.New("info"),
 		AlertMessage: p.New("This is an alert message"),
+		ViewMode:     p.New("card"),
 	}
 }
 
@@ -45,6 +47,10 @@ func (c *Components) SetAlertError() {
 	c.AlertMessage.Set("Something went wrong!")
 }
 
+func (c *Components) SetViewMode(mode string) {
+	c.ViewMode.Set(mode)
+}
+
 func (c *Components) Render() p.Node {
 	return p.Html(`<div class="demo">
 		<h1>Components</h1>
@@ -60,7 +66,7 @@ func (c *Components) Render() p.Node {
 		<section>
 			<h2>Dynamic Props</h2>
 			<p>Props can be bound to reactive stores:</p>
-			`, p.BindValue(`<input type="text" placeholder="Card title">`, c.CardTitle),
+			`, p.Html(`<input type="text" placeholder="Card title">`).Bind(c.CardTitle),
 		p.Comp(&Card{Title: c.CardTitle},
 			p.Html(`<p>This card's title updates as you type above.</p>`),
 		),
@@ -87,13 +93,34 @@ func (c *Components) Render() p.Node {
 			<h2>Conditional Styling Component</h2>
 			<p>Components with dynamic classes based on props:</p>
 			<div class="alert-buttons">
-				`, p.Html(`<button>Info</button>`).WithOn("click", c.SetAlertInfo), `
-				`, p.Html(`<button>Success</button>`).WithOn("click", c.SetAlertSuccess), `
-				`, p.Html(`<button>Warning</button>`).WithOn("click", c.SetAlertWarning), `
-				`, p.Html(`<button>Error</button>`).WithOn("click", c.SetAlertError), `
+				`, p.Html(`<button>Info</button>`).On("click", c.SetAlertInfo), `
+				`, p.Html(`<button>Success</button>`).On("click", c.SetAlertSuccess), `
+				`, p.Html(`<button>Warning</button>`).On("click", c.SetAlertWarning), `
+				`, p.Html(`<button>Error</button>`).On("click", c.SetAlertError), `
 			</div>`,
 		p.Comp(&Alert{Type: c.AlertType, Message: c.AlertMessage}),
 		`</section>
+
+		<section>
+			<h2>Conditional Components</h2>
+			<p>Components with slots and props inside if-blocks:</p>
+			<p>Current view: <strong>`, p.Bind(c.ViewMode), `</strong></p>
+			<div class="view-buttons">
+				`, p.Html(`<button>Card</button>`).On("click", func() { c.SetViewMode("card") }), `
+				`, p.Html(`<button>Badge</button>`).On("click", func() { c.SetViewMode("badge") }), `
+				`, p.Html(`<button>Alert</button>`).On("click", func() { c.SetViewMode("alert") }), `
+			</div>
+			`, p.If(c.ViewMode.Eq("card"),
+			p.Comp(&Card{Title: c.CardTitle},
+				p.Html(`<p>This card appears conditionally.</p>
+				<p>It receives a <strong>dynamic prop</strong> and <strong>slot content</strong>.</p>`),
+			),
+		).ElseIf(c.ViewMode.Eq("badge"),
+			p.Comp(&Badge{Label: c.Message}),
+		).Else(
+			p.Comp(&Alert{Type: p.New("success"), Message: c.Message}),
+		), `
+		</section>
 	</div>`)
 }
 
@@ -101,7 +128,7 @@ func (c *Components) Style() string {
 	// Nested component styles (Badge, Card, Button, Alert) are auto-collected during SSR
 	return `
 .demo{max-width:700px}
-.alert-buttons{display:flex;gap:8px;margin-bottom:10px}
+.alert-buttons,.view-buttons{display:flex;gap:8px;margin-bottom:10px}
 `
 }
 
@@ -142,7 +169,7 @@ type Button struct {
 
 func (b *Button) Render() p.Node {
 	if b.OnClick != nil {
-		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).WithOn("click", b.OnClick)
+		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).On("click", b.OnClick)
 	}
 	return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`)
 }

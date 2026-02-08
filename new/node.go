@@ -47,11 +47,12 @@ func Text(content string) *TextNode {
 
 // HtmlNode represents raw HTML with embedded nodes.
 // It allows mixing raw HTML strings with dynamic nodes like Bind, If, Each.
-// Supports chainable AttrIf and WithOn methods for conditional attributes and events.
+// Supports chainable AttrIf, On, and Bind methods.
 type HtmlNode struct {
-	Parts     []any        // strings, Nodes, or values to stringify
-	AttrConds []*AttrCond  // conditional attributes applied to first tag
-	Events    []*HtmlEvent // event bindings applied to first tag
+	Parts      []any        // strings, Nodes, or values to stringify
+	AttrConds  []*AttrCond  // conditional attributes applied to first tag
+	Events     []*HtmlEvent // event bindings applied to first tag
+	BoundStore any          // two-way binding store (*Store[string], *Store[int], *Store[bool])
 }
 
 // AttrCond represents a conditional attribute binding.
@@ -64,7 +65,7 @@ type AttrCond struct {
 }
 
 // HtmlEvent represents an event binding for HtmlNode.
-// Used by HtmlNode.WithOn() to attach event handlers.
+// Used by HtmlNode.On() to attach event handlers.
 type HtmlEvent struct {
 	ID        string   // unique handler ID for registry lookup
 	Event     string   // event name (e.g., "click", "submit")
@@ -101,15 +102,15 @@ func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode 
 	return h
 }
 
-// WithOn attaches an event handler to the first HTML tag.
+// On attaches an event handler to the first HTML tag.
 // The handler ID is auto-generated for registry lookup during hydration.
-// Returns the HtmlNode for chaining with modifiers.
+// Returns the HtmlNode for chaining.
 //
 // Example:
 //
-//	Html(`<button>Click</button>`).WithOn("click", handler)
-//	Html(`<form>`).WithOn("submit", handler).PreventDefault()
-func (h *HtmlNode) WithOn(event string, handler func()) *HtmlNode {
+//	Html(`<button>Click</button>`).On("click", handler)
+//	Html(`<form>`).On("submit", handler).PreventDefault()
+func (h *HtmlNode) On(event string, handler func()) *HtmlNode {
 	// Register handler in global registry for WASM hydration
 	id := RegisterHandler(handler)
 	h.Events = append(h.Events, &HtmlEvent{
@@ -121,7 +122,7 @@ func (h *HtmlNode) WithOn(event string, handler func()) *HtmlNode {
 }
 
 // PreventDefault adds the preventDefault modifier to the last event.
-// Must be called after WithOn.
+// Must be called after On.
 func (h *HtmlNode) PreventDefault() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]
@@ -131,12 +132,26 @@ func (h *HtmlNode) PreventDefault() *HtmlNode {
 }
 
 // StopPropagation adds the stopPropagation modifier to the last event.
-// Must be called after WithOn.
+// Must be called after On.
 func (h *HtmlNode) StopPropagation() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]
 		last.Modifiers = append(last.Modifiers, "stopPropagation")
 	}
+	return h
+}
+
+// Bind attaches a two-way binding to the first HTML element.
+// The store type determines the binding behavior:
+//   - *Store[string], *Store[int]: binds to input value
+//   - *Store[bool]: binds to checkbox checked state
+//
+// Example:
+//
+//	Html(`<input type="text">`).Bind(nameStore)
+//	Html(`<input type="checkbox">`).Bind(darkModeStore)
+func (h *HtmlNode) Bind(store any) *HtmlNode {
+	h.BoundStore = store
 	return h
 }
 
@@ -387,38 +402,6 @@ func DynAttr(name, template string, stores ...any) *DynAttrAttr {
 		Template: template,
 		Stores:   stores,
 	}
-}
-
-// BindValueNode represents a two-way binding to an input's value.
-// It wraps a complete HTML element and injects id/value attributes.
-type BindValueNode struct {
-	HTML    string // The HTML element, e.g. `<input type="text">`
-	Store   any    // *Store[string] or *Store[int]
-	StoreID string // Go expression for code generation
-}
-
-func (b *BindValueNode) nodeType() string { return "bindvalue" }
-
-// BindValue creates a two-way bound input element.
-// Example: BindValue(`<input type="text" placeholder="Name">`, nameStore)
-func BindValue[T any](html string, store *Store[T]) *BindValueNode {
-	return &BindValueNode{HTML: html, Store: store}
-}
-
-// BindCheckedNode represents a two-way binding to a checkbox's checked state.
-// It wraps a complete HTML element and injects id/checked attributes.
-type BindCheckedNode struct {
-	HTML    string // The HTML element, e.g. `<input type="checkbox">`
-	Store   any    // *Store[bool]
-	StoreID string // Go expression for code generation
-}
-
-func (b *BindCheckedNode) nodeType() string { return "bindchecked" }
-
-// BindChecked creates a two-way bound checkbox element.
-// Example: BindChecked(`<input type="checkbox">`, isCheckedStore)
-func BindChecked(html string, store *Store[bool]) *BindCheckedNode {
-	return &BindCheckedNode{HTML: html, Store: store}
 }
 
 // PropAttr represents a property passed to a child component.

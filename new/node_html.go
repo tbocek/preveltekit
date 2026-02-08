@@ -22,32 +22,20 @@ type BuildContext struct {
 	// SlotContent holds HTML to be rendered in place of <slot/> elements
 	SlotContent string
 
-	// RouteGroupID is the ID of the current route group (for component container binding)
-	RouteGroupID string
-
 	// CollectedStyles holds CSS from nested components (deduplicated by component name)
 	CollectedStyles map[string]string
 }
 
 // CollectedBindings stores all bindings found during tree walking.
 type CollectedBindings struct {
-	TextBindings        []TextBinding        `json:"TextBindings"`
-	Events              []EventBinding       `json:"Events"`
-	IfBlocks            []IfBlock            `json:"IfBlocks"`
-	EachBlocks          []EachBlock          `json:"EachBlocks"`
-	InputBindings       []InputBinding       `json:"InputBindings"`
-	AttrBindings        []AttrBinding        `json:"AttrBindings"`
-	AttrCondBindings    []AttrCondBinding    `json:"AttrCondBindings"`
-	Components          []ComponentBinding   `json:"Components"`
-	ComponentStore      *Store[Component]    `json:"-"` // For WASM to subscribe to navigation
-	ComponentContainers []ComponentContainer `json:"ComponentContainers,omitempty"`
-	ComponentBlocks     []ComponentBlock     `json:"ComponentBlocks,omitempty"`
-}
-
-// ComponentContainer maps a route group ID to its DOM container
-type ComponentContainer struct {
-	ID          string `json:"ID"`          // Route group ID, e.g., "main"
-	ContainerID string `json:"ContainerID"` // DOM element ID, e.g., "content"
+	TextBindings     []TextBinding     `json:"TextBindings"`
+	Events           []EventBinding    `json:"Events"`
+	IfBlocks         []IfBlock         `json:"IfBlocks"`
+	EachBlocks       []EachBlock       `json:"EachBlocks"`
+	InputBindings    []InputBinding    `json:"InputBindings"`
+	AttrBindings     []AttrBinding     `json:"AttrBindings"`
+	AttrCondBindings []AttrCondBinding `json:"AttrCondBindings"`
+	ComponentBlocks  []ComponentBlock  `json:"ComponentBlocks,omitempty"`
 }
 
 // ComponentBlock represents a Store[Component]'s pre-baked branches.
@@ -104,7 +92,6 @@ type IfBlock struct {
 
 // IfBlockBranch represents one branch (if or else-if) of an IfBlock.
 type IfBlockBranch struct {
-	CondExpr string             `json:"cond_expr"`          // Condition expression for display
 	CondRef  any                `json:"-"`                  // Condition reference for store resolution
 	HTML     string             `json:"html"`               // Pre-rendered HTML for this branch
 	Bindings *CollectedBindings `json:"Bindings,omitempty"` // Nested bindings within this branch
@@ -165,15 +152,6 @@ type AttrCondBinding struct {
 	Deps          []string `json:"deps,omitempty"`           // Store dependencies for reactivity
 }
 
-// ComponentBinding represents a nested component instance.
-type ComponentBinding struct {
-	ElementID string            // Component prefix, e.g., "basics_comp0"
-	Name      string            // Component type name, e.g., "Button"
-	Props     map[string]string // Static prop values
-	Events    map[string]string // Event handler mappings
-	SlotHTML  string            // Slot content HTML
-}
-
 // NewBuildContext creates a new build context for HTML generation.
 func NewBuildContext() *BuildContext {
 	return &BuildContext{
@@ -221,7 +199,7 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 // ID generation methods are inherited from embedded IDCounter.
 // See id.go for: NextEventID, NextBindID, NextClassID, NextAttrID,
 // NextTextMarker, NextIfMarker, NextEachMarker, NextCompMarker,
-// FullElementID, FullMarkerID
+// FullID
 
 // =============================================================================
 // ToHTML implementations
@@ -240,6 +218,55 @@ func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 	// If we have AttrConds or Events from chained methods, inject into first tag
 	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
 		html = h.injectChainedAttrs(html, ctx)
+	}
+
+	// Handle two-way binding (Bind)
+	if h.BoundStore != nil {
+		html = h.injectBind(html, ctx)
+	}
+
+	return html
+}
+
+// injectBind handles two-way input binding by injecting id/value/checked attributes.
+func (h *HtmlNode) injectBind(html string, ctx *BuildContext) string {
+	var storeID, bindType string
+
+	switch s := h.BoundStore.(type) {
+	case *Store[string]:
+		storeID = s.ID()
+		bindType = "value"
+		// Handle textarea (value goes as content, not attribute)
+		if strings.HasPrefix(strings.TrimSpace(strings.ToLower(html)), "<textarea") {
+			ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
+				ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+			})
+			return injectTextareaContent(html, storeID, s.Get())
+		}
+		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
+			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+		})
+		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%s"`, storeID, escapeAttr(s.Get())))
+
+	case *Store[int]:
+		storeID = s.ID()
+		bindType = "value"
+		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
+			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+		})
+		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%d"`, storeID, s.Get()))
+
+	case *Store[bool]:
+		storeID = s.ID()
+		bindType = "checked"
+		checked := ""
+		if s.Get() {
+			checked = " checked"
+		}
+		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
+			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+		})
+		return injectAttrs(html, fmt.Sprintf(`id="%s"%s`, storeID, checked))
 	}
 
 	return html
@@ -280,7 +307,7 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 			if comp != nil && len(v.Options()) > 0 {
 				// Generate a marker (like IfBlock markers)
 				localMarker := ctx.NextRouteMarker()
-				markerID := ctx.FullMarkerID(localMarker)
+				markerID := ctx.FullID(localMarker)
 
 				block := ComponentBlock{
 					MarkerID: markerID,
@@ -354,7 +381,7 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 	} else {
 		// AttrConds still need an element ID for reactive updates
 		localID := ctx.NextClassID()
-		elementID = ctx.FullElementID(localID)
+		elementID = ctx.FullID(localID)
 	}
 
 	// Collect active values for each attribute (for SSR rendering)
@@ -558,7 +585,7 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 
 	case *DynAttrAttr:
 		localID := ctx.NextAttrID()
-		fullID := ctx.FullElementID(localID)
+		fullID := ctx.FullID(localID)
 		// Evaluate template at SSR time
 		attrValue := a.Template
 		for i, store := range a.Stores {
@@ -618,7 +645,7 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 
 	// Generate a marker ID and register a TextBinding in the context
 	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullMarkerID(localMarker)
+	markerID := ctx.FullID(localMarker)
 
 	ctx.Bindings.TextBindings = append(ctx.Bindings.TextBindings, TextBinding{
 		MarkerID: markerID,
@@ -631,63 +658,6 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 		return fmt.Sprintf("<span>%s</span><!--%s-->", value, markerID)
 	}
 	return fmt.Sprintf("%s<!--%s-->", escapeHTML(value), markerID)
-}
-
-// ToHTML generates HTML for a BindValue node (two-way input binding).
-// Parses the HTML string and injects id and value attributes.
-func (b *BindValueNode) ToHTML(ctx *BuildContext) string {
-	// Get store ID and current value directly from the store
-	var storeID string
-	var value string
-	switch s := b.Store.(type) {
-	case *Store[string]:
-		storeID = s.ID()
-		value = s.Get()
-	case *Store[int]:
-		storeID = s.ID()
-		value = fmt.Sprintf("%d", s.Get())
-	}
-
-	// Register input binding in context
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-		ElementID: storeID,
-		StoreID:   storeID,
-		StoreRef:  b.Store,
-		BindType:  "value",
-	})
-
-	// Check if it's a textarea (value goes as content, not attribute)
-	if strings.HasPrefix(strings.TrimSpace(strings.ToLower(b.HTML)), "<textarea") {
-		return injectTextareaContent(b.HTML, storeID, value)
-	}
-
-	// Inject store ID as element id and current value
-	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s" value="%s"`, storeID, escapeAttr(value)))
-}
-
-// ToHTML generates HTML for a BindChecked node (checkbox binding).
-// Parses the HTML string and injects id and checked attributes.
-func (b *BindCheckedNode) ToHTML(ctx *BuildContext) string {
-	// Get store ID and checked state directly from the store
-	var storeID string
-	checked := ""
-	if s, ok := b.Store.(*Store[bool]); ok {
-		storeID = s.ID()
-		if s.Get() {
-			checked = " checked"
-		}
-	}
-
-	// Register input binding in context
-	ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-		ElementID: storeID,
-		StoreID:   storeID,
-		StoreRef:  b.Store,
-		BindType:  "checked",
-	})
-
-	// Inject store ID as element id and checked state
-	return injectAttrs(b.HTML, fmt.Sprintf(`id="%s"%s`, storeID, checked))
 }
 
 // =============================================================================
@@ -742,7 +712,7 @@ func findTagEnd(html string) int {
 // ToHTML generates HTML for an if node (conditional rendering).
 func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	localMarker := ctx.NextIfMarker()
-	markerID := ctx.FullMarkerID(localMarker)
+	markerID := ctx.FullID(localMarker)
 
 	// Collect dependencies
 	var deps []string
@@ -771,7 +741,6 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 		ctx.IDCounter = branchCtx.IDCounter
 
 		ifBlock.Branches = append(ifBlock.Branches, IfBlockBranch{
-			CondExpr: branch.Cond.Expr(),
 			CondRef:  branch.Cond, // Store for address-based resolution
 			HTML:     branchHTML,
 			Bindings: branchCtx.Bindings,
@@ -814,11 +783,11 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 // ToHTML generates HTML for an each node (list iteration).
 func (e *EachNode) ToHTML(ctx *BuildContext) string {
 	localMarker := ctx.NextEachMarker()
-	markerID := ctx.FullMarkerID(localMarker)
+	markerID := ctx.FullID(localMarker)
 
 	// Each item needs an element ID for DOM manipulation (not a marker)
 	// Use full element ID format for the span wrapper
-	itemElementPrefix := ctx.FullElementID(localMarker)
+	itemElementPrefix := ctx.FullID(localMarker)
 
 	// Get list items for SSR
 	var itemsHTML strings.Builder
@@ -862,7 +831,7 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 	// Component marker is used as prefix for nested bindings
 	compMarker := ctx.NextCompMarker()
-	fullCompPrefix := ctx.FullElementID(compMarker)
+	fullCompPrefix := ctx.FullID(compMarker)
 
 	// Use the component instance directly
 	comp, ok := c.Instance.(Component)
@@ -976,7 +945,6 @@ func mergeNestedBindings(parent, child *CollectedBindings) {
 	parent.IfBlocks = append(parent.IfBlocks, child.IfBlocks...)
 	parent.EachBlocks = append(parent.EachBlocks, child.EachBlocks...)
 	parent.InputBindings = append(parent.InputBindings, child.InputBindings...)
-	parent.Components = append(parent.Components, child.Components...)
 	parent.AttrBindings = append(parent.AttrBindings, child.AttrBindings...)
 	parent.AttrCondBindings = append(parent.AttrCondBindings, child.AttrCondBindings...)
 	parent.ComponentBlocks = append(parent.ComponentBlocks, child.ComponentBlocks...)
@@ -1003,10 +971,7 @@ func nodeToHTML(n Node, ctx *BuildContext) string {
 		return node.ToHTML(ctx)
 	case *BindNode:
 		return node.ToHTML(ctx)
-	case *BindValueNode:
-		return node.ToHTML(ctx)
-	case *BindCheckedNode:
-		return node.ToHTML(ctx)
+
 	case *IfNode:
 		return node.ToHTML(ctx)
 	case *EachNode:
@@ -1074,83 +1039,4 @@ func extractLastID(html string) string {
 		}
 	}
 	return lastID
-}
-
-// RenderResult contains all output from HTML rendering.
-type RenderResult struct {
-	HTML            string
-	Bindings        *CollectedBindings
-	CollectedStyles map[string]string
-}
-
-// RenderHTML is the main entry point for generating HTML from a Node tree.
-func RenderHTML(root Node) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
-// RenderHTMLFull renders HTML and returns all collected data including nested styles.
-func RenderHTMLFull(root Node) *RenderResult {
-	ctx := NewBuildContext()
-	html := nodeToHTML(root, ctx)
-	return &RenderResult{
-		HTML:            html,
-		Bindings:        ctx.Bindings,
-		CollectedStyles: ctx.CollectedStyles,
-	}
-}
-
-// RenderHTMLWithSlot renders HTML with slot content injected.
-func RenderHTMLWithSlot(root Node, slotContent string) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	ctx.SlotContent = slotContent
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
-// RenderHTMLWithPrefix renders HTML with a prefix for unique IDs.
-func RenderHTMLWithPrefix(root Node, prefix string) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	ctx.Prefix = prefix
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
-// RenderHTMLWithContext renders HTML with full context options.
-func RenderHTMLWithContext(root Node, opts ...func(*BuildContext)) (string, *CollectedBindings) {
-	ctx := NewBuildContext()
-	for _, opt := range opts {
-		opt(ctx)
-	}
-	html := nodeToHTML(root, ctx)
-	return html, ctx.Bindings
-}
-
-// RenderHTMLWithContextFull renders HTML with full context options and returns collected styles.
-func RenderHTMLWithContextFull(root Node, opts ...func(*BuildContext)) *RenderResult {
-	ctx := NewBuildContext()
-	for _, opt := range opts {
-		opt(ctx)
-	}
-	html := nodeToHTML(root, ctx)
-	return &RenderResult{
-		HTML:            html,
-		Bindings:        ctx.Bindings,
-		CollectedStyles: ctx.CollectedStyles,
-	}
-}
-
-// WithPrefixCtx sets the prefix on the build context.
-func WithPrefixCtx(prefix string) func(*BuildContext) {
-	return func(ctx *BuildContext) {
-		ctx.Prefix = prefix
-	}
-}
-
-// WithRouteGroupIDCtx sets the route group ID on the build context.
-func WithRouteGroupIDCtx(id string) func(*BuildContext) {
-	return func(ctx *BuildContext) {
-		ctx.RouteGroupID = id
-	}
 }

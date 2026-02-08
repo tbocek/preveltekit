@@ -2,9 +2,6 @@
 
 package preveltekit
 
-// pendingRouterIDs collects router IDs during SSR for container mapping
-var pendingRouterIDs []string
-
 // Router handles client-side routing
 type Router struct {
 	componentStore *Store[Component]
@@ -19,8 +16,6 @@ type Router struct {
 // Automatically registers all route components as options on the component store
 // so SSR can pre-render all branches.
 func NewRouter(componentStore *Store[Component], routes []Route, id string) *Router {
-	// Register ID for SSR to discover container mapping
-	pendingRouterIDs = append(pendingRouterIDs, id)
 	// Register all route components as store options for pre-baked rendering
 	for _, route := range routes {
 		if route.Component != nil {
@@ -33,13 +28,6 @@ func NewRouter(componentStore *Store[Component], routes []Route, id string) *Rou
 		id:             id,
 		currentPath:    NewWithID(id+".path", ""),
 	}
-}
-
-// GetPendingRouterIDs returns and clears the pending router IDs
-func GetPendingRouterIDs() []string {
-	ids := pendingRouterIDs
-	pendingRouterIDs = nil
-	return ids
 }
 
 // NotFound sets the handler for unmatched routes

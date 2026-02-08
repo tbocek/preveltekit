@@ -89,8 +89,8 @@ func Hydrate(app Component) {
 		om.OnMount()
 	}
 
-	// Call Render() on all components to register handlers via WithOn().
-	// Must recurse into nested ComponentNodes so their WithOn calls fire too.
+	// Call Render() on all components to register handlers via On().
+	// Must recurse into nested ComponentNodes so their On calls fire too.
 	// Store[Component] options are also walked to keep handler counter in sync with SSR.
 	renderRecursive(app)
 
@@ -99,7 +99,7 @@ func Hydrate(app Component) {
 }
 
 // renderRecursive calls Render() on a component and recursively on any
-// nested ComponentNodes. This ensures all WithOn() calls fire to register
+// nested ComponentNodes. This ensures all On() calls fire to register
 // handlers in the global registry.
 func renderRecursive(comp Component) {
 	node := comp.Render()
@@ -251,7 +251,7 @@ func resolveStore(storeID string, components map[string]Component) any {
 }
 
 // getHandler looks up a handler by ID from the global handler registry.
-// Handlers are registered via WithOn() which calls RegisterHandler().
+// Handlers are registered via On() which calls RegisterHandler().
 func getHandler(elementID string) func() {
 	return GetHandler(elementID)
 }
@@ -1046,21 +1046,14 @@ func floatToStr(f float64) string {
 
 // HydrateBindings is the JSON representation of bindings for WASM.
 type HydrateBindings struct {
-	TextBindings        []HydrateTextBinding        `json:"TextBindings"`
-	Events              []HydrateEvent              `json:"Events"`
-	IfBlocks            []HydrateIfBlock            `json:"IfBlocks"`
-	EachBlocks          []HydrateEachBlock          `json:"EachBlocks"`
-	InputBindings       []HydrateInputBinding       `json:"InputBindings"`
-	AttrBindings        []HydrateAttrBinding        `json:"AttrBindings"`
-	AttrCondBindings    []HydrateAttrCondBinding    `json:"AttrCondBindings"`
-	ComponentContainers []HydrateComponentContainer `json:"ComponentContainers,omitempty"`
-	ComponentBlocks     []HydrateComponentBlock     `json:"ComponentBlocks,omitempty"`
-}
-
-// HydrateComponentContainer maps a route group ID to its DOM container ID
-type HydrateComponentContainer struct {
-	ID          string `json:"ID"`
-	ContainerID string `json:"ContainerID"`
+	TextBindings     []HydrateTextBinding     `json:"TextBindings"`
+	Events           []HydrateEvent           `json:"Events"`
+	IfBlocks         []HydrateIfBlock         `json:"IfBlocks"`
+	EachBlocks       []HydrateEachBlock       `json:"EachBlocks"`
+	InputBindings    []HydrateInputBinding    `json:"InputBindings"`
+	AttrBindings     []HydrateAttrBinding     `json:"AttrBindings"`
+	AttrCondBindings []HydrateAttrCondBinding `json:"AttrCondBindings"`
+	ComponentBlocks  []HydrateComponentBlock  `json:"ComponentBlocks,omitempty"`
 }
 
 type HydrateTextBinding struct {
@@ -1084,7 +1077,6 @@ type HydrateIfBlock struct {
 }
 
 type HydrateIfBranch struct {
-	CondExpr string           `json:"CondExpr"`
 	HTML     string           `json:"HTML"`
 	Bindings *HydrateBindings `json:"Bindings,omitempty"`
 	StoreID  string           `json:"store_id,omitempty"`
