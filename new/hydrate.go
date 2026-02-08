@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // HasRoutes is implemented by components that define routes.
@@ -14,9 +15,15 @@ type HasRoutes interface {
 	Routes() []Route
 }
 
-// HasStyle is implemented by components that have CSS styles.
+// HasStyle is implemented by components that have scoped CSS styles.
 type HasStyle interface {
 	Style() string
+}
+
+// HasGlobalStyle is implemented by components that have unscoped global CSS styles.
+// Global styles are emitted without any CSS scoping — useful for base/reset styles.
+type HasGlobalStyle interface {
+	GlobalStyle() string
 }
 
 // HasNew is implemented by components that can create fresh instances.
@@ -79,19 +86,29 @@ func Hydrate(app Component) {
 		// Routes are now auto-registered as store options via NewRouter,
 		// so no need to pass them through context.
 		ctx := NewBuildContext()
-		html := nodeToHTML(freshApp.Render(), ctx)
 
-		// Add app-level style to collected styles
-		if hs, ok := freshApp.(HasStyle); ok {
-			ctx.CollectedStyles["app"] = hs.Style()
+		// Collect app global styles (unscoped)
+		if hgs, ok := freshApp.(HasGlobalStyle); ok {
+			if gs := hgs.GlobalStyle(); gs != "" {
+				ctx.CollectedGlobalStyles["app"] = gs
+			}
 		}
+
+		// Set app-level scope before rendering so all app HTML gets the class
+		if hs, ok := freshApp.(HasStyle); ok {
+			scopeAttr := GetOrCreateScope("app")
+			ctx.ScopeAttr = scopeAttr
+			ctx.CollectedStyles["app"] = scopeCSS(hs.Style(), scopeAttr)
+		}
+
+		html := nodeToHTML(freshApp.Render(), ctx)
 
 		// Resolve store references to string IDs, then merge into shared bindings
 		resolveBindings(ctx.Bindings)
 		mergeBindings(&allBindings, ctx.Bindings)
 
 		// Build full HTML document
-		fullHTML := buildHTMLDocument(html, ctx.CollectedStyles)
+		fullHTML := buildHTMLDocument(html, ctx.CollectedGlobalStyles, ctx.CollectedStyles)
 
 		// Write HTML file
 		htmlPath := filepath.Join("dist", route.HTMLFile)
@@ -120,12 +137,12 @@ func mergeBindings(dst, src *CollectedBindings) {
 
 	seenInput := make(map[string]bool)
 	for _, b := range dst.InputBindings {
-		seenInput[b.ElementID] = true
+		seenInput[b.StoreID] = true
 	}
 	for _, b := range src.InputBindings {
-		if !seenInput[b.ElementID] {
+		if !seenInput[b.StoreID] {
 			dst.InputBindings = append(dst.InputBindings, b)
-			seenInput[b.ElementID] = true
+			seenInput[b.StoreID] = true
 		}
 	}
 
@@ -340,16 +357,37 @@ func resolveBindings(bindings *CollectedBindings) {
 	}
 }
 
-func buildHTMLDocument(body string, collectedStyles map[string]string) string {
+func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[string]string) string {
 	var styles string
+
+	var allStyles string
+
+	// Global styles first (unscoped)
+	if len(collectedGlobalStyles) > 0 {
+		keys := make([]string, 0, len(collectedGlobalStyles))
+		for k := range collectedGlobalStyles {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			allStyles += collectedGlobalStyles[k] + "\n"
+		}
+	}
+
+	// Scoped styles
 	if len(collectedStyles) > 0 {
-		var allStyles string
-		for _, style := range collectedStyles {
-			allStyles += style + "\n"
+		keys := make([]string, 0, len(collectedStyles))
+		for k := range collectedStyles {
+			keys = append(keys, k)
 		}
-		if allStyles != "" {
-			styles = "<style>" + allStyles + "</style>\n"
+		sort.Strings(keys)
+		for _, k := range keys {
+			allStyles += collectedStyles[k] + "\n"
 		}
+	}
+
+	if allStyles != "" {
+		styles = "<style>" + allStyles + "</style>\n"
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>

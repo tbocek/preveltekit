@@ -22,8 +22,15 @@ type BuildContext struct {
 	// SlotContent holds HTML to be rendered in place of <slot/> elements
 	SlotContent string
 
-	// CollectedStyles holds CSS from nested components (deduplicated by component name)
+	// CollectedStyles holds scoped CSS from nested components (deduplicated by component name)
 	CollectedStyles map[string]string
+
+	// CollectedGlobalStyles holds unscoped CSS from GlobalStyle() (deduplicated by component name)
+	CollectedGlobalStyles map[string]string
+
+	// ScopeAttr is the CSS scoping class for the current component (e.g., "v0").
+	// When set, all HTML tags rendered in this context get this class injected.
+	ScopeAttr string
 }
 
 // CollectedBindings stores all bindings found during tree walking.
@@ -75,9 +82,8 @@ type TextBinding struct {
 // EventBinding binds an event handler to a DOM element by its id attribute.
 // HTML: <button id="basics_ev0"> triggers the handler on click.
 type EventBinding struct {
-	ElementID string   // Element id attribute, e.g., "basics_ev0"
-	Event     string   // Event name, e.g., "click"
-	Modifiers []string // Event modifiers, e.g., ["preventDefault"]
+	ElementID string // Element id attribute, e.g., "basics_ev0"
+	Event     string // Event name, e.g., "click"
 }
 
 // IfBlock represents a conditional block with branches at a comment marker.
@@ -108,8 +114,6 @@ type EachBlock struct {
 	MarkerID string `json:"MarkerID"`           // Comment marker, e.g., "basics_e0"
 	ListID   string `json:"ListID"`             // List store path, e.g., "basics.Items"
 	ListRef  any    `json:"-"`                  // Actual list pointer (for resolution)
-	ItemVar  string `json:"ItemVar"`            // Item variable name in template
-	IndexVar string `json:"IndexVar"`           // Index variable name in template
 	BodyHTML string `json:"BodyHTML,omitempty"` // Template HTML for each item
 	ElseHTML string `json:"ElseHTML,omitempty"` // HTML when list is empty
 }
@@ -117,10 +121,9 @@ type EachBlock struct {
 // InputBinding binds an input element to a store for two-way data binding.
 // HTML: <input id="basics_b0"> syncs value with store.
 type InputBinding struct {
-	ElementID string `json:"element_id"` // Element id attribute, e.g., "basics_b0"
-	StoreID   string `json:"store_id"`   // Store path, e.g., "basics.Name"
-	StoreRef  any    `json:"-"`          // Actual store pointer (for resolution)
-	BindType  string `json:"bind_type"`  // Binding type: "value" or "checked"
+	StoreID  string `json:"store_id"`  // Store ID (also used as element id), e.g., "s3"
+	StoreRef any    `json:"-"`         // Actual store pointer (for resolution)
+	BindType string `json:"bind_type"` // Binding type: "value" or "checked"
 }
 
 // AttrBinding binds a dynamic attribute value to stores.
@@ -155,8 +158,9 @@ type AttrCondBinding struct {
 // NewBuildContext creates a new build context for HTML generation.
 func NewBuildContext() *BuildContext {
 	return &BuildContext{
-		Bindings:        &CollectedBindings{},
-		CollectedStyles: make(map[string]string),
+		Bindings:              &CollectedBindings{},
+		CollectedStyles:       make(map[string]string),
+		CollectedGlobalStyles: make(map[string]string),
 	}
 }
 
@@ -239,12 +243,12 @@ func (h *HtmlNode) injectBind(html string, ctx *BuildContext) string {
 		// Handle textarea (value goes as content, not attribute)
 		if strings.HasPrefix(strings.TrimSpace(strings.ToLower(html)), "<textarea") {
 			ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-				ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+				StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
 			})
 			return injectTextareaContent(html, storeID, s.Get())
 		}
 		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+			StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
 		})
 		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%s"`, storeID, escapeAttr(s.Get())))
 
@@ -252,7 +256,7 @@ func (h *HtmlNode) injectBind(html string, ctx *BuildContext) string {
 		storeID = s.ID()
 		bindType = "value"
 		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+			StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
 		})
 		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%d"`, storeID, s.Get()))
 
@@ -264,7 +268,7 @@ func (h *HtmlNode) injectBind(html string, ctx *BuildContext) string {
 			checked = " checked"
 		}
 		ctx.Bindings.InputBindings = append(ctx.Bindings.InputBindings, InputBinding{
-			ElementID: storeID, StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
+			StoreID: storeID, StoreRef: h.BoundStore, BindType: bindType,
 		})
 		return injectAttrs(html, fmt.Sprintf(`id="%s"%s`, storeID, checked))
 	}
@@ -280,8 +284,12 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 		part := h.Parts[i]
 		switch v := part.(type) {
 		case string:
-			// Raw HTML string - pass through as-is (no escaping)
-			sb.WriteString(v)
+			// Raw HTML string — inject scope class into all tags if scoping is active
+			if ctx.ScopeAttr != "" {
+				sb.WriteString(injectScopeClass(v, ctx.ScopeAttr))
+			} else {
+				sb.WriteString(v)
+			}
 		case Node:
 			// Embedded node - render it
 			sb.WriteString(nodeToHTML(v, ctx))
@@ -331,6 +339,26 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 					// Render in isolated child context (like IfBlock branches)
 					branchCtx := ctx.Child(name)
 					branchCtx.CollectedStyles = ctx.CollectedStyles
+					branchCtx.CollectedGlobalStyles = ctx.CollectedGlobalStyles
+
+					// Collect global style (unscoped) for this branch component
+					if hgs, ok := optComp.(HasGlobalStyle); ok {
+						if _, exists := ctx.CollectedGlobalStyles[name]; !exists {
+							if gs := hgs.GlobalStyle(); gs != "" {
+								ctx.CollectedGlobalStyles[name] = gs
+							}
+						}
+					}
+
+					// Collect scoped style for this branch component
+					if hs, ok := optComp.(HasStyle); ok {
+						scopeAttr := GetOrCreateScope(name)
+						branchCtx.ScopeAttr = scopeAttr
+						if _, exists := ctx.CollectedStyles[name]; !exists {
+							ctx.CollectedStyles[name] = scopeCSS(hs.Style(), scopeAttr)
+						}
+					}
+
 					branchHTML := nodeToHTML(optComp.Render(), branchCtx)
 
 					// Resolve bindings within this branch
@@ -352,7 +380,11 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 
 				// Emit: <span>{activeHTML}</span><!--markerID-->
 				// Same pattern as IfBlock output
-				sb.WriteString(fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID))
+				if ctx.ScopeAttr != "" {
+					sb.WriteString(fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, activeHTML, markerID))
+				} else {
+					sb.WriteString(fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID))
+				}
 			} else if comp != nil {
 				// Fallback: no options, render current component directly
 				name := componentName(comp)
@@ -439,9 +471,8 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 			eventNames = append(eventNames, ev.Event)
 			// Add event binding so WASM knows to bind this handler
 			ctx.Bindings.Events = append(ctx.Bindings.Events, EventBinding{
-				ElementID: ev.ID, // Use the user-provided handler ID
+				ElementID: ev.ID,
 				Event:     ev.Event,
-				Modifiers: ev.Modifiers,
 			})
 		}
 		extraAttrs = fmt.Sprintf(` data-on="%s"`, strings.Join(eventNames, ","))
@@ -655,6 +686,9 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 	})
 
 	if b.IsHTML {
+		if ctx.ScopeAttr != "" {
+			return fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, value, markerID)
+		}
 		return fmt.Sprintf("<span>%s</span><!--%s-->", value, markerID)
 	}
 	return fmt.Sprintf("%s<!--%s-->", escapeHTML(value), markerID)
@@ -709,6 +743,93 @@ func findTagEnd(html string) int {
 	return -1
 }
 
+// injectScopeClass injects a scope class (e.g., "v0") into every opening
+// HTML tag in the string. Merges into existing class="" or adds class="v0".
+// Skips closing tags, comments, and DOCTYPE declarations.
+func injectScopeClass(html, scopeClass string) string {
+	var sb strings.Builder
+	sb.Grow(len(html) + len(html)/10)
+	i := 0
+	for i < len(html) {
+		if html[i] == '<' && i+1 < len(html) {
+			next := html[i+1]
+			// Skip closing tags </...>, comments <!--...-->, and <!DOCTYPE>
+			if next == '/' || next == '!' {
+				end := strings.IndexByte(html[i:], '>')
+				if end == -1 {
+					sb.WriteString(html[i:])
+					break
+				}
+				sb.WriteString(html[i : i+end+1])
+				i += end + 1
+				continue
+			}
+			// Opening tag: find the > (respecting quoted attributes)
+			j := i + 1
+			inQuote := byte(0)
+			for j < len(html) {
+				if inQuote != 0 {
+					if html[j] == inQuote {
+						inQuote = 0
+					}
+				} else if html[j] == '"' || html[j] == '\'' {
+					inQuote = html[j]
+				} else if html[j] == '>' {
+					break
+				}
+				j++
+			}
+			if j >= len(html) {
+				sb.WriteString(html[i:])
+				break
+			}
+			// Extract the opening tag content (between < and >)
+			tagContent := html[i:j]
+			selfClosing := j > 0 && html[j-1] == '/'
+			if selfClosing {
+				tagContent = html[i : j-1]
+			}
+
+			// Try to merge into existing class="..."
+			classIdx := strings.Index(tagContent, `class="`)
+			if classIdx != -1 {
+				// Found class="...", insert scope class at end of value
+				quoteStart := classIdx + 7
+				quoteEnd := strings.IndexByte(tagContent[quoteStart:], '"')
+				if quoteEnd != -1 {
+					quoteEnd += quoteStart
+					sb.WriteString(tagContent[:quoteEnd])
+					sb.WriteByte(' ')
+					sb.WriteString(scopeClass)
+					sb.WriteString(tagContent[quoteEnd:])
+					if selfClosing {
+						sb.WriteString("/>")
+					} else {
+						sb.WriteByte('>')
+					}
+					i = j + 1
+					continue
+				}
+			}
+			// No existing class — add class="v0"
+			sb.WriteString(tagContent)
+			sb.WriteString(` class="`)
+			sb.WriteString(scopeClass)
+			sb.WriteByte('"')
+			if selfClosing {
+				sb.WriteString("/>")
+			} else {
+				sb.WriteByte('>')
+			}
+			i = j + 1
+		} else {
+			sb.WriteByte(html[i])
+			i++
+		}
+	}
+	return sb.String()
+}
+
 // ToHTML generates HTML for an if node (conditional rendering).
 func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	localMarker := ctx.NextIfMarker()
@@ -732,8 +853,11 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	for _, branch := range i.Branches {
 		// Create a child context to capture this branch's bindings
 		branchCtx := &BuildContext{
-			IDCounter: ctx.IDCounter, // Copy all counters
-			Bindings:  &CollectedBindings{},
+			IDCounter:             ctx.IDCounter, // Copy all counters
+			Bindings:              &CollectedBindings{},
+			CollectedStyles:       ctx.CollectedStyles,       // Share styles for nested components
+			CollectedGlobalStyles: ctx.CollectedGlobalStyles, // Share global styles for nested components
+			ScopeAttr:             ctx.ScopeAttr,             // Inherit parent scope
 		}
 		branchHTML := childrenToHTML(branch.Children, branchCtx)
 
@@ -754,8 +878,11 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// Else branch
 	if len(i.ElseNode) > 0 {
 		elseCtx := &BuildContext{
-			IDCounter: ctx.IDCounter, // Copy all counters
-			Bindings:  &CollectedBindings{},
+			IDCounter:             ctx.IDCounter, // Copy all counters
+			Bindings:              &CollectedBindings{},
+			CollectedStyles:       ctx.CollectedStyles,       // Share styles for nested components
+			CollectedGlobalStyles: ctx.CollectedGlobalStyles, // Share global styles for nested components
+			ScopeAttr:             ctx.ScopeAttr,             // Inherit parent scope
 		}
 		elseHTML := childrenToHTML(i.ElseNode, elseCtx)
 
@@ -777,6 +904,9 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 	// initial hydration. This prevents duplicate bindings.
 
 	// Output the active branch wrapped in a span (uses marker ID in HTML comment)
+	if ctx.ScopeAttr != "" {
+		return fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, activeHTML, markerID)
+	}
 	return fmt.Sprintf("<span>%s</span><!--%s-->", activeHTML, markerID)
 }
 
@@ -792,6 +922,12 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 	// Get list items for SSR
 	var itemsHTML strings.Builder
 
+	// Build span format with scope attribute if active
+	spanFmt := `<span id="%s_%d">%s</span>`
+	if ctx.ScopeAttr != "" {
+		spanFmt = `<span id="%s_%d" class="` + ctx.ScopeAttr + `">%s</span>`
+	}
+
 	switch list := e.ListRef.(type) {
 	case *List[string]:
 		items := list.Get()
@@ -800,7 +936,7 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 		} else {
 			for i, item := range items {
 				itemHTML := nodeToHTML(e.Body(item, i), ctx)
-				itemsHTML.WriteString(fmt.Sprintf(`<span id="%s_%d">%s</span>`, itemElementPrefix, i, itemHTML))
+				itemsHTML.WriteString(fmt.Sprintf(spanFmt, itemElementPrefix, i, itemHTML))
 			}
 		}
 	case *List[int]:
@@ -810,7 +946,7 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 		} else {
 			for i, item := range items {
 				itemHTML := nodeToHTML(e.Body(item, i), ctx)
-				itemsHTML.WriteString(fmt.Sprintf(`<span id="%s_%d">%s</span>`, itemElementPrefix, i, itemHTML))
+				itemsHTML.WriteString(fmt.Sprintf(spanFmt, itemElementPrefix, i, itemHTML))
 			}
 		}
 	}
@@ -820,8 +956,6 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 		MarkerID: markerID,
 		ListID:   e.ListID,
 		ListRef:  e.ListRef,
-		ItemVar:  e.ItemVar,
-		IndexVar: e.IndexVar,
 	})
 
 	return fmt.Sprintf("%s<!--%s-->", itemsHTML.String(), markerID)
@@ -839,11 +973,26 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 		return fmt.Sprintf("<!-- component %s: invalid instance -->", c.Name)
 	}
 
-	// Collect style from nested component (deduplicated by component name)
+	// Collect global style (unscoped) from nested component
+	if hgs, ok := c.Instance.(HasGlobalStyle); ok {
+		if ctx.CollectedGlobalStyles != nil {
+			if _, exists := ctx.CollectedGlobalStyles[c.Name]; !exists {
+				if gs := hgs.GlobalStyle(); gs != "" {
+					ctx.CollectedGlobalStyles[c.Name] = gs
+				}
+			}
+		}
+	}
+
+	// Collect scoped style from nested component (deduplicated by component name)
+	var scopeAttr string
 	if hs, ok := c.Instance.(HasStyle); ok {
 		if ctx.CollectedStyles != nil {
 			if _, exists := ctx.CollectedStyles[c.Name]; !exists {
-				ctx.CollectedStyles[c.Name] = hs.Style()
+				scopeAttr = GetOrCreateScope(c.Name)
+				ctx.CollectedStyles[c.Name] = scopeCSS(hs.Style(), scopeAttr)
+			} else {
+				scopeAttr = GetOrCreateScope(c.Name)
 			}
 		}
 	}
@@ -851,16 +1000,18 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 	// Set props on the component's stores using reflection
 	setComponentProps(comp, c.Props)
 
-	// Render slot content first (with current context)
+	// Render slot content first (with current context — inherits parent scope)
 	slotHTML := childrenToHTML(c.Children, ctx)
 
 	// Create child context for the component with its own prefix
 	childCtx := &BuildContext{
-		IDCounter:       IDCounter{Prefix: fullCompPrefix},
-		Parent:          ctx,
-		Bindings:        &CollectedBindings{},
-		SlotContent:     slotHTML,
-		CollectedStyles: ctx.CollectedStyles, // Share styles map with parent
+		IDCounter:             IDCounter{Prefix: fullCompPrefix},
+		Parent:                ctx,
+		Bindings:              &CollectedBindings{},
+		SlotContent:           slotHTML,
+		CollectedStyles:       ctx.CollectedStyles,       // Share styles map with parent
+		CollectedGlobalStyles: ctx.CollectedGlobalStyles, // Share global styles map with parent
+		ScopeAttr:             scopeAttr,                 // Component's own scope only
 	}
 
 	// Render the component

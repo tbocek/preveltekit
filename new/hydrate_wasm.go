@@ -23,16 +23,6 @@ func trimPrefix(s, prefix string) string {
 	return s
 }
 
-// splitFirst splits s on first occurrence of sep, returns (before, after, found)
-func splitFirst(s, sep string) (string, string, bool) {
-	for i := 0; i <= len(s)-len(sep); i++ {
-		if s[i:i+len(sep)] == sep {
-			return s[:i], s[i+len(sep):], true
-		}
-	}
-	return s, "", false
-}
-
 // containsChar checks if s contains the character c
 func containsChar(s string, c byte) bool {
 	for i := 0; i < len(s); i++ {
@@ -48,9 +38,14 @@ type HasRoutes interface {
 	Routes() []Route
 }
 
-// HasStyle is implemented by components that have CSS styles.
+// HasStyle is implemented by components that have scoped CSS styles.
 type HasStyle interface {
 	Style() string
+}
+
+// HasGlobalStyle is implemented by components that have unscoped global CSS styles.
+type HasGlobalStyle interface {
+	GlobalStyle() string
 }
 
 // HasNew is implemented by components that can create fresh instances.
@@ -84,30 +79,28 @@ func Hydrate(app Component) {
 
 	// Call OnMount before Render to match SSR order.
 	// This creates the router (which calls WithOptions on Store[Component]),
-	// so options are populated when renderRecursive walks the tree.
+	// so options are populated when walkNodeForComponents walks the tree.
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
 	}
 
+	// Create app scope before walkNodeForComponents to match SSR order
+	// (SSR creates the app scope before nodeToHTML)
+	if _, ok := app.(HasStyle); ok {
+		GetOrCreateScope("app")
+	}
+
 	// Call Render() on all components to register handlers via On().
 	// Must recurse into nested ComponentNodes so their On calls fire too.
-	// Store[Component] options are also walked to keep handler counter in sync with SSR.
-	renderRecursive(app)
+	// Store[Component] options are also walked to keep handler/scope counter in sync with SSR.
+	walkNodeForComponents(app.Render())
 
 	// Use the full hydration which handles If-blocks, Each-blocks, etc.
 	hydrateWASM(app, children)
 }
 
-// renderRecursive calls Render() on a component and recursively on any
-// nested ComponentNodes. This ensures all On() calls fire to register
-// handlers in the global registry.
-func renderRecursive(comp Component) {
-	node := comp.Render()
-	walkNodeForComponents(node)
-}
-
-// walkNodeForComponents walks a Node tree and calls renderRecursive on
-// any ComponentNode instances found.
+// walkNodeForComponents walks a Node tree, calling Render() on any nested
+// ComponentNodes so their On() calls fire to register handlers in the global registry.
 func walkNodeForComponents(n Node) {
 	if n == nil {
 		return
@@ -127,7 +120,11 @@ func walkNodeForComponents(n Node) {
 						name := componentName(comp)
 						if !seen[name] {
 							seen[name] = true
-							renderRecursive(comp)
+							// Keep scope counter in sync with SSR's ComponentBlock rendering
+							if _, ok := comp.(HasStyle); ok {
+								GetOrCreateScope(name)
+							}
+							walkNodeForComponents(comp.Render())
 						}
 					}
 				}
@@ -148,7 +145,11 @@ func walkNodeForComponents(n Node) {
 		}
 	case *ComponentNode:
 		if comp, ok := node.Instance.(Component); ok {
-			renderRecursive(comp)
+			// Keep scope counter in sync with SSR's ComponentNode.ToHTML
+			if _, ok := comp.(HasStyle); ok {
+				GetOrCreateScope(node.Name)
+			}
+			walkNodeForComponents(comp.Render())
 		}
 	}
 }
@@ -161,7 +162,6 @@ func hydrateWASM(app Component, children map[string]Component) {
 	if bindingsJS.IsUndefined() || bindingsJS.IsNull() {
 		runLifecycle(app, children)
 		select {}
-		return
 	}
 
 	bindingsJSON := bindingsJS.String()
@@ -170,16 +170,6 @@ func hydrateWASM(app Component, children map[string]Component) {
 	if bindings == nil {
 		runLifecycle(app, children)
 		select {}
-		return
-	}
-
-	// Build component map: "component" -> app, "basics" -> child, etc.
-	components := map[string]Component{
-		"component": app,
-	}
-	for path, child := range children {
-		name := trimPrefix(path, "/")
-		components[name] = child
 	}
 
 	// Run OnCreate phase
@@ -187,22 +177,15 @@ func hydrateWASM(app Component, children map[string]Component) {
 
 	// Apply all bindings
 	cleanup := &Cleanup{}
-	applyBindings(bindings, components, cleanup)
+	applyBindings(bindings, cleanup)
 
-	// Run OnMount for all children FIRST to initialize their stores (e.g., CurrentTab = "home")
-	// But NOT app.OnMount yet - that starts the router which changes CurrentComponent
-	for _, child := range children {
-		if om, ok := child.(HasOnMount); ok {
-			om.OnMount()
-		}
-	}
-
-	// app.OnMount() already called in Hydrate() before renderRecursive,
-	// so Store[Component] options are populated for handler counter sync.
+	// Run OnMount for all children to initialize their stores (e.g., CurrentTab = "home").
+	// app.OnMount() already called in Hydrate() before walkNodeForComponents.
+	runOnMount(app, children)
 
 	// Apply component blocks (options already registered via OnMount -> NewRouter -> WithOptions)
 	for _, cb := range bindings.ComponentBlocks {
-		bindComponentBlock(cb, components)
+		bindComponentBlock(cb)
 	}
 
 	// Keep WASM running
@@ -212,19 +195,36 @@ func hydrateWASM(app Component, children map[string]Component) {
 // runOnCreate injects styles for app and all children.
 // Note: New() was already called to initialize stores.
 func runOnCreate(app Component, children map[string]Component) {
+	// Inject global styles (unscoped) first
+	if hgs, ok := app.(HasGlobalStyle); ok {
+		if gs := hgs.GlobalStyle(); gs != "" {
+			InjectStyle("_global_app", gs)
+		}
+	}
+	// Inject scoped styles for app
 	if hs, ok := app.(HasStyle); ok {
-		InjectStyle("app", hs.Style())
+		scopeAttr := GetOrCreateScope("app")
+		InjectStyle("app", scopeCSS(hs.Style(), scopeAttr))
 	}
 	// Inject styles for all children
 	for path, child := range children {
+		name := trimPrefix(path, "/")
+		// Global styles (unscoped)
+		if hgs, ok := child.(HasGlobalStyle); ok {
+			if gs := hgs.GlobalStyle(); gs != "" {
+				InjectStyle("_global_"+name, gs)
+			}
+		}
+		// Scoped styles
 		if hs, ok := child.(HasStyle); ok {
-			InjectStyle(trimPrefix(path, "/"), hs.Style())
+			scopeAttr := GetOrCreateScope(name)
+			InjectStyle(name, scopeCSS(hs.Style(), scopeAttr))
 		}
 	}
 }
 
 // runOnMount calls OnMount for all children.
-// Note: app.OnMount() is called earlier in Hydrate() before renderRecursive,
+// Note: app.OnMount() is called earlier in Hydrate() before walkNodeForComponents,
 // so it is not called here to avoid double invocation.
 func runOnMount(app Component, children map[string]Component) {
 	for _, child := range children {
@@ -240,37 +240,17 @@ func runLifecycle(app Component, children map[string]Component) {
 	runOnMount(app, children)
 }
 
-// resolveStore looks up a store by ID from the global registry.
-// Stores register themselves via New(0) which auto-generates an ID and adds them to storeRegistry.
-func resolveStore(storeID string, components map[string]Component) any {
-	store := GetStore(storeID)
-	if store == nil {
-		js.Global().Get("console").Call("log", "[DEBUG] resolveStore: store not found in registry:", storeID)
-	}
-	return store
-}
-
-// getHandler looks up a handler by ID from the global handler registry.
-// Handlers are registered via On() which calls RegisterHandler().
-func getHandler(elementID string) func() {
-	return GetHandler(elementID)
-}
-
 // bindTextDynamic sets up a text binding for any store type.
 func bindTextDynamic(markerID string, store any, isHTML bool) {
-	js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic:", markerID, "store is nil:", store == nil)
 	switch s := store.(type) {
 	case *Store[string]:
 		bindText(markerID, s, isHTML)
 	case *Store[int]:
-		js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic: binding int store, current value:", s.Get())
 		bindText(markerID, s, isHTML)
 	case *Store[bool]:
 		bindText(markerID, s, isHTML)
 	case *Store[float64]:
 		bindText(markerID, s, isHTML)
-	default:
-		js.Global().Get("console").Call("log", "[DEBUG] bindTextDynamic: unknown store type")
 	}
 }
 
@@ -299,13 +279,8 @@ func bindInputDynamic(cleanup *Cleanup, elementID string, store any, bindType st
 	}
 }
 
-// bindEventDynamic sets up an event binding.
-func bindEventDynamic(cleanup *Cleanup, elementID, event string, handler func()) {
-	BindEvents(cleanup, []Evt{{elementID, event, handler}})
-}
-
 // bindIfBlock sets up an if-block with reactive condition evaluation.
-func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
+func bindIfBlock(ifb HydrateIfBlock) {
 	// Skip if already set up (prevents duplicate setup from nested if-blocks)
 	if setupIfBlocks[ifb.MarkerID] {
 		return
@@ -329,7 +304,7 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 
 		for i := 0; i < len(ifb.Branches); i++ {
 			branch := ifb.Branches[i]
-			if evalCondition(branch, components) {
+			if evalCondition(branch) {
 				activeHTML = branch.HTML
 				activeBindings = branch.Bindings
 				activeBranchIdx = i
@@ -357,7 +332,7 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 
 		if activeBindings != nil {
 			clearBoundMarkers(activeBindings)
-			applyBindings(activeBindings, components, currentCleanup)
+			applyBindings(activeBindings, currentCleanup)
 		}
 	}
 
@@ -370,11 +345,11 @@ func bindIfBlock(ifb HydrateIfBlock, components map[string]Component) {
 		}
 		seenDeps[dep] = true
 
-		store := resolveStore(dep, components)
+		store := GetStore(dep)
 		if store == nil {
 			// Try with component prefix if dep doesn't contain a dot
 			if !containsChar(dep, '.') {
-				store = resolveStore("component."+dep, components)
+				store = GetStore("component." + dep)
 			}
 		}
 		if store != nil {
@@ -431,7 +406,7 @@ func clearBoundMarkers(bindings *HydrateBindings) {
 
 // bindComponentBlock sets up a component-block with pre-baked HTML swap on store change.
 // Subscribes to the Store[Component] and swaps branches by component type name.
-func bindComponentBlock(cb HydrateComponentBlock, components map[string]Component) {
+func bindComponentBlock(cb HydrateComponentBlock) {
 	if setupComponentBlocks[cb.MarkerID] {
 		return
 	}
@@ -447,9 +422,8 @@ func bindComponentBlock(cb HydrateComponentBlock, components map[string]Componen
 
 	updateComponentBlock := func() {
 		// Get current component from the store
-		compStore := resolveStore(cb.StoreID, components)
+		compStore := GetStore(cb.StoreID)
 		if compStore == nil {
-			js.Global().Get("console").Call("log", "[COMP] store not found:", cb.StoreID)
 			return
 		}
 
@@ -461,8 +435,6 @@ func bindComponentBlock(cb HydrateComponentBlock, components map[string]Componen
 				activeName = componentName(comp)
 			}
 		}
-
-		js.Global().Get("console").Call("log", "[COMP] updateComponentBlock called, firstCall:", firstCall, "activeName:", activeName, "currentBranch:", currentBranchName)
 
 		// Find matching branch by component name
 		var activeHTML string
@@ -477,23 +449,34 @@ func bindComponentBlock(cb HydrateComponentBlock, components map[string]Componen
 
 		// Skip if same branch is already active (but not on first call)
 		if activeName == currentBranchName && !firstCall {
-			js.Global().Get("console").Call("log", "[COMP] SKIP: same component already active")
 			return
 		}
 
 		if firstCall {
 			firstCall = false
 			currentBranchName = activeName
-			js.Global().Get("console").Call("log", "[COMP] FIRST CALL: skipping DOM swap, applying bindings only")
 			if activeBindings != nil {
 				clearBoundMarkers(activeBindings)
-				applyBindings(activeBindings, components, currentCleanup)
+				applyBindings(activeBindings, currentCleanup)
 			}
 			return
 		}
 
-		js.Global().Get("console").Call("log", "[COMP] SWAP: replacing DOM, old:", currentBranchName, "new:", activeName)
 		currentBranchName = activeName
+
+		// Inject styles for the new component (idempotent via InjectStyle)
+		if cs, ok2 := compStore.(*Store[Component]); ok2 {
+			comp := cs.Get()
+			if hgs, ok3 := comp.(HasGlobalStyle); ok3 {
+				if gs := hgs.GlobalStyle(); gs != "" {
+					InjectStyle("_global_"+activeName, gs)
+				}
+			}
+			if hs, ok3 := comp.(HasStyle); ok3 {
+				scopeAttr := GetOrCreateScope(activeName)
+				InjectStyle(activeName, scopeCSS(hs.Style(), scopeAttr))
+			}
+		}
 
 		// Swap HTML (same mechanism as IfBlock)
 		currentEl = FindExistingIfContent(cb.MarkerID)
@@ -505,12 +488,12 @@ func bindComponentBlock(cb HydrateComponentBlock, components map[string]Componen
 
 		if activeBindings != nil {
 			clearBoundMarkers(activeBindings)
-			applyBindings(activeBindings, components, currentCleanup)
+			applyBindings(activeBindings, currentCleanup)
 		}
 	}
 
 	// Subscribe to the component store
-	compStore := resolveStore(cb.StoreID, components)
+	compStore := GetStore(cb.StoreID)
 	if compStore != nil {
 		subscribeToStore(compStore, updateComponentBlock)
 	}
@@ -520,66 +503,49 @@ func bindComponentBlock(cb HydrateComponentBlock, components map[string]Componen
 }
 
 // applyBindings applies all bindings from a HydrateBindings struct to the DOM.
-func applyBindings(bindings *HydrateBindings, components map[string]Component, cleanup *Cleanup) {
-	js.Global().Get("console").Call("log", "[DEBUG] applyBindings called")
-	js.Global().Get("console").Call("log", "[DEBUG] bindings.Events count:", len(bindings.Events))
-	js.Global().Get("console").Call("log", "[DEBUG] bindings.TextBindings count:", len(bindings.TextBindings))
-
+func applyBindings(bindings *HydrateBindings, cleanup *Cleanup) {
 	// Text bindings
 	for _, tb := range bindings.TextBindings {
-		js.Global().Get("console").Call("log", "[DEBUG] text binding:", tb.MarkerID, "storeID:", tb.StoreID)
-		store := resolveStore(tb.StoreID, components)
+		store := GetStore(tb.StoreID)
 		if store != nil {
 			bindTextDynamic(tb.MarkerID, store, tb.IsHTML)
-		} else {
-			js.Global().Get("console").Call("log", "[DEBUG] text binding: store not resolved for", tb.StoreID)
 		}
 	}
 
 	// Input bindings
 	for _, ib := range bindings.InputBindings {
-		store := resolveStore(ib.StoreID, components)
+		store := GetStore(ib.StoreID)
 		if store != nil {
-			bindInputDynamic(cleanup, ib.ElementID, store, ib.BindType)
+			bindInputDynamic(cleanup, ib.StoreID, store, ib.BindType)
 		}
 	}
 
 	// Event bindings
 	for _, ev := range bindings.Events {
-		handler := getHandler(ev.ElementID)
-		js.Global().Get("console").Call("log", "[DEBUG] binding event:", ev.ElementID, ev.Event, "handler found:", handler != nil)
+		handler := GetHandler(ev.ElementID)
 		if handler != nil {
-			// Wrap handler to add debug logging
-			elementID := ev.ElementID
-			event := ev.Event
-			originalHandler := handler
-			wrappedHandler := func() {
-				js.Global().Get("console").Call("log", "[DEBUG] Handler executing for:", elementID, event)
-				originalHandler()
-				js.Global().Get("console").Call("log", "[DEBUG] Handler completed for:", elementID, event)
-			}
-			bindEventDynamic(cleanup, ev.ElementID, ev.Event, wrappedHandler)
+			BindEvents(cleanup, []Evt{{ev.ElementID, ev.Event, handler}})
 		}
 	}
 
 	// Nested if-blocks
 	for _, ifb := range bindings.IfBlocks {
-		bindIfBlock(ifb, components)
+		bindIfBlock(ifb)
 	}
 
 	// Attr bindings (dynamic attributes like data-type)
 	for _, ab := range bindings.AttrBindings {
-		bindAttr(ab, components)
+		bindAttr(ab)
 	}
 
 	// AttrCond bindings (conditional attributes from HtmlNode.AttrIf())
 	for _, acb := range bindings.AttrCondBindings {
-		bindAttrCondBinding(acb, components)
+		bindAttrCondBinding(acb)
 	}
 
 	// Each block bindings (list iteration)
 	for _, eb := range bindings.EachBlocks {
-		bindEachBlock(eb, components)
+		bindEachBlock(eb)
 	}
 
 	// NOTE: Route blocks are NOT applied here. They require the router's path store
@@ -589,7 +555,7 @@ func applyBindings(bindings *HydrateBindings, components map[string]Component, c
 }
 
 // bindAttr sets up a dynamic attribute binding.
-func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
+func bindAttr(ab HydrateAttrBinding) {
 	el := GetEl(ab.ElementID)
 	if !ok(el) {
 		// Try finding by data-attrbind attribute
@@ -602,7 +568,7 @@ func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
 	// Collect stores for this binding
 	var stores []any
 	for _, storeID := range ab.StoreIDs {
-		store := resolveStore(storeID, components)
+		store := GetStore(storeID)
 		if store != nil {
 			stores = append(stores, store)
 		}
@@ -632,7 +598,7 @@ func bindAttr(ab HydrateAttrBinding, components map[string]Component) {
 }
 
 // bindAttrCondBinding sets up a conditional attribute binding from HtmlNode.AttrIf().
-func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Component) {
+func bindAttrCondBinding(acb HydrateAttrCondBinding) {
 	el := GetEl(acb.ElementID)
 	if !ok(el) {
 		return
@@ -643,7 +609,7 @@ func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Compo
 	}
 
 	// Resolve the condition store (first dep is always the condition)
-	condStore := resolveStore(acb.Deps[0], components)
+	condStore := GetStore(acb.Deps[0])
 	if condStore == nil {
 		return
 	}
@@ -651,10 +617,10 @@ func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Compo
 	// Resolve true/false value stores if they're dynamic
 	var trueStore, falseStore any
 	if acb.TrueStoreID != "" {
-		trueStore = resolveStore(acb.TrueStoreID, components)
+		trueStore = GetStore(acb.TrueStoreID)
 	}
 	if acb.FalseStoreID != "" {
-		falseStore = resolveStore(acb.FalseStoreID, components)
+		falseStore = GetStore(acb.FalseStoreID)
 	}
 
 	// Function to evaluate condition and update attribute
@@ -734,7 +700,7 @@ func bindAttrCondBinding(acb HydrateAttrCondBinding, components map[string]Compo
 }
 
 // bindEachBlock sets up a list iteration binding.
-func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
+func bindEachBlock(eb HydrateEachBlock) {
 	if eb.ListID == "" {
 		return
 	}
@@ -752,7 +718,7 @@ func bindEachBlock(eb HydrateEachBlock, components map[string]Component) {
 	}
 
 	// Resolve the list
-	listAny := resolveStore(eb.ListID, components)
+	listAny := GetStore(eb.ListID)
 	if listAny == nil {
 		return
 	}
@@ -841,15 +807,6 @@ func intToStr(n int) string {
 	return string(buf[i:])
 }
 
-// isStore checks if a value is a Store type (used for counter synchronization).
-func isStore(v any) bool {
-	switch v.(type) {
-	case *Store[string], *Store[int], *Store[bool], *Store[float64]:
-		return true
-	}
-	return false
-}
-
 // replaceAll replaces all occurrences of old with new in s
 func replaceAll(s, old, new string) string {
 	if old == "" {
@@ -869,12 +826,12 @@ func replaceAll(s, old, new string) string {
 }
 
 // evalCondition evaluates a branch condition using structured data.
-func evalCondition(branch HydrateIfBranch, components map[string]Component) bool {
+func evalCondition(branch HydrateIfBranch) bool {
 	if branch.StoreID == "" {
 		return false
 	}
 
-	store := resolveStore(branch.StoreID, components)
+	store := GetStore(branch.StoreID)
 	if store == nil {
 		return false
 	}
@@ -1063,9 +1020,8 @@ type HydrateTextBinding struct {
 }
 
 type HydrateEvent struct {
-	ElementID string   `json:"ElementID"`
-	Event     string   `json:"Event"`
-	Modifiers []string `json:"Modifiers"`
+	ElementID string `json:"ElementID"`
+	Event     string `json:"Event"`
 }
 
 type HydrateIfBlock struct {
@@ -1086,9 +1042,8 @@ type HydrateIfBranch struct {
 }
 
 type HydrateInputBinding struct {
-	ElementID string `json:"element_id"`
-	StoreID   string `json:"store_id"`
-	BindType  string `json:"bind_type"`
+	StoreID  string `json:"store_id"`
+	BindType string `json:"bind_type"`
 }
 
 type HydrateAttrBinding struct {
@@ -1116,8 +1071,6 @@ type HydrateAttrCondBinding struct {
 type HydrateEachBlock struct {
 	MarkerID string `json:"MarkerID"`
 	ListID   string `json:"ListID"`
-	ItemVar  string `json:"ItemVar"`
-	IndexVar string `json:"IndexVar"`
 }
 
 // HydrateComponentBlock is the WASM-side representation of a ComponentBlock.

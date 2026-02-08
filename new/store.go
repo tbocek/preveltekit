@@ -60,12 +60,19 @@ func nextStoreID() string {
 func resetRegistries() {
 	storeCounter = 0
 	handlerCounter = 0
+	scopeCounter = 0
 	storeRegistry = make(map[string]any)
 	handlerRegistry = make(map[string]func())
+	handlerModifiers = make(map[string][]string)
+	scopeRegistry = make(map[string]string)
 }
 
 // handlerRegistry holds all registered event handlers by ID for hydration lookup
 var handlerRegistry = make(map[string]func())
+
+// handlerModifiers holds event modifiers (preventDefault, stopPropagation) by handler ID.
+// Set by PreventDefault()/StopPropagation() after On() registers the handler.
+var handlerModifiers = make(map[string][]string)
 
 // handlerCounter generates unique auto-IDs for event handlers
 var handlerCounter int
@@ -85,6 +92,31 @@ func GetStore(id string) any {
 // GetHandler looks up a handler by ID from the global registry
 func GetHandler(id string) func() {
 	return handlerRegistry[id]
+}
+
+// GetHandlerModifiers returns the modifiers for a handler ID (e.g., ["preventDefault"])
+func GetHandlerModifiers(id string) []string {
+	return handlerModifiers[id]
+}
+
+// scopeRegistry maps component name → scope class (e.g., "app" → "v0").
+// Used for Svelte-style CSS scoping: each component with Style() gets a unique class.
+var scopeRegistry = make(map[string]string)
+
+// scopeCounter generates unique scope IDs (v0, v1, v2, ...)
+var scopeCounter int
+
+// GetOrCreateScope returns the scope class name for a component name.
+// Creates a new one if the component hasn't been seen yet.
+// Returns e.g. "v0".
+func GetOrCreateScope(componentName string) string {
+	if cls, ok := scopeRegistry[componentName]; ok {
+		return cls
+	}
+	cls := "v" + itoa(scopeCounter)
+	scopeCounter++
+	scopeRegistry[componentName] = cls
+	return cls
 }
 
 // RegisterHandler registers an event handler, auto-generating a unique ID.

@@ -36,11 +36,6 @@ type TextNode struct {
 
 func (t *TextNode) nodeType() string { return "text" }
 
-// Text creates a text node.
-func Text(content string) *TextNode {
-	return &TextNode{Content: content}
-}
-
 // =============================================================================
 // Raw HTML Node
 // =============================================================================
@@ -67,19 +62,12 @@ type AttrCond struct {
 // HtmlEvent represents an event binding for HtmlNode.
 // Used by HtmlNode.On() to attach event handlers.
 type HtmlEvent struct {
-	ID        string   // unique handler ID for registry lookup
-	Event     string   // event name (e.g., "click", "submit")
-	Handler   func()   // event handler
-	Modifiers []string // modifiers (e.g., "preventDefault", "stopPropagation")
+	ID      string // unique handler ID for registry lookup
+	Event   string // event name (e.g., "click", "submit")
+	Handler func() // event handler
 }
 
 func (h *HtmlNode) nodeType() string { return "html" }
-
-// Html creates a raw HTML node from strings and embedded nodes.
-// Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
-func Html(parts ...any) *HtmlNode {
-	return &HtmlNode{Parts: parts}
-}
 
 // AttrIf adds a conditional attribute to the first HTML tag.
 // Values can be string literals or *Store[T] for reactive values.
@@ -122,21 +110,23 @@ func (h *HtmlNode) On(event string, handler func()) *HtmlNode {
 }
 
 // PreventDefault adds the preventDefault modifier to the last event.
-// Must be called after On.
+// Must be called after On. The modifier is stored in the handler registry
+// so WASM can apply event.preventDefault() without needing it in bindings.json.
 func (h *HtmlNode) PreventDefault() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]
-		last.Modifiers = append(last.Modifiers, "preventDefault")
+		handlerModifiers[last.ID] = append(handlerModifiers[last.ID], "preventDefault")
 	}
 	return h
 }
 
 // StopPropagation adds the stopPropagation modifier to the last event.
-// Must be called after On.
+// Must be called after On. The modifier is stored in the handler registry
+// so WASM can apply event.stopPropagation() without needing it in bindings.json.
 func (h *HtmlNode) StopPropagation() *HtmlNode {
 	if len(h.Events) > 0 {
 		last := h.Events[len(h.Events)-1]
-		last.Modifiers = append(last.Modifiers, "stopPropagation")
+		handlerModifiers[last.ID] = append(handlerModifiers[last.ID], "stopPropagation")
 	}
 	return h
 }
@@ -246,8 +236,6 @@ func (i *IfNode) Else(children ...Node) *IfNode {
 type EachNode struct {
 	ListRef  any                            // The actual list reference
 	ListID   string                         // Go expression for code generation
-	ItemVar  string                         // Variable name for item (default: "item")
-	IndexVar string                         // Variable name for index (default: "i")
 	Body     func(item any, index int) Node // Template function for each item
 	ElseNode []Node                         // Content for empty list
 }
@@ -258,20 +246,11 @@ func (e *EachNode) nodeType() string { return "each" }
 // The body function receives each item and its index.
 func Each[T comparable](list *List[T], body func(item T, index int) Node) *EachNode {
 	return &EachNode{
-		ListRef:  list,
-		ItemVar:  "item",
-		IndexVar: "i",
+		ListRef: list,
 		Body: func(item any, index int) Node {
 			return body(item.(T), index)
 		},
 	}
-}
-
-// WithVars sets custom variable names for item and index.
-func (e *EachNode) WithVars(itemVar, indexVar string) *EachNode {
-	e.ItemVar = itemVar
-	e.IndexVar = indexVar
-	return e
 }
 
 // Else adds content to show when the list is empty.

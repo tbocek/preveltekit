@@ -161,8 +161,6 @@ func (p *jsonParser) parseEvents() []HydrateEvent {
 				ev.ElementID = p.parseString()
 			case "Event":
 				ev.Event = p.parseString()
-			case "Modifiers":
-				ev.Modifiers = p.parseStringArray()
 			default:
 				p.skipValue()
 			}
@@ -363,8 +361,6 @@ func (p *jsonParser) parseInputBindings() []HydrateInputBinding {
 			p.skipWS()
 
 			switch key {
-			case "element_id":
-				ib.ElementID = p.parseString()
 			case "store_id":
 				ib.StoreID = p.parseString()
 			case "bind_type":
@@ -566,10 +562,6 @@ func (p *jsonParser) parseEachBlocks() []HydrateEachBlock {
 				eb.MarkerID = p.parseString()
 			case "ListID":
 				eb.ListID = p.parseString()
-			case "ItemVar":
-				eb.ItemVar = p.parseString()
-			case "IndexVar":
-				eb.IndexVar = p.parseString()
 			default:
 				p.skipValue()
 			}

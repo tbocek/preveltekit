@@ -72,7 +72,7 @@ func (a *App) Render() p.Node {
 	</div>`)
 }
 
-func (a *App) Style() string {
+func (a *App) GlobalStyle() string {
 	return `
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,sans-serif}

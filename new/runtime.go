@@ -295,12 +295,22 @@ func BindEvents(c *Cleanup, events []Evt) {
 	for _, e := range events {
 		e := e // Capture loop variable for closure
 		el := GetEl(e.ID)
-		js.Global().Get("console").Call("log", "[DEBUG] BindEvents: looking for element:", e.ID, "found:", ok(el))
 		if !ok(el) {
 			continue
 		}
+		mods := GetHandlerModifiers(e.ID)
 		fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-			js.Global().Get("console").Call("log", "[DEBUG] Event fired:", e.ID, e.Event)
+			if len(args) > 0 {
+				ev := args[0]
+				for _, mod := range mods {
+					switch mod {
+					case "preventDefault":
+						ev.Call("preventDefault")
+					case "stopPropagation":
+						ev.Call("stopPropagation")
+					}
+				}
+			}
 			e.Fn()
 			return nil
 		})
