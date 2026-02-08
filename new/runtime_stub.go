@@ -35,8 +35,6 @@ type Settable[T any] interface {
 	Set(T)
 }
 
-func BindText[T any](marker string, store Bindable[T])    {}
-func BindHTML[T any](marker string, store Bindable[T])    {}
 func BindInput(id string, store Settable[string]) jsFunc  { return jsFunc{} }
 func BindInputInt(id string, store Settable[int]) jsFunc  { return jsFunc{} }
 func BindCheckbox(id string, store Settable[bool]) jsFunc { return jsFunc{} }

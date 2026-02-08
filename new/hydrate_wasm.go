@@ -164,23 +164,28 @@ func runOnMount(children map[string]Component) {
 func bindTextDynamic(markerID string, store any, isHTML bool) {
 	switch s := store.(type) {
 	case *Store[string]:
-		bindText(markerID, s, isHTML)
+		bindTextStore(markerID, s, isHTML)
 	case *Store[int]:
-		bindText(markerID, s, isHTML)
+		bindTextStore(markerID, s, isHTML)
 	case *Store[bool]:
-		bindText(markerID, s, isHTML)
+		bindTextStore(markerID, s, isHTML)
 	case *Store[float64]:
-		bindText(markerID, s, isHTML)
+		bindTextStore(markerID, s, isHTML)
 	}
 }
 
-// bindText is a helper that calls BindText or BindHTML based on isHTML flag.
-func bindText[T any](markerID string, store Bindable[T], isHTML bool) {
-	if isHTML {
-		BindHTML(markerID, store)
-	} else {
-		BindText(markerID, store)
+// bindTextStore subscribes to a store and updates text content between marker pairs.
+func bindTextStore[T any](markerID string, store Bindable[T], isHTML bool) {
+	update := func(v T) {
+		s := toString(v)
+		if !isHTML {
+			s = escapeHTML(s)
+		}
+		replaceMarkerContent(markerID, s)
 	}
+	store.OnChange(update)
+	// Set current value immediately (store may have been updated before binding)
+	update(store.Get())
 }
 
 // bindInputDynamic sets up an input binding using reflection.
@@ -324,9 +329,6 @@ func replaceMarkerContent(markerID string, html string) {
 func clearBoundMarkers(bindings *HydrateBindings) {
 	if bindings == nil {
 		return
-	}
-	for _, tb := range bindings.TextBindings {
-		ClearBoundMarker(tb.MarkerID)
 	}
 	// Recursively clear nested if-block markers
 	for _, ifb := range bindings.IfBlocks {

@@ -242,7 +242,7 @@ p.Prop("Title", titleStore)                          // component prop
 
 ## Text Bindings
 
-Text bindings display a store's value in the DOM and update it reactively.
+Text bindings display a store's value in the DOM and update it reactively. They use the same comment marker pair pattern as all other block constructs.
 
 ### How It Works
 
@@ -253,32 +253,24 @@ p.Html(`<p>Hello, `, p.Bind(nameStore), `!</p>`)
 ```mermaid
 graph LR
     subgraph SSR
-        A["Bind(nameStore)"] --> B["World&lt;!--t0--&gt;"]
+        A["Bind(nameStore)"] --> B["&lt;!--t0s--&gt;World&lt;!--t0--&gt;"]
     end
     subgraph WASM
-        C["FindComment('t0')"] --> D["Reuse previous text node"]
-        D --> E["Remove comment"]
-        D --> F["nameStore.OnChange → update nodeValue"]
+        C["nameStore.OnChange"] --> D["replaceMarkerContent('t0', newValue)"]
     end
 ```
 
-**SSR Output** (text mode):
+**SSR Output** (both text and HTML mode):
 ```html
-<p>Hello, World<!--basics_t0-->!</p>
-```
-
-**SSR Output** (HTML mode, via `BindAsHTML`):
-```html
-<p>Hello, <span>World</span><!--basics_t0-->!</p>
+<p>Hello, <!--basics_t0s-->World<!--basics_t0-->!</p>
 ```
 
 **WASM Hydration:**
-1. Finds the comment `<!--basics_t0-->`
-2. Checks `previousSibling` — if it's a text node, reuses it
-3. Removes the comment node (no longer needed)
-4. Subscribes to `nameStore.OnChange` → updates the text node's `nodeValue`
+1. Subscribes to `nameStore.OnChange`
+2. On change, calls `replaceMarkerContent("basics_t0", escapedValue)`
+3. For `BindAsHTML`, the value is not escaped (raw HTML is inserted)
 
-The comment marker is consumed during hydration — it exists only to locate the text node during initial binding.
+Text bindings use the same `replaceMarkerContent` mechanism as if-blocks, each-blocks, and component blocks — no special-case code.
 
 ---
 
@@ -836,10 +828,6 @@ This approach:
 - Avoids wrapper elements entirely — content is inserted as bare DOM nodes
 - Works regardless of HTML content model (valid inside `<ul>`, `<table>`, `<select>`, etc.)
 - Both markers persist across replacements, so subsequent updates always find them
-
-### Text Bindings Are Different
-
-Text bindings (`<!--t0-->`) use a single marker that is **consumed** during hydration. The comment is removed and replaced by a persistent text node or `<span>` that gets updated in-place via `nodeValue` or `innerHTML`. This is because text bindings update a single value rather than swapping entire HTML blocks.
 
 ---
 

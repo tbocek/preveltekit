@@ -9,19 +9,6 @@ import (
 // Document is a cached reference to the DOM document
 var Document = js.Global().Get("document")
 
-// textNodeRefs stores the current text node reference for each marker (updated on rebind)
-var textNodeRefs = make(map[string]js.Value)
-
-// boundMarkers tracks which markers have had OnChange registered
-var boundMarkers = make(map[string]bool)
-
-// ClearBoundMarker removes a marker from the boundMarkers map.
-// This allows re-binding when if-block content is replaced.
-func ClearBoundMarker(marker string) {
-	delete(boundMarkers, marker)
-	delete(textNodeRefs, marker)
-}
-
 // nodeFilterShowComment is cached for TreeWalker (NodeFilter.SHOW_COMMENT = 128)
 var nodeFilterShowComment = js.ValueOf(128)
 
@@ -112,61 +99,6 @@ func FindComment(marker string) js.Value {
 			return node
 		}
 	}
-}
-
-// bindMarker is the unified implementation for BindText and BindHTML.
-// isHTML=false: binds to text node (nodeType 3), uses nodeValue
-// isHTML=true: binds to element (nodeType 1), uses innerHTML
-func bindMarker[T any](marker string, store Bindable[T], isHTML bool) {
-	// Skip if already bound (comment was removed on first bind)
-	if boundMarkers[marker] {
-		return
-	}
-	boundMarkers[marker] = true
-
-	comment := FindComment(marker)
-	if comment.IsNull() {
-		return
-	}
-
-	var node js.Value
-	prevSibling := comment.Get("previousSibling")
-	nodeType := 3
-	prop := "nodeValue"
-	if isHTML {
-		nodeType = 1
-		prop = "innerHTML"
-	}
-	if !prevSibling.IsNull() && prevSibling.Get("nodeType").Int() == nodeType {
-		node = prevSibling
-		// Set current value in case it changed after SSR (e.g., fetch results)
-		node.Set(prop, toString(store.Get()))
-	} else {
-		if isHTML {
-			node = Document.Call("createElement", "span")
-			node.Set("innerHTML", toString(store.Get()))
-		} else {
-			node = Document.Call("createTextNode", toString(store.Get()))
-		}
-		comment.Get("parentNode").Call("insertBefore", node, comment)
-	}
-	comment.Call("remove")
-	textNodeRefs[marker] = node
-	store.OnChange(func(v T) {
-		if n, ok := textNodeRefs[marker]; ok {
-			n.Set(prop, toString(v))
-		}
-	})
-}
-
-// BindText binds a store to a text node, using a comment marker for hydration.
-func BindText[T any](marker string, store Bindable[T]) {
-	bindMarker(marker, store, false)
-}
-
-// BindHTML binds a store to innerHTML, using a comment marker for hydration.
-func BindHTML[T any](marker string, store Bindable[T]) {
-	bindMarker(marker, store, true)
 }
 
 // Settable extends Bindable with Set capability for two-way binding

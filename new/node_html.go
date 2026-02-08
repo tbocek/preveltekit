@@ -676,12 +676,9 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 	})
 
 	if b.IsHTML {
-		if ctx.ScopeAttr != "" {
-			return fmt.Sprintf(`<span class="%s">%s</span><!--%s-->`, ctx.ScopeAttr, value, markerID)
-		}
-		return fmt.Sprintf("<span>%s</span><!--%s-->", value, markerID)
+		return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, value, markerID)
 	}
-	return fmt.Sprintf("%s<!--%s-->", escapeHTML(value), markerID)
+	return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, escapeHTML(value), markerID)
 }
 
 // =============================================================================
