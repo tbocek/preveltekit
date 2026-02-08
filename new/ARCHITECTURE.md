@@ -49,33 +49,21 @@ The framework has two execution modes sharing the same component code:
 
 ## Lifecycle
 
-```mermaid
-sequenceDiagram
-    participant SSR as SSR (Native Go)
-    participant Browser
-    participant WASM
+SSR and WASM run the same component code but for different purposes. SSR generates static HTML and collects bindings. WASM hydrates that HTML with reactivity.
 
-    Note over SSR: For each route:
-    SSR->>SSR: resetRegistries() (counters → 0)
-    SSR->>SSR: app = App.New() (creates stores s0, s1, ...)
-    SSR->>SSR: app.OnMount() (creates router, registers handlers h0, h1, ...)
-    SSR->>SSR: nodeToHTML(app.Render()) → HTML + CollectedBindings
-    SSR->>SSR: Write dist/{route}.html
-    SSR->>SSR: Encode bindings → dist/bindings.bin
+| Step | SSR (Native Go) | WASM (Browser) |
+|------|-----------------|----------------|
+| 1 | `resetRegistries()` — all counters to 0 | *(counters start at 0)* |
+| 2 | `app = App.New()` — creates stores `s0`, `s1`, ... | `app = App.New()` — creates stores `s0`, `s1`, ... **same order** |
+| 3 | `app.OnMount()` — creates router, registers handlers `h0`, `h1`, ... | `app.OnMount()` — registers handlers `h0`, `h1`, ... **same order** |
+| 4 | `nodeToHTML(app.Render())` — walks node tree, generates HTML with comment markers, collects bindings | `walkNodeForComponents(app.Render())` — walks node tree to sync remaining counters (component options, nested handlers) |
+| 5 | Write HTML to `dist/{route}.html` | Decode `bindings.bin` |
+| 6 | Encode bindings to `dist/bindings.bin` | `applyBindings()` — wire DOM elements to stores via markers and IDs |
+| 7 | *(repeat steps 1-6 for each route)* | `select{}` — block forever to keep event listeners alive |
 
-    Browser->>Browser: Load HTML (instant render)
-    Browser->>Browser: Fetch bindings.bin
-    Browser->>Browser: Load main.wasm
+> **Critical invariant**: SSR and WASM must create stores and register handlers in the exact same order, so counter-based IDs (`s0`, `s1`, `h0`, `h1`, ...) match between the HTML and the WASM runtime.
 
-    WASM->>WASM: app = App.New() (creates stores s0, s1, ... same order)
-    WASM->>WASM: app.OnMount() (registers handlers h0, h1, ... same order)
-    WASM->>WASM: walkNodeForComponents(app.Render()) (syncs counters)
-    WASM->>WASM: Decode bindings.bin
-    WASM->>WASM: applyBindings() (wire DOM ↔ stores)
-    WASM->>WASM: select{} (block forever)
-```
-
-The critical invariant: **SSR and WASM must create stores and register handlers in the exact same order**, so counter-based IDs (`s0`, `s1`, `h0`, `h1`, ...) match between the HTML and the WASM runtime.
+**Why `select{}`?** Go's WASM runtime tears down all `js.FuncOf` closures when `main()` returns. Since all event listeners and store callbacks are Go functions exposed to JS, the main goroutine must stay alive for the app to function.
 
 ---
 
