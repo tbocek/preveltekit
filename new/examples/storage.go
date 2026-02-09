@@ -82,11 +82,28 @@ func (s *Storage) Render() p.Node {
 		</section>
 
 		<p class="status">`, s.Status, `</p>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// auto-persisted store (syncs to localStorage on every Set)
+Theme := p.NewLocalStore("theme", "light")
+Theme.Set("dark") // automatically saved
+
+// read the store value (it's a *Store[string] inside)
+Theme.Store // use in Html() like any store
+
+// manual localStorage API
+p.SetStorage("notes", "hello")
+saved := p.GetStorage("notes")
+p.RemoveStorage("notes")
+p.ClearStorage()</pre>
+		</section>
 	</div>`)
 }
 
 func (s *Storage) Style() string {
 	return `
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo textarea{height:100px}
 .demo button.danger{background:#ffebee;border-color:#ef9a9a;color:#c62828}
 .demo button.danger:hover{background:#ffcdd2}

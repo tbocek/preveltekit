@@ -98,6 +98,7 @@ body{margin:0;font-family:system-ui,-apple-system,sans-serif}
 .demo button:hover{background:#e5e5e5}
 .demo input[type=text]{padding:8px;border:1px solid #ccc;border-radius:4px}
 .demo pre{background:#f5f5f5;padding:15px;border-radius:4px;overflow-x:auto;font-size:12px;white-space:pre-wrap}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0}
 .demo textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-family:inherit;resize:vertical}
 .hint{font-size:.9em;color:#666;font-style:italic}
 .buttons{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}

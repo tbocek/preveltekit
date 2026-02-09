@@ -28,9 +28,16 @@ type Fetch struct {
 
 func (f *Fetch) New() p.Component {
 	return &Fetch{
-		Status:  p.New("ready"),
+		Status:  p.New("loading..."),
 		RawData: p.New(""),
 	}
+}
+
+func (f *Fetch) OnMount() {
+	if p.IsBuildTime {
+		return // SSR: keep "loading..." status, fetch nothing
+	}
+	f.FetchTodo() // WASM: auto-fetch initial data
 }
 
 func (f *Fetch) FetchTodo() {
@@ -103,6 +110,56 @@ func (f *Fetch) CreatePost() {
 	}()
 }
 
+func (f *Fetch) UpdatePost() {
+	f.Status.Set("updating (PUT)...")
+	f.RawData.Set("")
+
+	go func() {
+		updated := Post{ID: 1, UserID: 1, Title: "Updated Title", Body: "Updated via Put[T]"}
+		result, err := p.Put[Post]("https://jsonplaceholder.typicode.com/posts/1", updated)
+		if err != nil {
+			f.Status.Set("error: " + err.Error())
+			return
+		}
+		f.RawData.Set("PUT response:\nID: " + itoa(result.ID) + "\nTitle: " + result.Title)
+		f.Status.Set("done")
+	}()
+}
+
+func (f *Fetch) PatchPost() {
+	f.Status.Set("patching...")
+	f.RawData.Set("")
+
+	go func() {
+		patch := struct {
+			Title string `js:"title"`
+		}{Title: "Patched Title"}
+		result, err := p.Patch[Post]("https://jsonplaceholder.typicode.com/posts/1", patch)
+		if err != nil {
+			f.Status.Set("error: " + err.Error())
+			return
+		}
+		f.RawData.Set("PATCH response:\nID: " + itoa(result.ID) + "\nTitle: " + result.Title)
+		f.Status.Set("done")
+	}()
+}
+
+func (f *Fetch) DeletePost() {
+	f.Status.Set("deleting...")
+	f.RawData.Set("")
+
+	go func() {
+		type Empty struct{}
+		_, err := p.Delete[Empty]("https://jsonplaceholder.typicode.com/posts/1")
+		if err != nil {
+			f.Status.Set("error: " + err.Error())
+			return
+		}
+		f.RawData.Set("DELETE successful (post 1 deleted)")
+		f.Status.Set("done")
+	}()
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -120,14 +177,13 @@ func (f *Fetch) Render() p.Node {
 		<h1>Fetch</h1>
 
 		<section>
-			<h2>Typed Fetch</h2>
+			<h2>GET — Typed Fetch</h2>
 			<p>Fetch data with automatic JSON decoding into Go structs:</p>
 
 			<div class="buttons">
-				`, p.Html(`<button>Fetch Todo</button>`).On("click", f.FetchTodo), `
-				`, p.Html(`<button>Fetch User</button>`).On("click", f.FetchUser), `
-				`, p.Html(`<button>Fetch Post</button>`).On("click", f.FetchPost), `
-				`, p.Html(`<button>Create Post (POST)</button>`).On("click", f.CreatePost), `
+				`, p.Html(`<button>GET Todo</button>`).On("click", f.FetchTodo), `
+				`, p.Html(`<button>GET User</button>`).On("click", f.FetchUser), `
+				`, p.Html(`<button>GET Post</button>`).On("click", f.FetchPost), `
 			</div>`,
 
 		p.If(f.RawData.Ne(""),
@@ -140,17 +196,60 @@ func (f *Fetch) Render() p.Node {
 		</section>
 
 		<section>
-			<h2>Usage</h2>
-			<pre class="code">type User struct {
+			<h2>POST / PUT / PATCH / DELETE</h2>
+			<p>All HTTP methods with typed request and response bodies:</p>
+			<div class="buttons">
+				`, p.Html(`<button>POST Create</button>`).On("click", f.CreatePost), `
+				`, p.Html(`<button>PUT Update</button>`).On("click", f.UpdatePost), `
+				`, p.Html(`<button>PATCH Title</button>`).On("click", f.PatchPost), `
+				`, p.Html(`<button>DELETE Post</button>`).On("click", f.DeletePost), `
+			</div>`,
+			p.If(f.RawData.Ne(""),
+				p.Html(`<pre>`, f.RawData, `</pre>`),
+			),
+			`</section>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// define response struct with js tags
+type User struct {
     ID   int    `+"`"+`js:"id"`+"`"+`
     Name string `+"`"+`js:"name"`+"`"+`
 }
 
+// GET — fetch and decode JSON
 go func() {
-    user, err := preveltekit.Get[User](url)
-    if err != nil { ... }
-    // use user
-}()</pre>
+    user, err := p.Get[User](url)
+}()
+
+// POST — send body, decode response
+go func() {
+    created, err := p.Post[Post](url, newPost)
+}()
+
+// PUT, PATCH, DELETE
+p.Put[T](url, body)
+p.Patch[T](url, body)
+p.Delete[T](url)
+
+// IsBuildTime: skip fetch during SSR, show loading state
+func (f *Fetch) OnMount() {
+    if p.IsBuildTime {
+        return // SSR renders "loading..." placeholder
+    }
+    f.FetchTodo() // WASM: fetch real data
+}
+
+// advanced: custom headers, abort controller
+signal, abort := p.NewAbortController()
+go func() {
+    result, err := p.Fetch[T](url, &amp;p.FetchOptions{
+        Method:  "GET",
+        Headers: map[string]string{"Authorization": "Bearer token"},
+        Signal:  signal,
+    })
+}()
+abort() // cancel the request</pre>
 		</section>
 	</div>`),
 	)

@@ -57,11 +57,21 @@ func (c *Components) Render() p.Node {
 
 		<section>
 			<h2>Basic Component with Props</h2>
-			<p>Pass data to child components via props:</p>`,
+			<p>Pass data to child components via struct fields:</p>`,
 		p.Comp(&Badge{Label: p.New("New")}),
 		p.Comp(&Badge{Label: p.New("Featured")}),
 		p.Comp(&Badge{Label: p.New("Sale")}),
-		`</section>
+		`<pre class="code">type Badge struct {
+    Label *p.Store[string]
+}
+
+func (b *Badge) Render() p.Node {
+    return p.Html(`+"`"+`&lt;span class="badge">`+"`"+`, b.Label, `+"`"+`&lt;/span>`+"`"+`)
+}
+
+// usage:
+p.Comp(&amp;Badge{Label: p.New("New")})</pre>
+		</section>
 
 		<section>
 			<h2>Dynamic Props</h2>
@@ -79,7 +89,18 @@ func (c *Components) Render() p.Node {
 			p.Html(`<p>This content is passed through the <strong>slot</strong>.</p>
 				<p>You can put any HTML here!</p>`),
 		),
-		`</section>
+		`<pre class="code">func (c *Card) Render() p.Node {
+    return p.Html(`+"`"+`&lt;div class="card">
+        &lt;div class="card-header">`+"`"+`, c.Title, `+"`"+`&lt;/div>
+        &lt;div class="card-body">`+"`"+`, p.Slot(), `+"`"+`&lt;/div>
+    &lt;/div>`+"`"+`)
+}
+
+// usage — child content fills the Slot():
+p.Comp(&amp;Card{Title: p.New("Title")},
+    p.Html(`+"`"+`&lt;p>Slot content here&lt;/p>`+"`"+`),
+)</pre>
+		</section>
 
 		<section>
 			<h2>Component Events</h2>
@@ -87,7 +108,14 @@ func (c *Components) Render() p.Node {
 			<p>Click count: <strong>`, c.ClickCount, `</strong></p>`,
 		p.Comp(&Button{Label: p.New("Click Me"), OnClick: c.HandleButtonClick}),
 		p.Comp(&Button{Label: p.New("Also Click Me"), OnClick: c.HandleButtonClick}),
-		`</section>
+		`<pre class="code">type Button struct {
+    Label   *p.Store[string]
+    OnClick func() // callback prop — parent passes handler
+}
+
+// usage:
+p.Comp(&amp;Button{Label: p.New("Click"), OnClick: handler})</pre>
+		</section>
 
 		<section>
 			<h2>Conditional Styling Component</h2>
@@ -99,7 +127,12 @@ func (c *Components) Render() p.Node {
 				`, p.Html(`<button>Error</button>`).On("click", c.SetAlertError), `
 			</div>`,
 		p.Comp(&Alert{Type: c.AlertType, Message: c.AlertMessage}),
-		`</section>
+		`<pre class="code">// Attr() sets dynamic attributes from stores
+p.Html(`+"`"+`&lt;div class="alert">`+"`"+`).Attr("data-type", alertType)
+
+// components get scoped CSS via Style()
+func (a *Alert) Style() string { return `+"`"+`.alert{...}`+"`"+` }</pre>
+		</section>
 
 		<section>
 			<h2>Conditional Components</h2>
@@ -125,9 +158,9 @@ func (c *Components) Render() p.Node {
 }
 
 func (c *Components) Style() string {
-	// Nested component styles (Badge, Card, Button, Alert) are auto-collected during SSR
 	return `
 .demo{max-width:700px}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .alert-buttons,.view-buttons{display:flex;gap:8px;margin-bottom:10px}
 `
 }

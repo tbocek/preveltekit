@@ -52,12 +52,35 @@ func (l *Links) Render() p.Node {
 				<a href="/basics" external class="btn-link secondary">Basics (Reload)</a>
 			</div>
 		</section>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// client-side navigation (SPA) — default
+&lt;a href="/basics">Basics&lt;/a>
+
+// server-side navigation (full reload)
+&lt;a href="/basics" external>Basics&lt;/a>
+
+// router setup in App.OnMount():
+router := p.NewRouter(CurrentComponent, routes, "id")
+router.NotFound(func() { CurrentComponent.Set(nil) })
+router.Start()
+
+// route definition:
+p.Route{
+    Path:      "/basics",
+    HTMLFile:  "basics.html",
+    SSRPath:   "/basics",
+    Component: basics,
+}</pre>
+		</section>
 	</div>`)
 }
 
 func (l *Links) Style() string {
 	return `
 .demo{max-width:700px}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo code{background:#f1f1f1;padding:2px 6px;border-radius:3px;font-size:.9em}
 .link-list{display:flex;flex-direction:column;gap:8px}
 .nav-link{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333}

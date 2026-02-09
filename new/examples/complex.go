@@ -97,11 +97,38 @@ func (c *Complex) Render() p.Node {
 			p.Html(`<p class="hint">Log hidden</p>`),
 		), `
 		</section>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// shared store: pass same *Store to multiple components
+theme := p.New("light")
+dashboard := &amp;Dashboard{Theme: theme}
+settings  := &amp;Settings{Theme: theme}
+// both read and write the same store
+
+// Store[Component] as local tabs (not router):
+activeTab := p.New[p.Component](dashboard)
+activeTab.WithOptions(dashboard, settings, activity)
+// embed in HTML — swaps component on Set()
+
+// Attr(): dynamic attributes from stores
+p.Html(`+"`"+`&lt;div>`+"`"+`).Attr("data-theme", theme)
+
+// nested reactivity: Each inside If
+p.If(showLog.Eq(true),
+    p.Html(`+"`"+`&lt;ul>`+"`"+`,
+        p.Each(log, func(entry string, i int) p.Node {
+            return p.Html(`+"`"+`&lt;li>`+"`"+`, entry, `+"`"+`&lt;/li>`+"`"+`)
+        }),
+    `+"`"+`&lt;/ul>`+"`"+`),
+)</pre>
+		</section>
 	</div>`)
 }
 
 func (c *Complex) Style() string {
 	return `
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .tab-bar{display:flex;gap:4px;margin-bottom:0}
 .tab-bar button{border-bottom:none;border-radius:4px 4px 0 0}
 .tab-content{border:1px solid #ddd;border-radius:0 4px 4px 4px;padding:15px;min-height:120px}

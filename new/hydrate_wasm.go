@@ -113,7 +113,9 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 
 	// Wire two-way binding
 	if h.BoundStore != nil {
-		wasmBindInput(h.BoundStore, cleanup)
+		localID := ctx.NextBindID()
+		bindID := ctx.FullID(localID)
+		wasmBindInput(bindID, h.BoundStore, cleanup)
 	}
 
 	// Recurse into parts
@@ -177,15 +179,15 @@ func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 	}
 }
 
-// wasmBindInput wires a two-way input binding.
-func wasmBindInput(boundStore any, cleanup *Cleanup) {
+// wasmBindInput wires a two-way input binding using the bind element ID.
+func wasmBindInput(bindID string, boundStore any, cleanup *Cleanup) {
 	switch s := boundStore.(type) {
 	case *Store[string]:
-		BindInputs(cleanup, []Inp{{s.ID(), s}})
+		BindInputs(cleanup, []Inp{{bindID, s}})
 	case *Store[int]:
-		cleanup.Add(BindInputInt(s.ID(), s))
+		cleanup.Add(BindInputInt(bindID, s))
 	case *Store[bool]:
-		BindCheckboxes(cleanup, []Chk{{s.ID(), s}})
+		BindCheckboxes(cleanup, []Chk{{bindID, s}})
 	}
 }
 

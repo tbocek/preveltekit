@@ -172,18 +172,22 @@ func wasmStoreComponentToHTML(v *Store[Component], ctx *WASMRenderContext) strin
 }
 
 // wasmInjectBind handles two-way input binding.
+// Uses a unique bind ID (not the store ID) so multiple inputs can bind the same store.
 func wasmInjectBind(h *HtmlNode, html string, ctx *WASMRenderContext) string {
+	localID := ctx.NextBindID()
+	bindID := ctx.FullID(localID)
+
 	switch s := h.BoundStore.(type) {
 	case *Store[string]:
-		return injectAttrs(html, `id="`+s.ID()+`" value="`+escapeAttr(s.Get())+`"`)
+		return injectAttrs(html, `id="`+bindID+`" value="`+escapeAttr(s.Get())+`"`)
 	case *Store[int]:
-		return injectAttrs(html, `id="`+s.ID()+`" value="`+itoa(s.Get())+`"`)
+		return injectAttrs(html, `id="`+bindID+`" value="`+itoa(s.Get())+`"`)
 	case *Store[bool]:
 		checked := ""
 		if s.Get() {
 			checked = " checked"
 		}
-		return injectAttrs(html, `id="`+s.ID()+`"`+checked)
+		return injectAttrs(html, `id="`+bindID+`"`+checked)
 	}
 	return html
 }

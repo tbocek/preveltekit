@@ -7,7 +7,6 @@ type IDCounter struct {
 	Text   int    // Counter for text binding markers
 	If     int    // Counter for if-block markers
 	Each   int    // Counter for each-block markers
-	Event  int    // Counter for event element IDs
 	Bind   int    // Counter for input binding element IDs
 	Class  int    // Counter for class/attr binding element IDs
 	Attr   int    // Counter for dynamic attribute element IDs
@@ -17,14 +16,6 @@ type IDCounter struct {
 }
 
 // --- Element ID generators (for HTML id="..." attributes) ---
-
-// NextEventID returns the next element ID for event bindings.
-// Used in: <button id="basics_ev0">
-func (c *IDCounter) NextEventID() string {
-	id := "ev" + itoa(c.Event)
-	c.Event++
-	return id
-}
 
 // NextBindID returns the next element ID for input bindings.
 // Used in: <input id="basics_b0">

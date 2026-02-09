@@ -9,6 +9,7 @@ type Debounce struct {
 	ClickCount    *p.Store[int]
 	ThrottleCount *p.Store[int]
 	Status        *p.Store[string]
+	TimerStatus   *p.Store[string]
 
 	doSearch        func()
 	cleanupDebounce func()
@@ -23,6 +24,7 @@ func (d *Debounce) New() p.Component {
 		ClickCount:    p.New(0),
 		ThrottleCount: p.New(0),
 		Status:        p.New("Type to search..."),
+		TimerStatus:   p.New("Ready"),
 	}
 }
 
@@ -48,6 +50,13 @@ func (d *Debounce) OnMount() {
 
 	d.throttleClick = p.Throttle(500, func() {
 		d.ThrottleCount.Set(d.ThrottleCount.Get() + 1)
+	})
+}
+
+func (d *Debounce) StartTimer() {
+	d.TimerStatus.Set("Waiting 2 seconds...")
+	p.SetTimeout(2000, func() {
+		d.TimerStatus.Set("Timer fired!")
 	})
 }
 
@@ -102,7 +111,41 @@ func (d *Debounce) Render() p.Node {
 		</section>
 
 		<section>
+			<h2>SetTimeout — One-Shot Timer</h2>
+			<p>Fires once after a delay.</p>
+			`, p.Html(`<button>Start 2s Timer</button>`).On("click", d.StartTimer), `
+			<p>Timer: <strong>`, d.TimerStatus, `</strong></p>
+		</section>
+
+		<section>
 			`, p.Html(`<button>Reset All</button>`).On("click", d.Reset), `
+		</section>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// debounce: fires after idle period
+doSearch, cleanup := p.Debounce(300, func() {
+    // fires 300ms after last call
+})
+doSearch()  // call repeatedly — only last one fires
+cleanup()   // cancel pending
+
+// throttle: fires at most once per interval
+onClick := p.Throttle(500, func() {
+    // max once per 500ms
+})
+
+// setTimeout: fires once after delay
+cancel := p.SetTimeout(2000, func() {
+    // fires after 2 seconds
+})
+cancel() // cancel before it fires
+
+// setInterval: fires repeatedly
+stop := p.SetInterval(60000, func() {
+    // fires every 60 seconds
+})
+stop() // stop the interval</pre>
 		</section>
 	</div>`),
 	)
@@ -110,6 +153,7 @@ func (d *Debounce) Render() p.Node {
 
 func (d *Debounce) Style() string {
 	return `
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo input[type=text]{width:100%;padding:12px;font-size:16px}
 .stats{display:flex;gap:20px;margin:15px 0;padding:10px;background:#e3f2fd;border-radius:4px}
 .stats span{color:#1565c0}

@@ -158,6 +158,14 @@ func (r *Routing) Render() p.Node {
 			AttrIf("class", r.CurrentStep.Eq(4), "disabled").
 			On("click", func() { r.NextStep() }),
 		`</div>
+
+		<pre class="code">// AttrIf: conditionally add classes (additive for same attribute)
+p.Html(`+"`"+`&lt;div class="step">...&lt;/div>`+"`"+`).
+    AttrIf("class", Step.Gt(2), "completed").
+    AttrIf("class", Step.Eq(2), "active").
+    On("click", GoToStep2)
+
+// chain multiple AttrIf + On calls on same node</pre>
 		</section>
 	</div>`)
 }
@@ -165,6 +173,7 @@ func (r *Routing) Render() p.Node {
 func (r *Routing) Style() string {
 	return `
 .demo{max-width:700px}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo button.disabled{opacity:.5;cursor:not-allowed}
 .tabs{display:flex;gap:4px;border-bottom:2px solid #ddd}
 .tabs button{border:none;border-radius:4px 4px 0 0;background:#f0f0f0;padding:10px 20px;margin:0}

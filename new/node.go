@@ -22,8 +22,6 @@ type NodeAttr interface {
 type Condition interface {
 	// Eval returns the current boolean value
 	Eval() bool
-	// Deps returns the field names this condition depends on
-	Deps() []string
 }
 
 // =============================================================================
@@ -393,8 +391,7 @@ type StoreCondition struct {
 	evalFunc func() bool
 }
 
-func (c *StoreCondition) Eval() bool     { return c.evalFunc() }
-func (c *StoreCondition) Deps() []string { return nil }
+func (c *StoreCondition) Eval() bool { return c.evalFunc() }
 
 // Ge creates a >= condition on a store.
 func (s *Store[T]) Ge(value T) Condition {

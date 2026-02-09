@@ -103,12 +103,35 @@ func (d *Derived) Render() p.Node {
 			`, p.Html(`<button>+1</button>`).On("click", d.IncrementAge), `
 			<p>Summary: <strong>`, d.Summary, `</strong></p>
 		</section>
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// Derived1: one source store -> computed store
+uppercase := Derived1(name, strings.ToUpper)
+
+// Derived2: two source stores -> computed store
+fullName := Derived2(first, last, func(f, l string) string {
+    return f + " " + l
+})
+
+// Derived3: three source stores -> computed store
+summary := Derived3(first, last, age, func(f, l string, a int) string {
+    return f + " " + l + ", age " + itoa(a)
+})
+
+// implementation pattern (using OnChange):
+func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
+    out := p.New(fn(a.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
+    return out
+}</pre>
+		</section>
 	</div>`)
 }
 
 func (d *Derived) Style() string {
 	return `
 .demo label{display:block;margin:8px 0}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 `
 }
 

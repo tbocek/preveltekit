@@ -127,12 +127,39 @@ func (l *Lists) Render() p.Node {
 		),
 		`</div>
 		</section>
+
+		<section>
+			<h2>Code</h2>
+			<pre class="code">// create a reactive list
+Items := p.NewList[string]("Apple", "Banana")
+
+// mutate — triggers re-render
+Items.Append("Cherry")
+Items.RemoveAt(0)
+Items.Set([]string{"Mango", "Papaya"})
+Items.Clear()
+
+// reactive length store (for conditions)
+Items.Len()       // *Store[int]
+Items.Len().Gt(0) // Condition
+
+// render with Each
+p.Each(Items, func(item string, i int) p.Node {
+    return p.Html(`+"`"+`&lt;li>`+"`"+`, item, `+"`"+`&lt;/li>`+"`"+`)
+}).Else(
+    p.Html(`+"`"+`&lt;p>No items&lt;/p>`+"`"+`),
+)
+
+// subscribe to changes
+Items.OnChange(func(items []string) { ... })</pre>
+		</section>
 	</div>`)
 }
 
 func (l *Lists) Style() string {
 	return `
 .demo h3{margin:10px 0 5px;color:#888;font-size:.9em}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .input-row{margin:10px 0}
 .button-group{margin:15px 0;padding:10px;background:#f9f9f9;border-radius:4px}
 .list-container{margin-top:20px;padding:15px;background:#f0f0f0;border-radius:4px}

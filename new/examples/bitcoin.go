@@ -132,6 +132,27 @@ func (b *Bitcoin) Render() p.Node {
 		p.Html(`</section>
 
 		<p class="hint">Price refreshes automatically every 60 seconds</p>
+
+		<section>
+			<h2>Code — Lifecycle</h2>
+			<pre class="code">// OnMount: called when component becomes active
+func (b *Bitcoin) OnMount() {
+    b.FetchPrice()
+    b.stopRefresh = p.SetInterval(60000, func() {
+        b.FetchPrice()
+    })
+}
+
+// OnDestroy: called when component is removed (route change)
+func (b *Bitcoin) OnDestroy() {
+    if b.stopRefresh != nil {
+        b.stopRefresh() // stop the interval
+    }
+}
+
+// IsBuildTime guard: skip side effects during SSR
+if p.IsBuildTime { return }</pre>
+		</section>
 	</div>`),
 	)
 }
@@ -139,6 +160,7 @@ func (b *Bitcoin) Render() p.Node {
 func (b *Bitcoin) Style() string {
 	return `
 .demo{max-width:500px}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .bitcoin-card{background:#fff;padding:2rem;border-radius:8px;border:1px solid #ddd;text-align:center}
 .price-info{display:flex;justify-content:space-between;margin-bottom:1rem;color:#666}
 .symbol{font-weight:600;color:#f7931a}

@@ -671,3 +671,6 @@ var wasmRenderedTrees = make(map[string][]wasmCachedOption)
 ```
 
 
+## Downside of WASM
+
+Do research about the current state, especially: garbage collection, and the js<->wasm call. There is the plan to add interfaces to wasm, so that this bridge is not needed, maybe without this, we could go without javascript for everything... <GENAI: DO RESEARCH HERE>

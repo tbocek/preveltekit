@@ -9,6 +9,8 @@ type Basics struct {
 	DarkMode *p.Store[bool]
 	Agreed   *p.Store[bool]
 	Score    *p.Store[int]
+	RawHTML  *p.Store[string]
+	Age      *p.Store[int]
 }
 
 func (b *Basics) New() p.Component {
@@ -19,6 +21,8 @@ func (b *Basics) New() p.Component {
 		DarkMode: p.New(false),
 		Agreed:   p.New(false),
 		Score:    p.New(75),
+		RawHTML:  p.New("<em>Hello</em> <strong>World</strong>"),
+		Age:      p.New(25),
 	}
 }
 
@@ -62,17 +66,26 @@ func (b *Basics) Render() p.Node {
 		<h1>Basics</h1>
 
 		<section>
-			<h2>Counter</h2>
+			<h2>Counter — Store, Set, Update, On</h2>
 			<p>Count: <strong>`, b.Count, `</strong></p>
 			`, p.Html(`<button>-1</button>`).On("click", b.Decrement), `
 			`, p.Html(`<button>+1</button>`).On("click", b.Increment), `
 			`, p.Html(`<button>+5</button>`).On("click", func() { b.Add(5) }), `
 			`, p.Html(`<button>Double</button>`).On("click", b.Double), `
 			`, p.Html(`<button>Reset</button>`).On("click", b.Reset), `
+			<pre class="code">Count := p.New(0)                           // create store
+Count.Set(5)                                 // set value
+Count.Update(func(v int) int { return v+1 }) // transform
+
+// embed in HTML — auto-updates in the DOM
+p.Html(`+"`"+`&lt;p>Count: &lt;strong>`+"`"+`, Count, `+"`"+`&lt;/strong>&lt;/p>`+"`"+`)
+
+// attach event handler
+p.Html(`+"`"+`&lt;button>+1&lt;/button>`+"`"+`).On("click", Increment)</pre>
 		</section>
 
 		<section>
-			<h2>Conditionals</h2>
+			<h2>Conditionals — If / ElseIf / Else</h2>
 			<p>Score: `, b.Score, `</p>
 			`, p.If(b.Score.Ge(90),
 		p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
@@ -92,28 +105,98 @@ func (b *Basics) Render() p.Node {
 				`, p.Html(`<button>D</button>`).On("click", func() { b.SetScore(65) }), `
 				`, p.Html(`<button>F</button>`).On("click", func() { b.SetScore(50) }), `
 			</div>
+			<pre class="code">p.If(Score.Ge(90),
+    p.Html(`+"`"+`&lt;p>Grade: A&lt;/p>`+"`"+`),
+).ElseIf(Score.Ge(80),
+    p.Html(`+"`"+`&lt;p>Grade: B&lt;/p>`+"`"+`),
+).Else(
+    p.Html(`+"`"+`&lt;p>Grade: F&lt;/p>`+"`"+`),
+)
+
+// conditions: Eq, Ne, Gt, Ge, Lt, Le</pre>
 		</section>
 
 		<section>
-			<h2>Two-Way Binding</h2>
+			<h2>Two-Way Binding — String</h2>
 			<label>Your name: `, p.Html(`<input type="text" placeholder="Enter name">`).Bind(b.Name), `</label>
 			<p>Hello, `, b.Name, `!</p>
+			<pre class="code">Name := p.New("")
+p.Html(`+"`"+`&lt;input type="text">`+"`"+`).Bind(Name)</pre>
 		</section>
 
 		<section>
-			<h2>Checkbox Binding</h2>
+			<h2>Two-Way Binding — Int</h2>
+			<label>Age: `, p.Html(`<input type="text" placeholder="Enter age">`).Bind(b.Age), `</label>
+			<p>You are `, b.Age, ` years old.</p>
+			<pre class="code">Age := p.New(25)
+p.Html(`+"`"+`&lt;input type="text">`+"`"+`).Bind(Age) // *Store[int] binding</pre>
+		</section>
+
+		<section>
+			<h2>Checkbox Binding — Bool</h2>
 			<label>`, p.Html(`<input type="checkbox">`).Bind(b.DarkMode), ` Dark Mode</label>
 			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", b.DarkMode.Eq(true), "dark"), `
+			<pre class="code">DarkMode := p.New(false)
+p.Html(`+"`"+`&lt;input type="checkbox">`+"`"+`).Bind(DarkMode) // *Store[bool]
+
+// AttrIf: conditionally add a class
+p.Html(`+"`"+`&lt;div>...&lt;/div>`+"`"+`).AttrIf("class", DarkMode.Eq(true), "dark")</pre>
 		</section>
 
 		<section>
-			<h2>Form</h2>
+			<h2>Form — PreventDefault</h2>
 			`, p.Html(`<form>
 				<label>Name: `, p.Html(`<input type="text" placeholder="Your name">`).Bind(b.Name), `</label>
 				<label>`, p.Html(`<input type="checkbox">`).Bind(b.Agreed), ` I agree to the terms</label>
 				<button type="submit">Submit</button>
 			</form>`).On("submit", b.Submit).PreventDefault(), `
 			<p class="message">`, b.Message, `</p>
+			<pre class="code">p.Html(`+"`"+`&lt;form>...&lt;/form>`+"`"+`).On("submit", Submit).PreventDefault()
+
+// also available: .StopPropagation()</pre>
+		</section>
+
+		<section>
+			<h2>StopPropagation</h2>
+			<p>Click the inner button — only inner handler fires, not outer:</p>
+			`, p.Html(`<div class="outer-click">
+				Outer (click me)
+				<div>`, p.Html(`<button>Inner (click me)</button>`).On("click", func() {
+		b.Message.Set("Inner clicked!")
+	}).StopPropagation(), `</div>
+			</div>`).On("click", func() {
+		b.Message.Set("Outer clicked!")
+	}), `
+			<p class="message">`, b.Message, `</p>
+			<pre class="code">// inner button stops event from reaching outer div
+p.Html(`+"`"+`&lt;button>Inner&lt;/button>`+"`"+`).On("click", handler).StopPropagation()</pre>
+		</section>
+
+		<section>
+			<h2>BindAsHTML — Raw HTML Rendering</h2>
+			<label>HTML: `, p.Html(`<input type="text">`).Bind(b.RawHTML), `</label>
+			<p>Rendered: `, p.BindAsHTML(b.RawHTML), `</p>
+			<pre class="code">RawHTML := p.New("&lt;em>Hello&lt;/em> &lt;strong>World&lt;/strong>")
+p.BindAsHTML(RawHTML) // renders as innerHTML (not escaped)</pre>
+		</section>
+
+		<section>
+			<h2>Text Node</h2>
+			<p>`, p.Text("This is a Text() node — plain text, no HTML parsing."), `</p>
+			<pre class="code">p.Text("plain text") // static text node, no HTML interpretation</pre>
+		</section>
+
+		<section>
+			<h2>Fragment — Frag()</h2>
+			`, p.Frag(
+		p.Html(`<p>First paragraph from Frag()</p>`),
+		p.Html(`<p>Second paragraph from Frag()</p>`),
+	), `
+			<pre class="code">// group nodes without a wrapper element
+p.Frag(
+    p.Html(`+"`"+`&lt;p>First&lt;/p>`+"`"+`),
+    p.Html(`+"`"+`&lt;p>Second&lt;/p>`+"`"+`),
+)</pre>
 		</section>
 	</div>`)
 }
@@ -121,6 +204,7 @@ func (b *Basics) Render() p.Node {
 func (b *Basics) Style() string {
 	return `
 .demo label{display:block;margin:8px 0}
+.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .grade{padding:10px;border-radius:4px;font-weight:700}
 .grade.a{background:#d4edda;color:#155724}
 .grade.b{background:#cce5ff;color:#004085}
@@ -129,6 +213,8 @@ func (b *Basics) Style() string {
 .grade.f{background:#f8d7da;color:#721c24}
 .dark{background:#333;color:#fff;padding:10px;border-radius:4px;margin-top:10px}
 .message{padding:10px;background:#e7f3ff;border-radius:4px}
+.outer-click{padding:15px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;cursor:pointer}
+.outer-click div{margin-top:10px}
 `
 }
 
