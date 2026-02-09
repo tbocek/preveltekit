@@ -54,7 +54,7 @@ func (f *Fetch) FetchTodo() {
 		if todo.Completed {
 			completed = "yes"
 		}
-		f.RawData.Set("ID: " + itoa(todo.ID) + "\nTitle: " + todo.Title + "\nCompleted: " + completed)
+		f.RawData.Set("ID: " + p.Itoa(todo.ID) + "\nTitle: " + todo.Title + "\nCompleted: " + completed)
 		f.Status.Set("done")
 	}()
 }
@@ -69,7 +69,7 @@ func (f *Fetch) FetchUser() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-		f.RawData.Set("ID: " + itoa(user.ID) + "\nName: " + user.Name)
+		f.RawData.Set("ID: " + p.Itoa(user.ID) + "\nName: " + user.Name)
 		f.Status.Set("done")
 	}()
 }
@@ -84,7 +84,7 @@ func (f *Fetch) FetchPost() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-		f.RawData.Set("ID: " + itoa(post.ID) + "\nUser: " + itoa(post.UserID) + "\nTitle: " + post.Title)
+		f.RawData.Set("ID: " + p.Itoa(post.ID) + "\nUser: " + p.Itoa(post.UserID) + "\nTitle: " + post.Title)
 		f.Status.Set("done")
 	}()
 }
@@ -105,7 +105,7 @@ func (f *Fetch) CreatePost() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-		f.RawData.Set("Created Post!\nID: " + itoa(created.ID) + "\nTitle: " + created.Title + "\nBody: " + created.Body)
+		f.RawData.Set("Created Post!\nID: " + p.Itoa(created.ID) + "\nTitle: " + created.Title + "\nBody: " + created.Body)
 		f.Status.Set("done")
 	}()
 }
@@ -121,7 +121,7 @@ func (f *Fetch) UpdatePost() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-		f.RawData.Set("PUT response:\nID: " + itoa(result.ID) + "\nTitle: " + result.Title)
+		f.RawData.Set("PUT response:\nID: " + p.Itoa(result.ID) + "\nTitle: " + result.Title)
 		f.Status.Set("done")
 	}()
 }
@@ -139,7 +139,7 @@ func (f *Fetch) PatchPost() {
 			f.Status.Set("error: " + err.Error())
 			return
 		}
-		f.RawData.Set("PATCH response:\nID: " + itoa(result.ID) + "\nTitle: " + result.Title)
+		f.RawData.Set("PATCH response:\nID: " + p.Itoa(result.ID) + "\nTitle: " + result.Title)
 		f.Status.Set("done")
 	}()
 }
@@ -158,18 +158,6 @@ func (f *Fetch) DeletePost() {
 		f.RawData.Set("DELETE successful (post 1 deleted)")
 		f.Status.Set("done")
 	}()
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	s := ""
-	for n > 0 {
-		s = string(byte('0'+n%10)) + s
-		n /= 10
-	}
-	return s
 }
 
 func (f *Fetch) Render() p.Node {

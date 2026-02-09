@@ -88,7 +88,7 @@ func (c *Complex) Render() p.Node {
 		p.If(c.ShowLog.Eq(true),
 			p.Html(`<ul class="log">`,
 				p.Each(c.Log, func(entry string, i int) p.Node {
-					return p.Html(`<li class="log-entry"><span class="log-idx">`, itoa(i), `</span> `, entry, `</li>`)
+					return p.Html(`<li class="log-entry"><span class="log-idx">`, p.Itoa(i), `</span> `, entry, `</li>`)
 				}).Else(
 					p.Html(`<li class="empty">No log entries</li>`),
 				),

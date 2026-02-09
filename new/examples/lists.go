@@ -119,7 +119,7 @@ func (l *Lists) Render() p.Node {
 		p.If(l.Items.Len().Gt(0),
 			p.Html(`<ul>`,
 				p.Each(l.Items, func(item string, i int) p.Node {
-					return p.Html(`<li><span class="index">`, itoa(i), `</span> `, item, `</li>`)
+					return p.Html(`<li><span class="index">`, p.Itoa(i), `</span> `, item, `</li>`)
 				}),
 				`</ul>`),
 		).Else(

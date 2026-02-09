@@ -1,5 +1,7 @@
 package preveltekit
 
+import "strings"
+
 // scopeCSS adds a scope class selector to every CSS rule's selectors.
 // e.g., ".demo button" becomes ".demo.v0 button.v0"
 // Handles @media (recurse), @keyframes (skip), pseudo-classes, combinators.
@@ -21,7 +23,7 @@ func scopeCSS(css, scopeClass string) string {
 			for j < len(css) && css[j] != '{' && css[j] != ';' {
 				j++
 			}
-			atRule := trimSpace(css[i:j])
+			atRule := strings.TrimSpace(css[i:j])
 			if j < len(css) && css[j] == ';' {
 				// @import or similar — pass through
 				buf = append(buf, css[i:j+1]...)
@@ -29,7 +31,7 @@ func scopeCSS(css, scopeClass string) string {
 				continue
 			}
 			if j < len(css) && css[j] == '{' {
-				if hasPrefix(atRule, "@keyframes") || hasPrefix(atRule, "@font-face") {
+				if strings.HasPrefix(atRule, "@keyframes") || strings.HasPrefix(atRule, "@font-face") {
 					// Skip scoping — copy the entire block as-is
 					depth := 1
 					k := j + 1
@@ -67,7 +69,7 @@ func scopeCSS(css, scopeClass string) string {
 			}
 		}
 		// Regular rule: find selector(s) before {
-		braceIdx := indexByte(css[i:], '{')
+		braceIdx := strings.IndexByte(css[i:], '{')
 		if braceIdx == -1 {
 			buf = append(buf, css[i:]...)
 			break
@@ -90,12 +92,12 @@ func scopeCSS(css, scopeClass string) string {
 		i = k
 
 		// Scope the selectors
-		selectors := splitByte(selectorPart, ',')
+		selectors := strings.Split(selectorPart, ",")
 		for si, sel := range selectors {
 			if si > 0 {
 				buf = append(buf, ',')
 			}
-			buf = append(buf, scopeSelector(trimSpace(sel), scope)...)
+			buf = append(buf, scopeSelector(strings.TrimSpace(sel), scope)...)
 		}
 		buf = append(buf, '{')
 		buf = append(buf, body...)
@@ -111,7 +113,7 @@ func scopeSelector(sel, scope string) string {
 		return sel
 	}
 	// Don't scope html/body selectors
-	trimmed := trimSpace(sel)
+	trimmed := strings.TrimSpace(sel)
 	if trimmed == "html" || trimmed == "body" || trimmed == "*" {
 		return sel
 	}
@@ -170,52 +172,4 @@ func scopeSelector(sel, scope string) string {
 		buf = append(buf, segment[insertPos:]...)
 	}
 	return string(buf)
-}
-
-// trimSpace removes leading and trailing whitespace.
-func trimSpace(s string) string {
-	start := 0
-	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
-		start++
-	}
-	end := len(s)
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
-		end--
-	}
-	return s[start:end]
-}
-
-// hasPrefix reports whether s starts with prefix.
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-// indexByte returns the index of the first occurrence of c in s, or -1.
-func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
-// splitByte splits s by separator byte, returning all parts.
-func splitByte(s string, sep byte) []string {
-	n := 1
-	for i := 0; i < len(s); i++ {
-		if s[i] == sep {
-			n++
-		}
-	}
-	parts := make([]string, 0, n)
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == sep {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-	parts = append(parts, s[start:])
-	return parts
 }

@@ -79,21 +79,9 @@ func (b *Bitcoin) Retry() {
 
 func pad2(n int) string {
 	if n < 10 {
-		return "0" + btcItoa(n)
+		return "0" + p.Itoa(n)
 	}
-	return btcItoa(n)
-}
-
-func btcItoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	s := ""
-	for n > 0 {
-		s = string(byte('0'+n%10)) + s
-		n /= 10
-	}
-	return s
+	return p.Itoa(n)
 }
 
 func formatPrice(f float64) string {
@@ -104,7 +92,7 @@ func formatPrice(f float64) string {
 	cents := int(f*100 + 0.5)
 	dollars := cents / 100
 	rem := cents % 100
-	s := btcItoa(dollars) + "." + pad2(rem)
+	s := p.Itoa(dollars) + "." + pad2(rem)
 	if neg {
 		return "-" + s
 	}

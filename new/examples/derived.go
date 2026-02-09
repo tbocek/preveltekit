@@ -54,7 +54,7 @@ func (d *Derived) New() p.Component {
 
 	age := p.New(30)
 	summary := Derived3(first, last, age, func(f, l string, a int) string {
-		return f + " " + l + ", age " + ditoa(a)
+		return f + " " + l + ", age " + p.Itoa(a)
 	})
 
 	return &Derived{
@@ -115,7 +115,7 @@ fullName := Derived2(first, last, func(f, l string) string {
 
 // Derived3: three source stores -> computed store
 summary := Derived3(first, last, age, func(f, l string, a int) string {
-    return f + " " + l + ", age " + itoa(a)
+    return f + " " + l + ", age " + p.Itoa(a)
 })
 
 // implementation pattern (using OnChange):
@@ -133,26 +133,4 @@ func (d *Derived) Style() string {
 .demo label{display:block;margin:8px 0}
 .demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 `
-}
-
-func ditoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }

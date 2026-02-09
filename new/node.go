@@ -476,6 +476,9 @@ func anyToString(v any) string {
 	}
 }
 
+// Itoa converts an int to a string without importing strconv.
+func Itoa(n int) string { return itoa(n) }
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

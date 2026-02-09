@@ -217,22 +217,3 @@ func (b *Basics) Style() string {
 .outer-click div{margin-top:10px}
 `
 }
-
-func atoi(s string) int {
-	n := 0
-	neg := false
-	for i, c := range s {
-		if c == '-' && i == 0 {
-			neg = true
-			continue
-		}
-		if c < '0' || c > '9' {
-			break
-		}
-		n = n*10 + int(c-'0')
-	}
-	if neg {
-		return -n
-	}
-	return n
-}

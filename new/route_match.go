@@ -1,5 +1,7 @@
 package preveltekit
 
+import "strings"
+
 // matchRoute matches a path against a route pattern.
 // Returns extracted params, specificity score, and whether it matched.
 func matchRoute(pattern, path string) (map[string]string, int, bool) {
@@ -19,7 +21,7 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 	}
 
 	// Handle wildcard prefix patterns like */suffix
-	if hasPrefix(pattern, "*/") {
+	if strings.HasPrefix(pattern, "*/") {
 		suffix := pattern[2:]
 		if path == "/"+suffix {
 			return params, 2, true
@@ -58,39 +60,20 @@ func matchRoute(pattern, path string) (map[string]string, int, bool) {
 	return params, specificity, true
 }
 
-// trimSlashes removes leading and trailing slashes from a path.
-func trimSlashes(s string) string {
-	start, end := 0, len(s)
-	for start < end && s[start] == '/' {
-		start++
-	}
-	for end > start && s[end-1] == '/' {
-		end--
-	}
-	return s[start:end]
-}
-
 // splitPath splits a URL path into non-empty segments.
 func splitPath(s string) []string {
-	s = trimSlashes(s)
+	s = strings.Trim(s, "/")
 	if s == "" {
 		return nil
 	}
-	n := 1
-	for i := 0; i < len(s); i++ {
-		if s[i] == '/' {
+	parts := strings.Split(s, "/")
+	// Filter empty segments (from double slashes)
+	n := 0
+	for _, p := range parts {
+		if p != "" {
+			parts[n] = p
 			n++
 		}
 	}
-	parts := make([]string, 0, n)
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == '/' {
-			if start < i {
-				parts = append(parts, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	return parts
+	return parts[:n]
 }

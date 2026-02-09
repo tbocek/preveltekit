@@ -3,6 +3,7 @@
 package preveltekit
 
 import (
+	"strings"
 	"syscall/js"
 )
 
@@ -118,9 +119,9 @@ func (r *Router) SetupLinks() {
 		hrefStr := href.String()
 
 		// Skip external links
-		if hasPrefix(hrefStr, "http://") || hasPrefix(hrefStr, "https://") ||
-			hasPrefix(hrefStr, "//") || hasPrefix(hrefStr, "mailto:") ||
-			hasPrefix(hrefStr, "tel:") {
+		if strings.HasPrefix(hrefStr, "http://") || strings.HasPrefix(hrefStr, "https://") ||
+			strings.HasPrefix(hrefStr, "//") || strings.HasPrefix(hrefStr, "mailto:") ||
+			strings.HasPrefix(hrefStr, "tel:") {
 			return nil
 		}
 
@@ -135,7 +136,7 @@ func (r *Router) SetupLinks() {
 		}
 
 		// Skip hash-only links
-		if hrefStr == "#" || (hasPrefix(hrefStr, "#") && len(hrefStr) > 1) {
+		if hrefStr == "#" || (strings.HasPrefix(hrefStr, "#") && len(hrefStr) > 1) {
 			return nil
 		}
 
@@ -181,7 +182,7 @@ func (r *Router) handleRoute(path string) {
 	if path == "" {
 		path = "/"
 	}
-	if path != "/" && hasSuffix(path, "/") {
+	if path != "/" && strings.HasSuffix(path, "/") {
 		path = path[:len(path)-1]
 	}
 
@@ -219,9 +220,9 @@ func resolvePath(href string) string {
 
 	// Get current path
 	current := js.Global().Get("location").Get("pathname").String()
-	if !hasSuffix(current, "/") {
+	if !strings.HasSuffix(current, "/") {
 		// Remove last segment for relative resolution
-		if idx := lastIndexByte(current, '/'); idx >= 0 {
+		if idx := strings.LastIndexByte(current, '/'); idx >= 0 {
 			current = current[:idx+1]
 		}
 	}
@@ -229,8 +230,8 @@ func resolvePath(href string) string {
 	path := current + href
 
 	// Clean up ../ segments
-	if containsDotDot(path) {
-		segments := splitPathAll(path)
+	if strings.Contains(path, "..") {
+		segments := strings.Split(path, "/")
 		var clean []string
 		for _, seg := range segments {
 			if seg == ".." {
@@ -241,7 +242,7 @@ func resolvePath(href string) string {
 				clean = append(clean, seg)
 			}
 		}
-		path = "/" + joinPath(clean)
+		path = "/" + strings.Join(clean, "/")
 	}
 
 	// Clean double slashes
@@ -250,91 +251,12 @@ func resolvePath(href string) string {
 	return path
 }
 
-// --- Inline string helpers (avoid strings package) ---
-// hasPrefix, trimSlashes, splitPath are in shared files (css_scope.go, route_match.go)
-
-func hasSuffix(s, suffix string) bool {
-	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
-}
-
-func splitPathAll(s string) []string {
-	if s == "" {
-		return nil
-	}
-	n := 1
-	for i := 0; i < len(s); i++ {
-		if s[i] == '/' {
-			n++
-		}
-	}
-	parts := make([]string, 0, n)
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == '/' {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-	return parts
-}
-
-func joinPath(parts []string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	n := len(parts) - 1
-	for _, p := range parts {
-		n += len(p)
-	}
-	b := make([]byte, 0, n)
-	for i, p := range parts {
-		b = append(b, p...)
-		if i < len(parts)-1 {
-			b = append(b, '/')
-		}
-	}
-	return string(b)
-}
-
-func lastIndexByte(s string, c byte) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
-func containsDotDot(s string) bool {
-	for i := 0; i+1 < len(s); i++ {
-		if s[i] == '.' && s[i+1] == '.' {
-			if i+2 >= len(s) || s[i+2] == '/' {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func cleanDoubleSlash(s string) string {
-	hasDouble := false
-	for i := 0; i+1 < len(s); i++ {
-		if s[i] == '/' && s[i+1] == '/' {
-			hasDouble = true
-			break
-		}
-	}
-	if !hasDouble {
+	if !strings.Contains(s, "//") {
 		return s
 	}
-	b := make([]byte, 0, len(s))
-	prev := byte(0)
-	for i := 0; i < len(s); i++ {
-		if s[i] == '/' && prev == '/' {
-			continue
-		}
-		b = append(b, s[i])
-		prev = s[i]
+	for strings.Contains(s, "//") {
+		s = strings.ReplaceAll(s, "//", "/")
 	}
-	return string(b)
+	return s
 }
