@@ -18,6 +18,10 @@ A Go/WASM web framework with SSR pre-rendering. Components are written in pure G
 - [Attribute Bindings](#attribute-bindings)
 - [CSS Scoping](#css-scoping)
 - [Routing](#routing)
+- [Fetch API](#fetch-api)
+- [Timer Functions](#timer-functions)
+- [Storage API](#storage-api)
+- [Utilities](#utilities)
 - [ID System](#id-system)
 - [Comment Marker System](#comment-marker-system)
 - [WASM Tree Walking](#wasm-tree-walking)
@@ -117,7 +121,7 @@ func Derived3[A, B, C, R any](a *p.Store[A], b *p.Store[B], c *p.Store[C], fn fu
 uppercase := Derived1(name, strings.ToUpper)
 fullName := Derived2(first, last, func(f, l string) string { return f + " " + l })
 summary := Derived3(first, last, age, func(f, l string, a int) string {
-    return f + " " + l + ", age " + itoa(a)
+    return f + " " + l + ", age " + p.Itoa(a)
 })
 ```
 
@@ -327,20 +331,25 @@ p.Html(`<input type="text">`).Bind(nameStore)
 p.Html(`<input type="checkbox">`).Bind(boolStore)
 ```
 
+Each `.Bind()` call gets its own unique element ID via `NextBindID()` (`b0`, `b1`, ...), separate from the store's ID. This allows multiple inputs to bind the same store without duplicate HTML IDs.
+
 **SSR Output** (text input):
 ```html
-<input type="text" id="s1" value="World">
+<input type="text" id="basics_b0" value="World">
 ```
 
 **SSR Output** (checkbox):
 ```html
-<input type="checkbox" id="s2" checked>
+<input type="checkbox" id="basics_b1" checked>
 ```
+
+**Supported store types**: `*Store[string]` (text input/textarea), `*Store[int]` (number input), `*Store[bool]` (checkbox).
 
 **WASM Tree Walk:**
 1. `wasmBindHtmlNode` detects `h.BoundStore` is set
-2. Calls the appropriate `BindInput`, `BindInputInt`, or `BindCheckbox`
-3. These add bidirectional binding: DOM events → `store.Set()`, `store.OnChange` → DOM property update
+2. Advances `NextBindID()` to get the bind element ID (matching SSR)
+3. Calls the appropriate `BindInput`, `BindInputInt`, or `BindCheckbox`
+4. These add bidirectional binding: DOM events → `store.Set()`, `store.OnChange` → DOM property update
 
 ---
 
@@ -391,8 +400,10 @@ List rendering with template-based item generation.
 
 ```go
 p.Each(items, func(item string, i int) p.Node {
-    return p.Html(`<li>`, itoa(i), `: `, item, `</li>`)
-})
+    return p.Html(`<li>`, p.Itoa(i), `: `, item, `</li>`)
+}).Else(
+    p.Html(`<p>No items</p>`),
+)
 ```
 
 **SSR Output** (3 items):
@@ -539,6 +550,18 @@ func (a *App) OnMount() {
 - `Start()` reads the SSR path (set via `SetSSRPath`) and calls `handleRoute()`
 - The SSR renderer renders all route component branches
 
+### Router Methods
+
+| Method | Purpose |
+|--------|---------|
+| `Start()` | Handles initial route, listens for `popstate`, sets up link interception |
+| `Navigate(path)` | Programmatic navigation (pushes history state) |
+| `Replace(path)` | Navigate without adding to history |
+| `CurrentPath() *Store[string]` | Reactive store containing the current path |
+| `NotFound(handler func())` | Set handler for unmatched routes |
+| `BeforeNavigate(fn func(from, to string) bool)` | Navigation guard — return false to cancel |
+| `SetupLinks()` | Intercept all `<a>` clicks for SPA navigation (called by Start) |
+
 ### WASM Behavior
 
 - `SetupLinks()` intercepts all `<a>` clicks on the document
@@ -546,6 +569,128 @@ func (a *App) OnMount() {
 - Calls `Navigate(path)` which pushes history state and triggers route matching
 - Route matching uses specificity scoring (exact segments > parameters > wildcards)
 - The `popstate` event handler enables back/forward navigation
+
+---
+
+## Fetch API
+
+Generic HTTP client wrapping the browser's `fetch()` API. Uses the Codec system internally to encode Go structs to JS objects and decode JS responses back to Go structs via `js` struct tags.
+
+### Functions
+
+```go
+todo, err := p.Get[Todo]("https://api.example.com/todos/1")
+user, err := p.Post[User]("/api/users", newUser)
+updated, err := p.Put[Post]("/api/posts/1", postData)
+patched, err := p.Patch[Post]("/api/posts/1", partial)
+_, err := p.Delete[any]("/api/posts/1")
+```
+
+### FetchOptions
+
+For full control, use `Fetch` directly:
+
+```go
+signal, abort := p.NewAbortController()
+result, err := p.Fetch[Post]("/api/posts", &p.FetchOptions{
+    Method:  "POST",
+    Body:    postData,
+    Headers: map[string]string{"Authorization": "Bearer token"},
+    Signal:  signal,
+})
+// abort() to cancel the request
+```
+
+### FetchError
+
+On HTTP errors (non-2xx), returns `*FetchError` with `Status`, `StatusText`, and `URL`.
+
+### SSR Behavior
+
+All fetch functions return zero values and an error during SSR (`IsBuildTime == true`). Use `IsBuildTime` to guard fetch calls in `OnMount()`.
+
+---
+
+## Timer Functions
+
+Timer utilities that wrap browser `setInterval`/`setTimeout` with proper cleanup.
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `SetInterval` | `(ms int, callback func()) func()` | Stop function |
+| `SetTimeout` | `(ms int, callback func()) func()` | Cancel function |
+| `Debounce` | `(ms int, callback func()) (func(), func())` | Debounced function + cleanup |
+| `Throttle` | `(ms int, callback func()) func()` | Throttled function |
+
+```go
+func (b *Bitcoin) OnMount() {
+    stop := p.SetInterval(30000, b.FetchPrice)
+    b.cleanup = stop
+}
+
+func (b *Bitcoin) OnDestroy() {
+    b.cleanup()
+}
+```
+
+During SSR, all timer functions are no-ops that return no-op stop/cancel functions.
+
+---
+
+## Storage API
+
+Wrapper around browser `localStorage`.
+
+### Low-level Functions
+
+```go
+p.SetStorage("key", "value")
+val := p.GetStorage("key")
+p.RemoveStorage("key")
+p.ClearStorage()
+```
+
+### LocalStore
+
+A `*Store[string]` that auto-syncs with `localStorage`:
+
+```go
+theme := p.NewLocalStore("theme", "light")  // reads localStorage on creation
+theme.Set("dark")                            // updates both store and localStorage
+```
+
+`LocalStore` uses `newWithID(key, defaultValue)` internally so the localStorage key doubles as the store ID.
+
+During SSR, storage functions are no-ops — `GetStorage` returns `""`, `NewLocalStore` returns a regular store with the default value.
+
+---
+
+## Utilities
+
+### IsBuildTime
+
+```go
+const IsBuildTime = true   // during SSR (native Go build)
+const IsBuildTime = false  // during WASM (browser)
+```
+
+Use to guard browser-only code in `OnMount()`:
+
+```go
+func (f *Fetch) OnMount() {
+    if !p.IsBuildTime {
+        f.LoadData()
+    }
+}
+```
+
+### Itoa
+
+```go
+p.Itoa(42)  // "42"
+```
+
+Lightweight int-to-string conversion exposed for use in examples and user code, avoiding the need to import `strconv` (which adds ~20kb to the WASM binary).
 
 ---
 
@@ -558,14 +703,14 @@ All IDs are counter-based and deterministic. SSR and WASM must increment counter
 | Prefix | Generator | Used For | Example |
 |--------|-----------|----------|---------|
 | `s` | `nextStoreID()` | Store/List registration | `s0`, `s1`, `s2` |
-| `h` | `nextHandlerID()` | Handler registration | `h0`, `h1`, `h2` |
+| `h` | `nextHandlerID()` | Handler registration + event element IDs | `h0`, `h1`, `h2` |
 | `v` | `GetOrCreateScope()` | CSS scope classes | `v0`, `v1` |
 | `t` | `NextTextMarker()` | Text binding comments | `<!--t0-->` |
 | `i` | `NextIfMarker()` | If-block comments | `<!--i0s-->...<!--i0-->` |
 | `e` | `NextEachMarker()` | Each-block comments | `<!--e0s-->...<!--e0-->` |
 | `c` | `NextCompMarker()` | Component ID prefix | `components_c0_t0` |
 | `r` | `NextRouteMarker()` | Route/component-block comments | `<!--r0s-->...<!--r0-->` |
-| `ev` | `NextEventID()` | Event element IDs | `id="ev0"` |
+| `b` | `NextBindID()` | Input binding element IDs | `id="b0"` |
 | `cl` | `NextClassID()` | Class binding element IDs | `id="cl0"` |
 | `a` | `NextAttrID()` | Attribute binding element IDs | `data-attrbind="a0"` |
 
@@ -671,6 +816,64 @@ var wasmRenderedTrees = make(map[string][]wasmCachedOption)
 ```
 
 
-## Downside of WASM
+## Downsides of WASM
 
-Do research about the current state, especially: garbage collection, and the js<->wasm call. There is the plan to add interfaces to wasm, so that this bridge is not needed, maybe without this, we could go without javascript for everything... <GENAI: DO RESEARCH HERE>
+Go-to-WASM is usable today but comes with real trade-offs. Here's the current state as of early 2026.
+
+### Binary Size
+
+The Go compiler ships a full runtime (goroutine scheduler, garbage collector, `reflect`, etc.) in every WASM binary. The practical floor for a "hello world" is ~2MB gzipped. Our framework binary is ~208kb *after* gzip + `wasm-opt -Oz`, which is good for a Go WASM app but still large compared to a JavaScript framework (~5-30kb). Every new standard library import (`strconv`, `fmt`, `regexp`) pulls in additional weight because the linker can't tree-shake as aggressively as JS bundlers.
+
+**TinyGo** can produce much smaller binaries (10-100kb) but lacks full `reflect` support and has an incomplete standard library, making it unsuitable for this framework's generic store system.
+
+### The JS Bridge (`syscall/js`)
+
+All DOM access from Go WASM goes through `syscall/js`, which is a JavaScript FFI layer. Every call — `getElementById`, `addEventListener`, `setAttribute` — crosses the WASM↔JS boundary. This has measurable overhead:
+
+- **~10x slower** than equivalent native JavaScript for DOM-heavy operations (per Go issue [#32591](https://github.com/golang/go/issues/32591)).
+- Each `js.FuncOf` allocates a Go closure and registers it in a lookup table that the JS side calls back into, adding GC pressure.
+- Values passed between Go and JS must be serialized/deserialized (no shared memory for objects).
+
+For this framework, the impact is mitigated because DOM operations happen at reactive granularity (only when a store changes), not in a hot render loop. But it means Go WASM will never match the raw DOM throughput of a JS framework like Svelte or SolidJS.
+
+### Garbage Collection
+
+Go ships its own GC inside the WASM binary. The browser's GC and Go's GC are completely independent — they don't cooperate. This means:
+
+- **Double GC overhead**: The browser GCs the JS heap (including all `js.Value` wrappers), while Go separately GCs its own linear memory.
+- **Stop-the-world pauses**: Go's GC can cause long STW pauses in WASM (see issue [#54444](https://github.com/golang/go/issues/54444)), because WASM is single-threaded — there's no way to run GC concurrently with application code.
+- **No WasmGC integration yet**: The [WasmGC proposal](https://github.com/WebAssembly/gc) lets languages use the browser's built-in GC instead of shipping their own. Chrome, Firefox, and Safari all support WasmGC now, and languages like Dart and Kotlin already target it. Go has an open issue ([#63904](https://github.com/golang/go/issues/63904)) but the work is blocked by fundamental mismatches — WasmGC doesn't support interior pointers, which Go requires for efficient struct access. Without them, every struct field would need boxing, killing performance.
+
+### No Direct DOM Access
+
+WASM cannot call browser APIs (DOM, fetch, localStorage) directly. Everything must go through JavaScript glue code. There is no formal proposal to change this — the [Web IDL bindings](https://github.com/nicolo-ribaudo/tc39-proposal-wasm-legacy-type-reflection) concept could theoretically allow WASM to call DOM APIs natively, but standardizing it would require agreement across all browser vendors on a low-level DOM API, which hasn't happened in the 8+ years since WASM launched.
+
+The **Component Model** and **Interface Types** (WIT) are solving the interop problem for server-side WASM (WASI), but they don't address browser DOM access.
+
+### Single-Threaded Execution
+
+Go's goroutines work in WASM but run on a single OS thread — there's no parallel execution. The WASM threads proposal exists but isn't universally deployed, and Go's WASM target doesn't use it. This means:
+
+- `select{}` blocks the main thread (necessary to keep event listeners alive)
+- CPU-intensive Go code will freeze the UI
+- `go func()` provides concurrency (interleaving) but not parallelism
+
+### What Could Change
+
+| Improvement | Status | Impact |
+|-------------|--------|--------|
+| **WasmGC for Go** | Blocked on interior pointer support ([#63904](https://github.com/golang/go/issues/63904)) | Would eliminate shipped GC, shrink binaries by ~1MB, remove STW pauses |
+| **Direct DOM access** | No formal proposal | Would eliminate `syscall/js` overhead entirely |
+| **WASM threads** | Proposal exists, not in Go's WASM target | Would enable parallel goroutines, concurrent GC |
+| **Component Model in browsers** | Server-side (WASI 0.3) is maturing, browser story unclear | Could provide typed DOM bindings without JS glue |
+
+### Why Go WASM Anyway?
+
+Despite these limitations, Go WASM is practical for apps where:
+
+- **Type safety and compile-time checks** matter more than raw DOM performance
+- **Shared logic** between server and client (same language, same types)
+- **Reactivity granularity is coarse** — updating a few DOM elements per user interaction is fast enough even through the JS bridge
+- **Developer productivity** — Go's tooling, error handling, and simplicity vs. JavaScript's ecosystem complexity
+
+The framework's design (SSR pre-rendering + surgical hydration) minimizes the WASM runtime's job to only wiring reactive bindings, which keeps the JS bridge crossings low.
