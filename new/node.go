@@ -71,20 +71,9 @@ type HtmlEvent struct {
 
 func (h *HtmlNode) nodeType() string { return "html" }
 
-// wasmStringsToRemove collects string parts from Html() calls during SSR.
-// A post-build step uses this list to zero them out in the WASM data section.
-var wasmStringsToRemove = make(map[string]int)
-
 // Html creates a raw HTML node from strings and embedded nodes.
 // Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
 func Html(parts ...any) *HtmlNode {
-	if wasmStringsToRemove != nil {
-		for _, p := range parts {
-			if s, ok := p.(string); ok && len(s) > 0 {
-				wasmStringsToRemove[s]++
-			}
-		}
-	}
 	return &HtmlNode{Parts: parts}
 }
 
@@ -281,11 +270,12 @@ func (e *EachNode) Else(children ...Node) *EachNode {
 
 // ComponentNode represents a nested component.
 type ComponentNode struct {
-	Name     string         // Component type name (derived from instance)
-	Instance any            // The actual component instance
-	Props    map[string]any // Property values
-	Events   map[string]any // Event handlers
-	Children []Node         // Slot content
+	Name        string         // Component type name (derived from instance)
+	Instance    any            // The actual component instance
+	Props       map[string]any // Property values
+	Events      map[string]any // Event handlers
+	Children    []Node         // Slot content
+	renderCache Node           // cached Render() result (used by WASM to avoid double Render)
 }
 
 func (c *ComponentNode) nodeType() string { return "component" }
@@ -539,21 +529,22 @@ func ftoa(f float64) string {
 	if neg {
 		f = -f
 	}
-	// Simple float to string: integer part + 2 decimal places
 	intPart := int(f)
-	fracPart := int((f - float64(intPart)) * 100)
-	s := itoa(intPart)
-	if fracPart > 0 {
-		s += "."
-		if fracPart < 10 {
-			s += "0"
+	fracPart := f - float64(intPart)
+	result := itoa(intPart)
+	if fracPart > 0.0000001 {
+		result += "."
+		for i := 0; i < 6 && fracPart > 0.0000001; i++ {
+			fracPart *= 10
+			digit := int(fracPart)
+			result += string(byte('0' + digit))
+			fracPart -= float64(digit)
 		}
-		s += itoa(fracPart)
 	}
 	if neg {
-		s = "-" + s
+		return "-" + result
 	}
-	return s
+	return result
 }
 
 // escapeHTML escapes HTML special characters.

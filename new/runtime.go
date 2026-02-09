@@ -52,37 +52,6 @@ type Bindable[T any] interface {
 	OnChange(func(T))
 }
 
-// toString converts a value to string for display
-func toString[T any](v T) string {
-	switch val := any(v).(type) {
-	case string:
-		return val
-	case int:
-		return itoa(val)
-	case int64:
-		return itoa(int(val))
-	case int32:
-		return itoa(int(val))
-	case uint:
-		return itoa(int(val))
-	case uint64:
-		return itoa(int(val))
-	case uint32:
-		return itoa(int(val))
-	case float64:
-		return floatToStr(val)
-	case float32:
-		return floatToStr(float64(val))
-	case bool:
-		if val {
-			return "true"
-		}
-		return "false"
-	default:
-		return ""
-	}
-}
-
 // FindComment finds a comment node with the given marker text using TreeWalker
 func FindComment(marker string) js.Value {
 	walker := Document.Call("createTreeWalker",
@@ -154,13 +123,6 @@ func BindCheckbox(id string, store Settable[bool]) js.Func {
 	store.OnChange(func(v bool) { el.Set("checked", v) })
 	el.Set("checked", store.Get())
 	return fn
-}
-
-// ToggleClass adds or removes a class based on a condition
-func ToggleClass(el js.Value, class string, add bool) {
-	if ok(el) {
-		el.Get("classList").Call("toggle", class, add)
-	}
 }
 
 // === Batch Binding Types (for smaller WASM) ===

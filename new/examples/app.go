@@ -10,6 +10,7 @@ type App struct {
 func (a *App) New() p.Component {
 	// Initialize child components
 	basics := (&Basics{}).New()
+	complex := (&Complex{}).New()
 	components := (&Components{}).New()
 	lists := (&Lists{}).New()
 	routing := (&Routing{}).New()
@@ -25,6 +26,7 @@ func (a *App) New() p.Component {
 		routes: []p.Route{
 			{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
 			{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
+			{Path: "/complex", HTMLFile: "complex.html", SSRPath: "/complex", Component: complex},
 			{Path: "/components", HTMLFile: "components.html", SSRPath: "/components", Component: components},
 			{Path: "/lists", HTMLFile: "lists.html", SSRPath: "/lists", Component: lists},
 			{Path: "/routing", HTMLFile: "routing.html", SSRPath: "/routing", Component: routing},
@@ -56,6 +58,7 @@ func (a *App) Render() p.Node {
 			<h2>Reactive</h2>
 			<ul>
 				<li><a href="/basics">Basics</a></li>
+				<li><a href="/complex">Complex</a></li>
 				<li><a href="/components">Components</a></li>
 				<li><a href="/lists">Lists</a></li>
 				<li><a href="/routing">Routing</a></li>

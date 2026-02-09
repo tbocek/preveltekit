@@ -38,7 +38,6 @@ type Settable[T any] interface {
 func BindInput(id string, store Settable[string]) jsFunc  { return jsFunc{} }
 func BindInputInt(id string, store Settable[int]) jsFunc  { return jsFunc{} }
 func BindCheckbox(id string, store Settable[bool]) jsFunc { return jsFunc{} }
-func ToggleClass(el *jsValue, class string, add bool)     {}
 
 // Batch binding types and functions (stubs for SSR)
 type Evt struct {

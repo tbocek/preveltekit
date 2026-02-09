@@ -55,7 +55,7 @@ echo "Cleaning dist folder..."
 rm -rf "$PROJECT_DIR/dist"
 mkdir -p "$PROJECT_DIR/dist"
 
-echo "Generating HTML files and bindings..."
+echo "Generating HTML files..."
 go run -tags '!wasm' "$PROJECT_DIR" 2>&1 | while read -r line; do
     if [[ "$line" == Generated:* ]]; then
         echo "  ${line#Generated: }"
@@ -74,16 +74,13 @@ tinygo build -o "$PROJECT_DIR/dist/main.wasm" $TINYGO_FLAGS "$PROJECT_DIR"
 echo "Copying wasm_exec.js..."
 cp "$PROJECT_DIR/assets/wasm_exec.js" "$PROJECT_DIR/dist/"
 
-if [ "$RELEASE_MODE" = true ]; then  
-    echo "Stripping HTML strings from WASM..."
-    go run preveltekit/cmd/build strip "$PROJECT_DIR/dist/main.wasm" "$PROJECT_DIR/dist/remove_from_wasm"
-    rm -rf "$PROJECT_DIR/dist/remove_from_wasm"
+if [ "$RELEASE_MODE" = true ]; then
     echo "Strip wasm"
     wasm-strip "$PROJECT_DIR/dist/main.wasm"
     echo "Strip wasm_exec"
     strip_wasm_exec "$PROJECT_DIR/dist/main.wasm" "$PROJECT_DIR/dist/wasm_exec.js"
     echo "Compressing..."
-    for f in "$PROJECT_DIR/dist"/*.html "$PROJECT_DIR/dist"/*.wasm "$PROJECT_DIR/dist"/*.js "$PROJECT_DIR/dist"/*.json "$PROJECT_DIR/dist"/*.bin; do
+    for f in "$PROJECT_DIR/dist"/*.html "$PROJECT_DIR/dist"/*.wasm "$PROJECT_DIR/dist"/*.js; do
         [ -f "$f" ] || continue
         (zopfli --i10 "$f" 2>/dev/null || gzip -k -f "$f" 2>/dev/null || true) &
         (brotli -q 11 -k -f "$f" 2>/dev/null || true) &

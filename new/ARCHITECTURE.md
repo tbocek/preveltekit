@@ -1,6 +1,6 @@
 # Preveltekit Architecture
 
-A Go/WASM web framework with SSR pre-rendering. Components are written in pure Go using a declarative DSL. At build time, a native Go binary renders HTML and collects reactive bindings into a compact binary. At runtime, a WASM binary hydrates the pre-rendered HTML with reactivity.
+A Go/WASM web framework with SSR pre-rendering. Components are written in pure Go using a declarative DSL. At build time, a native Go binary renders HTML. At runtime, a WASM binary hydrates the pre-rendered HTML by walking the same Render() tree to discover and wire all bindings directly — no intermediate binary format needed.
 
 ## Table of Contents
 
@@ -19,7 +19,9 @@ A Go/WASM web framework with SSR pre-rendering. Components are written in pure G
 - [CSS Scoping](#css-scoping)
 - [Routing](#routing)
 - [ID System](#id-system)
-- [Bindings Binary](#bindings-binary)
+- [Comment Marker System](#comment-marker-system)
+- [WASM Tree Walking](#wasm-tree-walking)
+- [Render Cache](#render-cache)
 - [File Reference](#file-reference)
 
 ---
@@ -31,37 +33,35 @@ graph LR
     subgraph "Build Time (Native Go)"
         A[Component Tree] --> B[SSR Renderer]
         B --> C[HTML Files]
-        B --> D[bindings.bin]
     end
     subgraph "Runtime (Browser)"
-        C --> E[Initial Page]
-        D --> F[WASM Hydration]
+        C --> D[Initial Page]
+        E[Same Component Code] --> F[WASM Tree Walk]
         F --> G[Reactive DOM]
     end
 ```
 
 The framework has two execution modes sharing the same component code:
 
-1. **SSR (native Go)**: Walks the component tree, generates static HTML with comment markers and element IDs, collects all reactive binding metadata into `bindings.bin`.
-2. **WASM (browser)**: Loads the pre-rendered HTML, decodes `bindings.bin`, and wires up reactivity — connecting stores to DOM elements via the markers and IDs embedded in the HTML.
+1. **SSR (native Go)**: Walks the component tree via `nodeToHTML()`, generates static HTML with comment markers and element IDs.
+2. **WASM (browser)**: Walks the same Render() tree via `wasmWalkAndBind()`, discovers all bindings, and wires them to the existing DOM elements using the markers and IDs embedded in the HTML.
+
+Both modes advance the same deterministic ID counters in the same order, so counter-based IDs match between the pre-rendered HTML and the WASM runtime.
 
 ---
 
 ## Lifecycle
-
-SSR and WASM run the same component code but for different purposes. SSR generates static HTML and collects bindings. WASM hydrates that HTML with reactivity.
 
 | Step | SSR (Native Go) | WASM (Browser) |
 |------|-----------------|----------------|
 | 1 | `resetRegistries()` — all counters to 0 | *(counters start at 0)* |
 | 2 | `app = App.New()` — creates stores `s0`, `s1`, ... | `app = App.New()` — creates stores `s0`, `s1`, ... **same order** |
 | 3 | `app.OnMount()` — creates router, registers handlers `h0`, `h1`, ... | `app.OnMount()` — registers handlers `h0`, `h1`, ... **same order** |
-| 4 | `nodeToHTML(app.Render())` — walks node tree, generates HTML with comment markers, collects bindings | `walkNodeForComponents(app.Render())` — walks node tree to sync remaining counters (component options, nested handlers) |
-| 5 | Write HTML to `dist/{route}.html` | Decode `bindings.bin` |
-| 6 | Encode bindings to `dist/bindings.bin` | `applyBindings()` — wire DOM elements to stores via markers and IDs |
-| 7 | *(repeat steps 1-6 for each route)* | `select{}` — block forever to keep event listeners alive |
+| 4 | `nodeToHTML(app.Render())` — walks node tree, generates HTML with markers | `wasmWalkAndBind(app.Render())` — walks same tree, wires DOM bindings |
+| 5 | Write HTML to `dist/{route}.html` | `select{}` — block forever to keep event listeners alive |
+| 6 | *(repeat steps 1-5 for each route)* | |
 
-> **Critical invariant**: SSR and WASM must create stores and register handlers in the exact same order, so counter-based IDs (`s0`, `s1`, `h0`, `h1`, ...) match between the HTML and the WASM runtime.
+> **Critical invariant**: SSR and WASM must create stores and register handlers in the exact same order, so counter-based IDs (`s0`, `s1`, `h0`, `h1`, ...) match between the HTML and the WASM runtime. Both must also advance marker counters (`t0`, `i0`, `e0`, `r0`, ...) identically — this means both SSR and WASM render ALL branches of if-blocks and ALL options of Store[Component] to keep counters in sync, even though only the active branch is displayed.
 
 **Why `select{}`?** Go's WASM runtime tears down all `js.FuncOf` closures when `main()` returns. Since all event listeners and store callbacks are Go functions exposed to JS, the main goroutine must stay alive for the app to function.
 
@@ -87,8 +87,6 @@ path := p.NewWithID("mypath", "/home")  // explicit ID
 - `Update(fn func(T) T)` → transforms value via function
 - `OnChange(func(T))` → subscribes to changes
 
-Stores are looked up by ID during WASM hydration via `GetStore(id)`.
-
 ### List[T]
 
 ```go
@@ -102,9 +100,8 @@ items.Len()  // derived Store[int] with ID "s3.len"
 - `Append(items...)` → adds to end
 - `RemoveAt(i)` → removes at index
 - `Clear()` → removes all
-- `Len()` → returns a derived `*Store[int]` that tracks the list length (lazily created with ID `listID + ".len"`)
+- `Len()` → returns a derived `*Store[int]` that tracks the list length
 - `OnChange(func([]T))` → fires on any change
-- `OnEdit(func(Edit[T]))` → fires per individual edit operation
 
 ### Handlers
 
@@ -181,7 +178,7 @@ p.Html(`<p>`, p.Bind(myStore), `</p>`)       // explicit text binding
 
 When a `*Store[T]` is passed directly as a part, it's automatically wrapped in a `BindNode`.
 
-When a `*Store[Component]` with registered options is passed, it becomes a `ComponentBlock` (see [Component Blocks](#component-blocks)).
+When a `*Store[Component]` with registered options is passed, it becomes a ComponentBlock (see [Component Blocks](#component-blocks)).
 
 ### Chainable Methods on Html
 
@@ -230,7 +227,7 @@ p.Prop("Title", titleStore)                          // component prop
 
 ## Text Bindings
 
-Text bindings display a store's value in the DOM and update it reactively. They use the same comment marker pair pattern as all other block constructs.
+Text bindings display a store's value in the DOM and update it reactively.
 
 ### How It Works
 
@@ -238,27 +235,16 @@ Text bindings display a store's value in the DOM and update it reactively. They 
 p.Html(`<p>Hello, `, p.Bind(nameStore), `!</p>`)
 ```
 
-```mermaid
-graph LR
-    subgraph SSR
-        A["Bind(nameStore)"] --> B["marker pair: t0s...t0"]
-    end
-    subgraph WASM
-        C["nameStore.OnChange"] --> D["replaceMarkerContent(t0, val)"]
-    end
-```
-
-**SSR Output** (both text and HTML mode):
+**SSR Output:**
 ```html
 <p>Hello, <!--basics_t0s-->World<!--basics_t0-->!</p>
 ```
 
-**WASM Hydration:**
-1. Subscribes to `nameStore.OnChange`
-2. On change, calls `replaceMarkerContent("basics_t0", escapedValue)`
-3. For `BindAsHTML`, the value is not escaped (raw HTML is inserted)
-
-Text bindings use the same `replaceMarkerContent` mechanism as if-blocks, each-blocks, and component blocks — no special-case code.
+**WASM Tree Walk:**
+1. `wasmWalkAndBind` encounters the `BindNode`
+2. Advances `NextTextMarker()` → `t0`, builds `markerID` = `"basics_t0"`
+3. Subscribes to `nameStore.OnChange`
+4. On change, calls `replaceMarkerContent("basics_t0", escapedValue)`
 
 ---
 
@@ -272,39 +258,17 @@ Event bindings connect DOM events to Go handler functions.
 p.Html(`<button>+1</button>`).On("click", c.Increment)
 ```
 
-```mermaid
-graph LR
-    subgraph SSR
-        A[".On(click, handler)"] --> B["RegisterHandler → h0"]
-        B --> C["button id=h0 data-on=click"]
-    end
-    subgraph WASM
-        D["GetHandler(h0)"] --> E["addEventListener(click, wrapper)"]
-    end
-```
-
 **SSR Output:**
 ```html
 <button id="h0" data-on="click">+1</button>
 ```
 
-**Bindings entry:**
-```
-Event { ElementID: "h0", Event: "click" }
-```
-
-**WASM Hydration:**
-1. Looks up handler function via `GetHandler("h0")`
-2. Creates a `js.FuncOf` wrapper that calls the handler
-3. Calls `addEventListener("click", wrapper)` on the element
-
-### Event Modifiers
-
-```go
-p.Html(`<form>`).On("submit", handler).PreventDefault()
-```
-
-Modifiers are stored alongside the handler. The WASM event wrapper checks modifiers and calls `event.preventDefault()` or `event.stopPropagation()` before invoking the handler.
+**WASM Tree Walk:**
+1. `wasmBindHtmlNode` encounters the `HtmlNode` with events
+2. Uses the event's pre-registered handler ID (`h0`) as the element ID
+3. Looks up the handler via `GetHandler("h0")`
+4. Creates a `js.FuncOf` wrapper, calls `addEventListener("click", wrapper)` on the element
+5. Checks for modifiers (`PreventDefault`, `StopPropagation`) and applies them in the wrapper
 
 ---
 
@@ -319,17 +283,6 @@ p.Html(`<input type="text">`).Bind(nameStore)
 p.Html(`<input type="checkbox">`).Bind(boolStore)
 ```
 
-```mermaid
-graph LR
-    subgraph SSR
-        A[".Bind(nameStore)"] --> B["input id=s1 value=World"]
-    end
-    subgraph WASM
-        C["addEventListener(input)"] --> D["store.Set(el.value)"]
-        E["store.OnChange"] --> F["el.value = newVal"]
-    end
-```
-
 **SSR Output** (text input):
 ```html
 <input type="text" id="s1" value="World">
@@ -340,17 +293,10 @@ graph LR
 <input type="checkbox" id="s2" checked>
 ```
 
-**Bindings entry:**
-```
-InputBinding { StoreID: "s1", BindType: "value" }
-```
-
-**WASM Hydration:**
-1. Finds element by store ID
-2. Adds `input` event listener → calls `store.Set(element.value)`
-3. Subscribes to `store.OnChange` → sets `element.value`
-
-For checkboxes, uses `change` event and the `checked` property instead.
+**WASM Tree Walk:**
+1. `wasmBindHtmlNode` detects `h.BoundStore` is set
+2. Calls the appropriate `BindInput`, `BindInputInt`, or `BindCheckbox`
+3. These add bidirectional binding: DOM events → `store.Set()`, `store.OnChange` → DOM property update
 
 ---
 
@@ -370,52 +316,26 @@ p.If(score.Ge(90),
 )
 ```
 
-```mermaid
-graph TD
-    subgraph "SSR Output"
-        A["start marker i0s"] --> B["p.a Grade: A"]
-        B --> C["end marker i0"]
-    end
-    subgraph "bindings.bin"
-        D["IfBlock
-            MarkerID: i0
-            Branches: A, B conditions
-            ElseHTML: Grade: F
-            Deps: s0"]
-    end
-```
-
 **SSR Output** (assuming score is 95):
 ```html
 <!--basics_i0s--><p class="a">Grade: A</p><!--basics_i0-->
 ```
 
-All branch HTMLs are pre-baked into `bindings.bin`. Only the active branch is rendered in the SSR HTML.
+SSR renders ALL branches to advance counters, but only outputs the active branch's HTML.
 
-**WASM Hydration:**
-1. Subscribes to all dependency stores (`Deps`)
-2. On change, evaluates conditions to find the new active branch
-3. If branch changed, calls `replaceMarkerContent("basics_i0", newHTML)`:
-   - Finds `<!--basics_i0s-->` (start) and `<!--basics_i0-->` (end)
-   - Removes all DOM nodes between them
-   - Parses new HTML via `<template>` element
-   - Inserts fragment before end marker
-4. Releases old branch bindings, applies new branch bindings
-
-```mermaid
-graph LR
-    subgraph "Before (score=95)"
-        A1["i0s marker"] --- B1["Grade: A"] --- C1["i0 marker"]
-    end
-    subgraph "After score.Set(50)"
-        A2["i0s marker"] --- B2["Grade: F"] --- C2["i0 marker"]
-    end
-    B1 -.->|replaceMarkerContent| B2
-```
+**WASM Tree Walk (`wasmBindIfNode`):**
+1. Advances `NextIfMarker()` to get `markerID`
+2. **Counter-advance pass**: Walks ALL branches (active and inactive) to advance ID counters in sync with SSR. Saves the `IDCounter` state at the start of each branch in `branchCounters`.
+3. **Bind pass**: Restores the saved counter state for the active branch and calls `wasmWalkAndBind` on it to wire up its nested bindings.
+4. **Reactive updates**: Subscribes to condition stores. On change:
+   - Evaluates conditions to find new active branch
+   - Generates new HTML via `wasmNodeToHTML`
+   - Calls `replaceMarkerContent(markerID, newHTML)` to swap DOM content
+   - Walks the new branch tree to wire its bindings
 
 ### Nested Bindings
 
-Each branch can contain its own text bindings, events, nested if-blocks, etc. These are stored per-branch in `bindings.bin` and applied/released when branches swap.
+Each branch can contain its own text bindings, events, nested if-blocks, etc. These are discovered during the tree walk and wired/released when branches swap.
 
 ---
 
@@ -431,128 +351,50 @@ p.Each(items, func(item string, i int) p.Node {
 })
 ```
 
-```mermaid
-graph TD
-    subgraph "SSR"
-        A["Render with sentinel values"] --> B["Capture template HTML"]
-        B --> C["Replace sentinels: \x00I\x00, \x00N\x00"]
-        A --> D["Render actual items for HTML output"]
-    end
-    subgraph "bindings.bin"
-        E["EachBlock
-            MarkerID: e0
-            ListID: s3
-            BodyHTML: li template with sentinels"]
-    end
-```
-
-**SSR Template Capture:**
-
-The SSR renderer calls the body function once with sentinel values:
-- String lists: item = `\x00ITEM_SENTINEL\x00`, index = `9999999`
-- Int lists: item = `8888888`, index = `9999999`
-
-The rendered HTML is captured and sentinels are replaced with compact markers:
-- `\x00ITEM_SENTINEL\x00` → `\x00I\x00`
-- `9999999` → `\x00N\x00`
-
-This produces the `BodyHTML` template stored in `bindings.bin`.
-
 **SSR Output** (3 items):
 ```html
 <!--lists_e0s--><li>0: Apple</li><li>1: Banana</li><li>2: Cherry</li><!--lists_e0-->
 ```
 
-Items are rendered directly — no wrapper elements.
-
-**WASM Hydration:**
-1. Resolves the list store via `GetStore("s3")`
+**WASM Tree Walk:**
+1. Advances `NextEachMarker()` to get `markerID`
 2. Subscribes to `list.OnChange`
-3. On change, for each item:
-   - Replaces `\x00I\x00` with the item value
-   - Replaces `\x00N\x00` with the index
-4. Calls `replaceMarkerContent("lists_e0", concatenatedHTML)`
-
-```mermaid
-graph LR
-    subgraph "Before"
-        A1["e0s marker"] --- B1["Apple, Banana"] --- C1["e0 marker"]
-    end
-    subgraph "After items.Set X,Y"
-        A2["e0s marker"] --- B2["X, Y"] --- C2["e0 marker"]
-    end
-    B1 -.->|replaceMarkerContent| B2
-```
+3. On change, calls the body function for each item, renders to HTML via `wasmNodeToHTML`, and calls `replaceMarkerContent` with the concatenated HTML
 
 ---
 
 ## Component Blocks
 
-Dynamic component switching via `Store[Component]` with pre-baked branches.
+Dynamic component switching via `Store[Component]` with options.
 
 ### How It Works
 
 ```go
-// In App:
 type App struct {
     Current *p.Store[p.Component]
 }
 
-func (a *App) OnMount() {
-    router := p.NewRouter(a.Current, a.routes, "app")
-    router.Start()
-}
-
 func (a *App) Render() p.Node {
     return p.Html(`<main>`, a.Current, `</main>`)
-    //                      ^^^^^^^^^ Store[Component] with options
 }
 ```
 
-When `NewRouter` is called, it calls `componentStore.WithOptions(route.Component...)` to register all possible components. This tells the SSR renderer to pre-bake all branches.
+When `NewRouter` is called, it registers all possible components via `componentStore.WithOptions(...)`.
 
-```mermaid
-graph TD
-    subgraph "SSR"
-        A["Store[Component] with Options"] --> B["Render ALL branches"]
-        B --> C["Branch 'basics': HTML + Bindings"]
-        B --> D["Branch 'lists': HTML + Bindings"]
-        B --> E["Branch 'routing': HTML + Bindings"]
-        A --> F["Output active branch between markers"]
-    end
-    subgraph "bindings.bin"
-        G["ComponentBlock
-            MarkerID: r0, StoreID: s5
-            Branches: basics, lists, ...
-            Each with HTML + nested Bindings"]
-    end
-```
-
-**SSR Output** (active component is `basics`):
+**SSR**: Renders ALL option components to advance counters, outputs only the active one between markers:
 ```html
-<main><!--r0s--><div class="demo"><h1>Basics</h1>...</div><!--r0--></main>
+<main><!--app_r0s--><div class="demo">Basics...</div><!--app_r0--></main>
 ```
 
-All component branch HTMLs and their nested bindings are stored in `bindings.bin`.
-
-**WASM Hydration:**
-1. First call: skips DOM swap (trusts SSR content), applies active branch bindings
-2. On `Store[Component]` change:
-   - Gets new component's type name via reflection
-   - Finds matching branch by name
-   - Calls `replaceMarkerContent("r0", branchHTML)`
-   - Releases old bindings, applies new branch bindings
-
-```mermaid
-graph LR
-    subgraph "Before (route: /basics)"
-        A1["r0s marker"] --- B1["Basics component HTML"] --- C1["r0 marker"]
-    end
-    subgraph "After navigate(/lists)"
-        A2["r0s marker"] --- B2["Lists component HTML"] --- C2["r0 marker"]
-    end
-    B1 -.->|replaceMarkerContent| B2
-```
+**WASM Tree Walk (`wasmBindStoreComponent`):**
+1. Advances `NextRouteMarker()` to get `markerID`
+2. Checks `wasmRenderedTrees` cache for pre-rendered trees from the HTML pass (see [Render Cache](#render-cache))
+3. If cached: reuses the trees directly. If not (top-level Hydrate): does a counter-advance pass over ALL options
+4. **Bind pass**: Walks the active option's tree to wire its bindings
+5. **Reactive updates**: On `Store[Component]` change:
+   - Renders new component via `wasmNodeToHTML` (caches the tree)
+   - Calls `replaceMarkerContent` to swap DOM
+   - Walks the cached tree to wire new bindings
 
 ---
 
@@ -585,7 +427,7 @@ p.Html(`<div>content</div>`).AttrIf("class", score.Ge(90), "excellent")
 ```
 
 **WASM:**
-- For `class` attributes: uses `classList.add` / `classList.remove` for efficient toggling
+- For `class` attributes: uses `classList.add` / `classList.remove`
 - For other attributes: uses `setAttribute` / `removeAttribute`
 - Subscribes to condition store and optional value stores
 
@@ -607,37 +449,25 @@ Components with `Style()` get Svelte-style CSS scoping.
 
 ```go
 func (c *Counter) Style() string {
-    return `
-        .demo button { color: blue; }
-        .demo button:hover { color: red; }
-    `
+    return `.demo button { color: blue; }`
 }
 ```
 
 1. Each styled component gets a unique scope class (`v0`, `v1`, ...) via `GetOrCreateScope()`
-2. The CSS rules are rewritten to include the scope:
+2. CSS rules are rewritten to include the scope:
 
 ```css
 /* Before */
 .demo button { color: blue; }
-.demo button:hover { color: red; }
 
 /* After scoping with "v0" */
 .demo.v0 button.v0 { color: blue; }
-.demo.v0 button.v0:hover { color: red; }
 ```
 
-3. All HTML tags rendered within that component get the scope class injected:
+3. All HTML tags rendered within that component get the scope class injected via `injectScopeClass()`
+4. Scoped CSS is collected during SSR and emitted in a `<style>` tag in the HTML head
 
-```html
-<!-- Before scoping -->
-<div class="demo"><button>Click</button></div>
-
-<!-- After scoping with "v0" -->
-<div class="demo v0"><button class="v0">Click</button></div>
-```
-
-4. Scoped CSS is collected during SSR and emitted in a `<style>` tag in the HTML head.
+The `injectScopeClass` function handles tags split across multiple `HtmlNode` parts (e.g., `<div class="alert" ` + DynAttr + `>`) by injecting the scope class even when the closing `>` isn't in the current string part.
 
 ---
 
@@ -653,19 +483,6 @@ type App struct {
     routes           []p.Route
 }
 
-func (a *App) New() p.Component {
-    basics := (&Basics{}).New()
-    lists := (&Lists{}).New()
-
-    return &App{
-        CurrentComponent: p.New(basics),
-        routes: []p.Route{
-            {Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
-            {Path: "/lists",  HTMLFile: "lists.html",  SSRPath: "/lists",  Component: lists},
-        },
-    }
-}
-
 func (a *App) OnMount() {
     router := p.NewRouter(a.CurrentComponent, a.routes, "app")
     router.Start()
@@ -676,24 +493,9 @@ func (a *App) OnMount() {
 
 - `NewRouter` calls `componentStore.WithOptions(...)` to register all route components
 - `Start()` reads the SSR path (set via `SetSSRPath`) and calls `handleRoute()`
-- `handleRoute` finds the matching route and sets the component store
-- The SSR renderer then bakes all route component branches into the ComponentBlock
+- The SSR renderer renders all route component branches
 
 ### WASM Behavior
-
-```mermaid
-graph TD
-    A[User clicks link] --> B[Router.SetupLinks interceptor]
-    B --> C{Internal link?}
-    C -->|Yes| D[preventDefault]
-    D --> E[Router.Navigate]
-    E --> F[history.pushState]
-    F --> G[handleRoute]
-    G --> H[Find matching route]
-    H --> I[componentStore.Set]
-    I --> J[ComponentBlock updates DOM]
-    C -->|No| K[Normal navigation]
-```
 
 - `SetupLinks()` intercepts all `<a>` clicks on the document
 - Skips external links, `target="_blank"`, modifier keys, hash-only links
@@ -744,39 +546,6 @@ Store and handler IDs are global (no prefix). Marker and element IDs are prefixe
 
 ---
 
-## Bindings Binary
-
-All binding metadata is serialized to `bindings.bin` using a compact binary format.
-
-### Format
-
-- **Varint**: 7 bits per byte, high bit = continuation
-- **String**: varint length + raw bytes
-- **Bool**: single byte (0 or 1)
-- **Slices**: varint count + items
-- **Nullable**: byte 0 = nil, 1 = present + data
-
-### Encoding Order
-
-```
-1. TextBindings     [StoreID, MarkerID, IsHTML]
-2. Events           [ElementID, Event]
-3. IfBlocks         [MarkerID, Branches[HTML, StoreID, Op, Operand, IsBool, ?Bindings],
-                     ElseHTML, ?ElseBindings, Deps]
-4. EachBlocks       [MarkerID, ListID, BodyHTML]
-5. InputBindings    [StoreID, BindType]
-6. AttrBindings     [ElementID, AttrName, Template, StoreIDs]
-7. AttrCondBindings [ElementID, AttrName, TrueValue, FalseValue, TrueStoreID,
-                     FalseStoreID, Op, Operand, IsBool, Deps]
-8. ComponentBlocks  [MarkerID, StoreID, Branches[Name, HTML, ?Bindings]]
-```
-
-The `?Bindings` fields are recursive — nested if-blocks and component blocks within branches have their own bindings trees.
-
-HTML strings are minified (whitespace between tags collapsed) before encoding.
-
----
-
 ## Comment Marker System
 
 The framework uses a unified comment marker pair pattern for all block constructs that swap DOM content:
@@ -790,7 +559,7 @@ The framework uses a unified comment marker pair pattern for all block construct
 
 ### replaceMarkerContent
 
-All block types (IfBlock, EachBlock, ComponentBlock) use the same DOM replacement function:
+All block types (text, if, each, component) use the same DOM replacement function:
 
 ```
 replaceMarkerContent(markerID, newHTML):
@@ -802,10 +571,60 @@ replaceMarkerContent(markerID, newHTML):
 ```
 
 This approach:
-- Avoids `innerHTML` on parent elements (which can mangle invalid nesting like `<span>` inside `<ul>`)
-- Avoids wrapper elements entirely — content is inserted as bare DOM nodes
-- Works regardless of HTML content model (valid inside `<ul>`, `<table>`, `<select>`, etc.)
-- Both markers persist across replacements, so subsequent updates always find them
+- Avoids `innerHTML` on parent elements (which can mangle invalid nesting)
+- Avoids wrapper elements — content is inserted as bare DOM nodes
+- Works regardless of HTML content model (`<ul>`, `<table>`, `<select>`, etc.)
+- Both markers persist across replacements
+
+---
+
+## WASM Tree Walking
+
+The WASM hydration walks the same Render() tree that SSR uses, but instead of generating HTML, it wires DOM bindings.
+
+### Two Contexts
+
+| | SSR (`BuildContext`) | WASM (`WASMRenderContext`) |
+|---|---|---|
+| **Contains** | IDCounter, SlotContent, CollectedStyles, ScopeAttr | IDCounter, ScopeAttr |
+| **Purpose** | Generate HTML string | Advance counters, discover bindings |
+| **Entry** | `nodeToHTML(tree, ctx)` | `wasmWalkAndBind(tree, ctx, cleanup)` |
+
+Both contexts embed `IDCounter` so they advance markers identically.
+
+### WASM HTML Generation
+
+When a reactive update requires new HTML (e.g., if-block branch swap, each-block re-render, component switch), WASM generates HTML using `wasmNodeToHTML()`. This mirrors SSR's `nodeToHTML()` but runs in the browser. The generated HTML is inserted via `replaceMarkerContent`, then the tree is walked again with `wasmWalkAndBind` to wire bindings for the new content.
+
+### Counter Synchronization for Branches
+
+Both SSR and WASM must render ALL branches of if-blocks and ALL options of Store[Component] to advance counters identically, even for inactive branches. This ensures marker IDs like `basics_i0`, `basics_e0` match between the pre-rendered HTML and the WASM runtime.
+
+For if-blocks, `wasmBindIfNode` saves the IDCounter state at the start of each branch (`branchCounters`) so the active branch can be walked for binding with the correct counter values.
+
+---
+
+## Render Cache
+
+`Render()` has side effects — it calls `.On("click", handler)` which registers handlers with auto-incrementing IDs. Calling `Render()` multiple times produces different handler IDs. The caching system ensures each component's `Render()` is called exactly once.
+
+### ComponentNode Cache
+
+`ComponentNode` has a `renderCache` field. When `wasmComponentNodeToHTML` renders a component for HTML generation, it stores the result in `renderCache`. When `wasmBindComponentNode` later walks the same component for binding, it reuses the cached tree instead of calling `Render()` again.
+
+### Store[Component] Cache
+
+`wasmRenderedTrees` is a global map keyed by marker ID. When `wasmStoreComponentToHTML` renders all options of a Store[Component] for HTML generation, it caches each option's Render() tree. When `wasmBindStoreComponent` later processes the same Store[Component], it finds the cached trees and skips the redundant counter-advance pass.
+
+```go
+type wasmCachedOption struct {
+    comp      Component
+    name      string
+    tree      Node
+    scopeAttr string
+}
+var wasmRenderedTrees = make(map[string][]wasmCachedOption)
+```
 
 ---
 
@@ -813,21 +632,29 @@ This approach:
 
 | File | Build Tag | Purpose |
 |------|-----------|---------|
-| `store.go` | (shared) | Stores, Lists, Maps, interfaces, registries |
-| `node.go` | (shared) | Node types, DSL functions, conditions |
+| `store.go` | (shared) | Stores, Lists, interfaces, registries |
+| `node.go` | (shared) | Node types, DSL functions, conditions, `ftoa` |
 | `id.go` | (shared) | ID counter types and generators |
 | `css_scope.go` | (shared) | CSS scoping logic |
 | `route_match.go` | (shared) | Route pattern matching |
-| `node_html.go` | `!js \|\| !wasm` | SSR rendering, ToHTML methods, bindings collection |
-| `hydrate.go` | `!js \|\| !wasm` | SSR entry point, HTML document generation |
-| `bindings_encode.go` | `!js \|\| !wasm` | Binary encoding of bindings |
-| `router_stub.go` | `!wasm` | SSR router stubs |
+| `node_html_shared.go` | (shared) | Shared HTML utilities: `injectAttrs`, `injectScopeClass`, `setComponentProps` |
+| `node_html.go` | `!js \|\| !wasm` | SSR rendering: ToHTML methods, HTML generation |
+| `node_html_wasm.go` | `js && wasm` | WASM HTML generation: `wasmNodeToHTML`, render caches |
+| `hydrate.go` | `!js \|\| !wasm` | SSR entry point: route iteration, HTML document generation |
+| `hydrate_wasm.go` | `js && wasm` | WASM entry point: `Hydrate()`, `wasmWalkAndBind`, all `wasmBind*` functions |
+| `runtime.go` | `js && wasm` | DOM helpers: `FindComment`, `BindInput`, `BindCheckbox`, batch binding |
 | `runtime_stub.go` | `!js \|\| !wasm` | SSR DOM stubs |
-| `js_stub.go` | `!wasm` | Fake JS API for SSR |
-| `hydrate_wasm.go` | `js && wasm` | WASM hydration, all bind* functions |
-| `bindings_decode.go` | `js && wasm` | Binary decoding of bindings |
-| `runtime.go` | `js && wasm` | DOM helpers, FindComment, batch binding |
 | `router.go` | `wasm` | Client-side SPA router |
+| `router_stub.go` | `!wasm` | SSR router stubs |
+| `js_stub.go` | `!wasm` | Fake JS API for SSR |
+| `codec.go` | `js && wasm` | WASM codec utilities |
+| `codec_stub.go` | `!js \|\| !wasm` | SSR codec stubs |
+| `fetch.go` | `js && wasm` | WASM fetch API |
+| `fetch_stub.go` | `!js \|\| !wasm` | SSR fetch stubs |
+| `storage.go` | `js && wasm` | WASM localStorage API |
+| `storage_stub.go` | `!js \|\| !wasm` | SSR storage stubs |
+| `ticker.go` | `js && wasm` | WASM timer utilities |
+| `ticker_stub.go` | `!js \|\| !wasm` | SSR ticker stubs |
 
 ### Stub Pattern
 
@@ -840,3 +667,13 @@ For each WASM-only file, there's a corresponding stub file for the SSR build:
 - `ticker.go` ↔ `ticker_stub.go`
 
 Stubs provide no-op implementations so the package compiles for native Go.
+
+### Key Shared vs Split Files
+
+```
+node_html_shared.go  (no build tag)  — HTML utilities used by both SSR and WASM
+node_html.go         (!js || !wasm)  — SSR: nodeToHTML, ToHTML methods
+node_html_wasm.go    (js && wasm)    — WASM: wasmNodeToHTML, render caches
+hydrate.go           (!js || !wasm)  — SSR: Hydrate entry, HTML document output
+hydrate_wasm.go      (js && wasm)    — WASM: Hydrate entry, wasmWalkAndBind
+```
