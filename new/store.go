@@ -53,6 +53,16 @@ type HasID interface {
 	ID() string
 }
 
+// AnyGetter is implemented by stores to return their value as any.
+type AnyGetter interface {
+	GetAny() any
+}
+
+// AnySubscriber is implemented by stores to subscribe without knowing the value type.
+type AnySubscriber interface {
+	OnChangeAny(func())
+}
+
 // Store is a generic reactive container that calls callbacks on mutation
 type Store[T any] struct {
 	id        string
@@ -209,6 +219,12 @@ func (s *Store[T]) Update(fn func(T) T) {
 func (s *Store[T]) OnChange(cb func(T)) {
 	s.callbacks = append(s.callbacks, cb)
 }
+
+// GetAny returns the current value as any.
+func (s *Store[T]) GetAny() any { return s.value }
+
+// OnChangeAny adds a callback that runs on change without receiving the value.
+func (s *Store[T]) OnChangeAny(fn func()) { s.OnChange(func(_ T) { fn() }) }
 
 func (s *Store[T]) notify() {
 	for _, cb := range s.callbacks {

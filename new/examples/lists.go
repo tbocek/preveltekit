@@ -89,30 +89,30 @@ func (l *Lists) Render() p.Node {
 			<h2>List Operations</h2>
 			<p>Items: <strong>`, l.Items.Len(), `</strong></p>
 
-			<div class="input-row">
-				`, p.Html(`<input type="text" placeholder="New item name">`).Bind(l.NewItem), `
-			</div>
+			<div class="input-row">`,
+		p.Html(`<input type="text" placeholder="New item name">`).Bind(l.NewItem),
+		`</div>
 
 			<div class="button-group">
-				<h3>Add</h3>
-				`, p.Html(`<button>Prepend</button>`).On("click", l.PrependItem), `
-				`, p.Html(`<button>Insert Middle</button>`).On("click", l.InsertMiddle), `
-				`, p.Html(`<button>Append</button>`).On("click", l.AddItem), `
-			</div>
+				<h3>Add</h3>`,
+		p.Html(`<button>Prepend</button>`).On("click", l.PrependItem),
+		p.Html(`<button>Insert Middle</button>`).On("click", l.InsertMiddle),
+		p.Html(`<button>Append</button>`).On("click", l.AddItem),
+		`</div>
 
 			<div class="button-group">
-				<h3>Remove</h3>
-				`, p.Html(`<button>First</button>`).On("click", l.RemoveFirst), `
-				`, p.Html(`<button>Middle</button>`).On("click", l.RemoveMiddle), `
-				`, p.Html(`<button>Last</button>`).On("click", l.RemoveLast), `
-				`, p.Html(`<button>Clear All</button>`).On("click", l.ClearAll), `
-			</div>
+				<h3>Remove</h3>`,
+		p.Html(`<button>First</button>`).On("click", l.RemoveFirst),
+		p.Html(`<button>Middle</button>`).On("click", l.RemoveMiddle),
+		p.Html(`<button>Last</button>`).On("click", l.RemoveLast),
+		p.Html(`<button>Clear All</button>`).On("click", l.ClearAll),
+		`</div>
 
 			<div class="button-group">
-				<h3>Replace All (simulates fetch)</h3>
-				`, p.Html(`<button>Load Fruits</button>`).On("click", l.LoadFruits), `
-				`, p.Html(`<button>Load Numbers</button>`).On("click", l.LoadNumbers), `
-			</div>
+				<h3>Replace All (simulates fetch)</h3>`,
+		p.Html(`<button>Load Fruits</button>`).On("click", l.LoadFruits),
+		p.Html(`<button>Load Numbers</button>`).On("click", l.LoadNumbers),
+		`</div>
 
 			<div class="list-container">
 				<h3>Current Items</h3>`,
@@ -124,8 +124,8 @@ func (l *Lists) Render() p.Node {
 				`</ul>`),
 		).Else(
 			p.Html(`<p class="empty">No items in list</p>`),
-		),
-		`</div>
+		), `
+			</div>
 		</section>
 
 		<section>

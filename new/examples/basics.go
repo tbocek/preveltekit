@@ -67,13 +67,13 @@ func (b *Basics) Render() p.Node {
 
 		<section>
 			<h2>Counter — Store, Set, Update, On</h2>
-			<p>Count: <strong>`, b.Count, `</strong></p>
-			`, p.Html(`<button>-1</button>`).On("click", b.Decrement), `
-			`, p.Html(`<button>+1</button>`).On("click", b.Increment), `
-			`, p.Html(`<button>+5</button>`).On("click", func() { b.Add(5) }), `
-			`, p.Html(`<button>Double</button>`).On("click", b.Double), `
-			`, p.Html(`<button>Reset</button>`).On("click", b.Reset), `
-			<pre class="code">Count := p.New(0)                           // create store
+			<p>Count: <strong>`, b.Count, `</strong></p>`,
+		p.Html(`<button>-1</button>`).On("click", b.Decrement),
+		p.Html(`<button>+1</button>`).On("click", b.Increment),
+		p.Html(`<button>+5</button>`).On("click", func() { b.Add(5) }),
+		p.Html(`<button>Double</button>`).On("click", b.Double),
+		p.Html(`<button>Reset</button>`).On("click", b.Reset),
+		`<pre class="code">Count := p.New(0)                           // create store
 Count.Set(5)                                 // set value
 Count.Update(func(v int) int { return v+1 }) // transform
 
@@ -87,24 +87,25 @@ p.Html(`+"`"+`&lt;button>+1&lt;/button>`+"`"+`).On("click", Increment)</pre>
 		<section>
 			<h2>Conditionals — If / ElseIf / Else</h2>
 			<p>Score: `, b.Score, `</p>
-			`, p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
-		p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
-	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
-		p.Html(`<p class="grade b">Grade: B - Good</p>`),
-	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
-		p.Html(`<p class="grade c">Grade: C - Average</p>`),
-	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
-		p.Html(`<p class="grade d">Grade: D - Below Average</p>`),
-	).Else(
-		p.Html(`<p class="grade f">Grade: F - Failing</p>`),
-	), `
-			<div class="buttons">
-				`, p.Html(`<button>A</button>`).On("click", func() { b.SetScore(95) }), `
-				`, p.Html(`<button>B</button>`).On("click", func() { b.SetScore(85) }), `
-				`, p.Html(`<button>C</button>`).On("click", func() { b.SetScore(75) }), `
-				`, p.Html(`<button>D</button>`).On("click", func() { b.SetScore(65) }), `
-				`, p.Html(`<button>F</button>`).On("click", func() { b.SetScore(50) }), `
-			</div>
+			`,
+		p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
+			p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
+		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
+			p.Html(`<p class="grade b">Grade: B - Good</p>`),
+		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
+			p.Html(`<p class="grade c">Grade: C - Average</p>`),
+		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
+			p.Html(`<p class="grade d">Grade: D - Below Average</p>`),
+		).Else(
+			p.Html(`<p class="grade f">Grade: F - Failing</p>`),
+		), `
+			<div class="buttons">`,
+		p.Html(`<button>A</button>`).On("click", func() { b.SetScore(95) }),
+		p.Html(`<button>B</button>`).On("click", func() { b.SetScore(85) }),
+		p.Html(`<button>C</button>`).On("click", func() { b.SetScore(75) }),
+		p.Html(`<button>D</button>`).On("click", func() { b.SetScore(65) }),
+		p.Html(`<button>F</button>`).On("click", func() { b.SetScore(50) }),
+		`</div>
 			<pre class="code">p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
     p.Html(`+"`"+`&lt;p>Grade: A&lt;/p>`+"`"+`),
 ).ElseIf(p.Cond(func() bool { return Score.Get() >= 80 }, Score),
@@ -162,11 +163,11 @@ p.Html(`+"`"+`&lt;div>...&lt;/div>`+"`"+`).AttrIf("class", p.Cond(func() bool { 
 			`, p.Html(`<div class="outer-click">
 				Outer (click me)
 				<div>`, p.Html(`<button>Inner (click me)</button>`).On("click", func() {
-		b.Message.Set("Inner clicked!")
-	}).StopPropagation(), `</div>
+			b.Message.Set("Inner clicked!")
+		}).StopPropagation(), `</div>
 			</div>`).On("click", func() {
-		b.Message.Set("Outer clicked!")
-	}), `
+			b.Message.Set("Outer clicked!")
+		}), `
 			<p class="message">`, b.Message, `</p>
 			<pre class="code">// inner button stops event from reaching outer div
 p.Html(`+"`"+`&lt;button>Inner&lt;/button>`+"`"+`).On("click", handler).StopPropagation()</pre>

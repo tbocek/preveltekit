@@ -78,7 +78,6 @@ func (r *Routing) Render() p.Node {
 			<p>Simple tab-based navigation pattern:</p>
 
 			<div class="tabs">`,
-		// Chained: AttrIf + On
 		p.Html(`<button>Home</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "home" }, r.CurrentTab), "active").On("click", func() { r.GoHome() }),
 		p.Html(`<button>Profile</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "profile" }, r.CurrentTab), "active").On("click", func() { r.GoProfile() }),
 		p.Html(`<button>Settings</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "settings" }, r.CurrentTab), "active").On("click", func() { r.GoSettings() }),
@@ -94,8 +93,8 @@ func (r *Routing) Render() p.Node {
 			p.Html(`<div class="tab-panel"><h3>Settings</h3><p>Configure your application settings.</p></div>`),
 		).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "notifications" }, r.CurrentTab),
 			p.Html(`<div class="tab-panel"><h3>Notifications</h3><p>View your recent notifications.</p></div>`),
-		),
-		`</div>
+		), `
+			</div>
 		</section>
 
 		<section>
@@ -103,7 +102,6 @@ func (r *Routing) Render() p.Node {
 			<p>Multi-step form navigation:</p>
 
 			<div class="stepper">`,
-		// NEW SYNTAX: Multiple AttrIf for same attribute (additive)
 		p.Html(`<div class="step">
 					<button>1</button>
 					<span>Details</span>
@@ -145,11 +143,10 @@ func (r *Routing) Render() p.Node {
 			p.Html(`<div class="step-panel"><h3>Step 3: Payment Method</h3><p>Choose your payment method.</p></div>`),
 		).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep),
 			p.Html(`<div class="step-panel"><h3>Step 4: Confirmation</h3><p>Review and confirm your order.</p></div>`),
-		),
-		`</div>
+		), `
+			</div>
 
 			<div class="step-buttons">`,
-		// Chained: On with AttrIf for disabled state
 		p.Html(`<button>Previous</button>`).
 			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep), "disabled").
 			On("click", func() { r.PrevStep() }),

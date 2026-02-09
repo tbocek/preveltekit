@@ -8,62 +8,62 @@ const IsBuildTime = true
 // Stub implementations for non-WASM builds (SSR/pre-rendering)
 // These are no-ops since DOM manipulation only happens in the browser
 
-// Document is a no-op stub for SSR (uses jsValue from js_stub.go)
-var Document = &jsValue{}
+// document is a no-op stub for SSR (uses jsValue from js_stub.go)
+var document = &jsValue{}
 
-func GetEl(id string) *jsValue           { return &jsValue{} }
-func FindComment(marker string) *jsValue { return &jsValue{} }
+func getEl(id string) *jsValue           { return &jsValue{} }
+func findComment(marker string) *jsValue { return &jsValue{} }
 
-// Cleanup holds js.Func references for batch release (stub for SSR).
-type Cleanup struct{}
+// cleanupBag holds js.Func references for batch release (stub for SSR).
+type cleanupBag struct{}
 
 // Add is a no-op for SSR.
-func (c *Cleanup) Add(fn jsFunc) {}
+func (c *cleanupBag) Add(fn jsFunc) {}
 
 // AddDestroy is a no-op for SSR.
-func (c *Cleanup) AddDestroy(fn func()) {}
+func (c *cleanupBag) AddDestroy(fn func()) {}
 
 // Release is a no-op for SSR.
-func (c *Cleanup) Release() {}
+func (c *cleanupBag) Release() {}
 
 // jsFunc is a stub for js.Func in non-WASM builds
 type jsFunc struct{}
 
-// Bindable is implemented by types that can be bound to DOM elements.
-type Bindable[T any] interface {
+// bindable is implemented by types that can be bound to DOM elements.
+type bindable[T any] interface {
 	Get() T
 	OnChange(func(T))
 }
 
-// Settable extends Bindable with Set capability for two-way binding
-type Settable[T any] interface {
-	Bindable[T]
+// settable extends bindable with Set capability for two-way binding
+type settable[T any] interface {
+	bindable[T]
 	Set(T)
 }
 
-func BindInput(id string, store Settable[string]) jsFunc  { return jsFunc{} }
-func BindInputInt(id string, store Settable[int]) jsFunc  { return jsFunc{} }
-func BindCheckbox(id string, store Settable[bool]) jsFunc { return jsFunc{} }
+func bindInput(id string, store settable[string]) jsFunc  { return jsFunc{} }
+func bindInputInt(id string, store settable[int]) jsFunc  { return jsFunc{} }
+func bindCheckbox(id string, store settable[bool]) jsFunc { return jsFunc{} }
 
 // Batch binding types and functions (stubs for SSR)
-type Evt struct {
+type evt struct {
 	ID    string
 	Event string
 	Fn    func()
 }
 
-func BindEvents(c *Cleanup, events []Evt) {}
+func bindEvents(c *cleanupBag, events []evt) {}
 
-type Inp struct {
+type inp struct {
 	ID    string
-	Store Settable[string]
+	Store settable[string]
 }
 
-func BindInputs(c *Cleanup, bindings []Inp) {}
+func bindInputs(c *cleanupBag, bindings []inp) {}
 
-type Chk struct {
+type chk struct {
 	ID    string
-	Store Settable[bool]
+	Store settable[bool]
 }
 
-func BindCheckboxes(c *Cleanup, bindings []Chk) {}
+func bindCheckboxes(c *cleanupBag, bindings []chk) {}

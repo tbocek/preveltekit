@@ -75,8 +75,8 @@ p.Comp(&amp;Badge{Label: p.New("New")})</pre>
 
 		<section>
 			<h2>Dynamic Props</h2>
-			<p>Props can be bound to reactive stores:</p>
-			`, p.Html(`<input type="text" placeholder="Card title">`).Bind(c.CardTitle),
+			<p>Props can be bound to reactive stores:</p>`,
+		p.Html(`<input type="text" placeholder="Card title">`).Bind(c.CardTitle),
 		p.Comp(&Card{Title: c.CardTitle},
 			p.Html(`<p>This card's title updates as you type above.</p>`),
 		),
@@ -87,9 +87,10 @@ p.Comp(&amp;Badge{Label: p.New("New")})</pre>
 			<p>Components can accept child content via slots:</p>`,
 		p.Comp(&Card{Title: p.New("Card with Slot")},
 			p.Html(`<p>This content is passed through the <strong>slot</strong>.</p>
-				<p>You can put any HTML here!</p>`),
+					<p>You can put any HTML here!</p>`),
 		),
-		`<pre class="code">func (c *Card) Render() p.Node {
+		`
+			<pre class="code">func (c *Card) Render() p.Node {
     return p.Html(`+"`"+`&lt;div class="card">
         &lt;div class="card-header">`+"`"+`, c.Title, `+"`"+`&lt;/div>
         &lt;div class="card-body">`+"`"+`, p.Slot(), `+"`"+`&lt;/div>
@@ -120,12 +121,12 @@ p.Comp(&amp;Button{Label: p.New("Click"), OnClick: handler})</pre>
 		<section>
 			<h2>Conditional Styling Component</h2>
 			<p>Components with dynamic classes based on props:</p>
-			<div class="alert-buttons">
-				`, p.Html(`<button>Info</button>`).On("click", c.SetAlertInfo), `
-				`, p.Html(`<button>Success</button>`).On("click", c.SetAlertSuccess), `
-				`, p.Html(`<button>Warning</button>`).On("click", c.SetAlertWarning), `
-				`, p.Html(`<button>Error</button>`).On("click", c.SetAlertError), `
-			</div>`,
+			<div class="alert-buttons">`,
+		p.Html(`<button>Info</button>`).On("click", c.SetAlertInfo),
+		p.Html(`<button>Success</button>`).On("click", c.SetAlertSuccess),
+		p.Html(`<button>Warning</button>`).On("click", c.SetAlertWarning),
+		p.Html(`<button>Error</button>`).On("click", c.SetAlertError),
+		`</div>`,
 		p.Comp(&Alert{Type: c.AlertType, Message: c.AlertMessage}),
 		`<pre class="code">// Attr() sets dynamic attributes from stores
 p.Html(`+"`"+`&lt;div class="alert">`+"`"+`).Attr("data-type", alertType)
@@ -138,15 +139,15 @@ func (a *Alert) Style() string { return `+"`"+`.alert{...}`+"`"+` }</pre>
 			<h2>Conditional Components</h2>
 			<p>Components with slots and props inside if-blocks:</p>
 			<p>Current view: <strong>`, c.ViewMode, `</strong></p>
-			<div class="view-buttons">
-				`, p.Html(`<button>Card</button>`).On("click", func() { c.SetViewMode("card") }), `
-				`, p.Html(`<button>Badge</button>`).On("click", func() { c.SetViewMode("badge") }), `
-				`, p.Html(`<button>Alert</button>`).On("click", func() { c.SetViewMode("alert") }), `
-			</div>
-			`, p.If(p.Cond(func() bool { return c.ViewMode.Get() == "card" }, c.ViewMode),
+			<div class="view-buttons">`,
+		p.Html(`<button>Card</button>`).On("click", func() { c.SetViewMode("card") }),
+		p.Html(`<button>Badge</button>`).On("click", func() { c.SetViewMode("badge") }),
+		p.Html(`<button>Alert</button>`).On("click", func() { c.SetViewMode("alert") }),
+		`</div>`,
+		p.If(p.Cond(func() bool { return c.ViewMode.Get() == "card" }, c.ViewMode),
 			p.Comp(&Card{Title: c.CardTitle},
 				p.Html(`<p>This card appears conditionally.</p>
-				<p>It receives a <strong>dynamic prop</strong> and <strong>slot content</strong>.</p>`),
+						<p>It receives a <strong>dynamic prop</strong> and <strong>slot content</strong>.</p>`),
 			),
 		).ElseIf(p.Cond(func() bool { return c.ViewMode.Get() == "badge" }, c.ViewMode),
 			p.Comp(&Badge{Label: c.Message}),

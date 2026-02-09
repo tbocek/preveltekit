@@ -98,10 +98,10 @@ func (d *Derived) Render() p.Node {
 		<section>
 			<h2>Derived3 — Three Sources</h2>
 			<p class="hint">A store computed from three sources. Change any input to update the summary.</p>
-			<p>Age: <strong>`, d.Age, `</strong></p>
-			`, p.Html(`<button>-1</button>`).On("click", d.DecrementAge), `
-			`, p.Html(`<button>+1</button>`).On("click", d.IncrementAge), `
-			<p>Summary: <strong>`, d.Summary, `</strong></p>
+			<p>Age: <strong>`, d.Age, `</strong></p>`,
+		p.Html(`<button>-1</button>`).On("click", d.DecrementAge),
+		p.Html(`<button>+1</button>`).On("click", d.IncrementAge),
+		`<p>Summary: <strong>`, d.Summary, `</strong></p>
 		</section>
 		<section>
 			<h2>Code</h2>

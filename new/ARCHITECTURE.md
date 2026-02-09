@@ -342,7 +342,7 @@ Each `.Bind()` call gets its own unique element ID via `NextBindID()` (`b0`, `b1
 **WASM Tree Walk:**
 1. `wasmBindHtmlNode` detects `h.BoundStore` is set
 2. Advances `NextBindID()` to get the bind element ID (matching SSR)
-3. Calls the appropriate `BindInput`, `BindInputInt`, or `BindCheckbox`
+3. Calls the appropriate `bindInput`, `bindInputInt`, or `bindCheckbox`
 4. These add bidirectional binding: DOM events → `store.Set()`, `store.OnChange` → DOM property update
 
 ---

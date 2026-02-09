@@ -127,18 +127,6 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 			sb.WriteString(nodeToHTML(v, ctx))
 		case NodeAttr:
 			sb.WriteString(attrToHTMLString(v, ctx))
-		case *Store[string]:
-			bindNode := &BindNode{StoreRef: v, IsHTML: false}
-			sb.WriteString(bindNode.ToHTML(ctx))
-		case *Store[int]:
-			bindNode := &BindNode{StoreRef: v, IsHTML: false}
-			sb.WriteString(bindNode.ToHTML(ctx))
-		case *Store[bool]:
-			bindNode := &BindNode{StoreRef: v, IsHTML: false}
-			sb.WriteString(bindNode.ToHTML(ctx))
-		case *Store[float64]:
-			bindNode := &BindNode{StoreRef: v, IsHTML: false}
-			sb.WriteString(bindNode.ToHTML(ctx))
 		case *Store[Component]:
 			comp := v.Get()
 			if comp != nil && len(v.Options()) > 0 {
@@ -200,6 +188,9 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 				html := nodeToHTML(comp.Render(), childCtx)
 				sb.WriteString(html)
 			}
+		case AnyGetter:
+			bindNode := &BindNode{StoreRef: v, IsHTML: false}
+			sb.WriteString(bindNode.ToHTML(ctx))
 		default:
 			sb.WriteString(escapeHTML(fmt.Sprintf("%v", v)))
 		}
@@ -258,10 +249,8 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 			switch v := part.(type) {
 			case string:
 				attrValue += v
-			case *Store[string]:
-				attrValue += v.Get()
-			case *Store[int]:
-				attrValue += fmt.Sprintf("%d", v.Get())
+			case AnyGetter:
+				attrValue += anyToString(v.GetAny())
 			}
 		}
 		return fmt.Sprintf(`data-attrbind="%s" %s="%s"`, fullID, a.Name, escapeAttr(attrValue))
@@ -273,17 +262,8 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 // ToHTML generates HTML for a bind node (text interpolation).
 func (b *BindNode) ToHTML(ctx *BuildContext) string {
 	var value string
-	switch s := b.StoreRef.(type) {
-	case *Store[string]:
-		value = s.Get()
-	case *Store[int]:
-		value = fmt.Sprintf("%d", s.Get())
-	case *Store[bool]:
-		value = fmt.Sprintf("%t", s.Get())
-	case *Store[float64]:
-		value = fmt.Sprintf("%g", s.Get())
-	default:
-		value = ""
+	if g, ok := b.StoreRef.(AnyGetter); ok {
+		value = anyToString(g.GetAny())
 	}
 
 	localMarker := ctx.NextTextMarker()

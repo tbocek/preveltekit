@@ -168,11 +168,11 @@ func (f *Fetch) Render() p.Node {
 			<h2>GET — Typed Fetch</h2>
 			<p>Fetch data with automatic JSON decoding into Go structs:</p>
 
-			<div class="buttons">
-				`, p.Html(`<button>GET Todo</button>`).On("click", f.FetchTodo), `
-				`, p.Html(`<button>GET User</button>`).On("click", f.FetchUser), `
-				`, p.Html(`<button>GET Post</button>`).On("click", f.FetchPost), `
-			</div>`,
+			<div class="buttons">`,
+		p.Html(`<button>GET Todo</button>`).On("click", f.FetchTodo),
+		p.Html(`<button>GET User</button>`).On("click", f.FetchUser),
+		p.Html(`<button>GET Post</button>`).On("click", f.FetchPost),
+		`</div>`,
 
 		p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
 			p.Html(`<pre>`, f.RawData, `</pre>`),
@@ -186,12 +186,12 @@ func (f *Fetch) Render() p.Node {
 		<section>
 			<h2>POST / PUT / PATCH / DELETE</h2>
 			<p>All HTTP methods with typed request and response bodies:</p>
-			<div class="buttons">
-				`, p.Html(`<button>POST Create</button>`).On("click", f.CreatePost), `
-				`, p.Html(`<button>PUT Update</button>`).On("click", f.UpdatePost), `
-				`, p.Html(`<button>PATCH Title</button>`).On("click", f.PatchPost), `
-				`, p.Html(`<button>DELETE Post</button>`).On("click", f.DeletePost), `
-			</div>`,
+			<div class="buttons">`,
+			p.Html(`<button>POST Create</button>`).On("click", f.CreatePost),
+			p.Html(`<button>PUT Update</button>`).On("click", f.UpdatePost),
+			p.Html(`<button>PATCH Title</button>`).On("click", f.PatchPost),
+			p.Html(`<button>DELETE Post</button>`).On("click", f.DeletePost),
+			`</div>`,
 			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
 				p.Html(`<pre>`, f.RawData, `</pre>`),
 			),

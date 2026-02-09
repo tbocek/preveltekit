@@ -94,20 +94,11 @@ func wasmRenderParts(h *HtmlNode, ctx *WASMRenderContext) string {
 			s += wasmNodeToHTML(v, ctx)
 		case NodeAttr:
 			s += wasmAttrToHTML(v, ctx)
-		case *Store[string]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			s += wasmBindNodeToHTML(bind, ctx)
-		case *Store[int]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			s += wasmBindNodeToHTML(bind, ctx)
-		case *Store[bool]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			s += wasmBindNodeToHTML(bind, ctx)
-		case *Store[float64]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			s += wasmBindNodeToHTML(bind, ctx)
 		case *Store[Component]:
 			s += wasmStoreComponentToHTML(v, ctx)
+		case AnyGetter:
+			bind := &BindNode{StoreRef: v, IsHTML: false}
+			s += wasmBindNodeToHTML(bind, ctx)
 		default:
 			s += escapeHTML(anyToString(v))
 		}
@@ -230,19 +221,8 @@ func wasmInjectChainedAttrs(h *HtmlNode, html string, ctx *WASMRenderContext) st
 // wasmBindNodeToHTML renders a BindNode (text interpolation).
 func wasmBindNodeToHTML(b *BindNode, ctx *WASMRenderContext) string {
 	var value string
-	switch s := b.StoreRef.(type) {
-	case *Store[string]:
-		value = s.Get()
-	case *Store[int]:
-		value = itoa(s.Get())
-	case *Store[bool]:
-		if s.Get() {
-			value = "true"
-		} else {
-			value = "false"
-		}
-	case *Store[float64]:
-		value = ftoa(s.Get())
+	if g, ok := b.StoreRef.(AnyGetter); ok {
+		value = anyToString(g.GetAny())
 	}
 
 	localMarker := ctx.NextTextMarker()
@@ -368,10 +348,8 @@ func wasmAttrToHTML(attr NodeAttr, ctx *WASMRenderContext) string {
 			switch v := part.(type) {
 			case string:
 				attrValue += v
-			case *Store[string]:
-				attrValue += v.Get()
-			case *Store[int]:
-				attrValue += itoa(v.Get())
+			case AnyGetter:
+				attrValue += anyToString(v.GetAny())
 			}
 		}
 		return `data-attrbind="` + fullID + `" ` + a.Name + `="` + escapeAttr(attrValue) + `"`

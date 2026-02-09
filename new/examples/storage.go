@@ -59,10 +59,10 @@ func (s *Storage) Render() p.Node {
 			<h2>Persisted Theme (Auto-sync)</h2>
 			<p>Theme preference is automatically saved to localStorage.</p>
 			<p>Current theme: <strong>`, s.Theme.Store, `</strong></p>
-			<div class="buttons">
-				`, p.Html(`<button>Light</button>`).On("click", s.SetLight), `
-				`, p.Html(`<button>Dark</button>`).On("click", s.SetDark), `
-			</div>
+			<div class="buttons">`,
+		p.Html(`<button>Light</button>`).On("click", s.SetLight),
+		p.Html(`<button>Dark</button>`).On("click", s.SetDark),
+		`</div>
 			<p class="hint">Refresh the page - theme will persist!</p>
 		</section>
 
@@ -70,10 +70,10 @@ func (s *Storage) Render() p.Node {
 			<h2>Manual Storage (Notes)</h2>
 			<p>Notes are saved manually when you click Save.</p>
 			`, p.Html(`<textarea placeholder="Type your notes here..."></textarea>`).Bind(s.Notes), `
-			<div class="buttons">
-				`, p.Html(`<button>Save Notes</button>`).On("click", s.SaveNotes), `
-				`, p.Html(`<button>Clear Notes</button>`).On("click", s.ClearNotes), `
-			</div>
+			<div class="buttons">`,
+		p.Html(`<button>Save Notes</button>`).On("click", s.SaveNotes),
+		p.Html(`<button>Clear Notes</button>`).On("click", s.ClearNotes),
+		`</div>
 		</section>
 
 		<section>

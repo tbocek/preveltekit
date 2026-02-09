@@ -34,7 +34,7 @@ func Hydrate(app ComponentRoot) {
 	ctx := &WASMRenderContext{
 		ScopeAttr: appScope,
 	}
-	cleanup := &Cleanup{}
+	cleanup := &cleanupBag{}
 	wasmWalkAndBind(app.Render(), ctx, cleanup)
 
 	// Keep WASM running
@@ -44,7 +44,7 @@ func Hydrate(app ComponentRoot) {
 // wasmWalkAndBind walks a Node tree, discovering bindings and wiring them to the DOM.
 // This replaces both walkNodeForComponents and the bindings.bin-based applyBindings.
 // The ctx IDCounter must advance in the same order as SSR's nodeToHTML.
-func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	if n == nil {
 		return
 	}
@@ -70,7 +70,7 @@ func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *Cleanup) {
 }
 
 // wasmBindHtmlNode walks an HtmlNode, wiring events, binds, AttrConds, and recursing into parts.
-func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	// Determine element ID (must match SSR's logic)
 	var elementID string
 	hasChainedAttrs := len(h.AttrConds) > 0 || len(h.Events) > 0
@@ -86,15 +86,15 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 
 	// Wire events
 	if len(h.Events) > 0 {
-		var evts []Evt
+		var evts []evt
 		for _, ev := range h.Events {
 			handler := GetHandler(ev.ID)
 			if handler != nil {
-				evts = append(evts, Evt{ev.ID, ev.Event, handler})
+				evts = append(evts, evt{ev.ID, ev.Event, handler})
 			}
 		}
 		if len(evts) > 0 {
-			BindEvents(cleanup, evts)
+			bindEvents(cleanup, evts)
 		}
 	}
 
@@ -120,72 +120,48 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 			if da, ok2 := v.(*DynAttrAttr); ok2 {
 				wasmBindDynAttr(da, ctx, cleanup)
 			}
-		case *Store[string]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			wasmBindTextNode(bind, ctx, cleanup)
-		case *Store[int]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			wasmBindTextNode(bind, ctx, cleanup)
-		case *Store[bool]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			wasmBindTextNode(bind, ctx, cleanup)
-		case *Store[float64]:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			wasmBindTextNode(bind, ctx, cleanup)
 		case *Store[Component]:
 			wasmBindStoreComponent(v, ctx, cleanup)
+		case AnySubscriber:
+			bind := &BindNode{StoreRef: v, IsHTML: false}
+			wasmBindTextNode(bind, ctx, cleanup)
 		}
 	}
 }
 
 // wasmBindTextNode wires a text binding (BindNode) to the DOM.
-func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	localMarker := ctx.NextTextMarker()
 	markerID := ctx.FullID(localMarker)
 
-	switch s := b.StoreRef.(type) {
-	case *Store[string]:
-		s.OnChange(func(v string) {
+	if s, ok := b.StoreRef.(AnySubscriber); ok {
+		g := b.StoreRef.(AnyGetter)
+		s.OnChangeAny(func() {
+			val := anyToString(g.GetAny())
 			if b.IsHTML {
-				replaceMarkerContent(markerID, v)
+				replaceMarkerContent(markerID, val)
 			} else {
-				replaceMarkerContent(markerID, escapeHTML(v))
+				replaceMarkerContent(markerID, escapeHTML(val))
 			}
-		})
-	case *Store[int]:
-		s.OnChange(func(v int) {
-			replaceMarkerContent(markerID, escapeHTML(itoa(v)))
-		})
-	case *Store[bool]:
-		s.OnChange(func(v bool) {
-			val := "false"
-			if v {
-				val = "true"
-			}
-			replaceMarkerContent(markerID, escapeHTML(val))
-		})
-	case *Store[float64]:
-		s.OnChange(func(v float64) {
-			replaceMarkerContent(markerID, escapeHTML(ftoa(v)))
 		})
 	}
 }
 
 // wasmBindInput wires a two-way input binding using the bind element ID.
-func wasmBindInput(bindID string, boundStore any, cleanup *Cleanup) {
+func wasmBindInput(bindID string, boundStore any, cleanup *cleanupBag) {
 	switch s := boundStore.(type) {
 	case *Store[string]:
-		BindInputs(cleanup, []Inp{{bindID, s}})
+		bindInputs(cleanup, []inp{{bindID, s}})
 	case *Store[int]:
-		cleanup.Add(BindInputInt(bindID, s))
+		cleanup.Add(bindInputInt(bindID, s))
 	case *Store[bool]:
-		BindCheckboxes(cleanup, []Chk{{bindID, s}})
+		bindCheckboxes(cleanup, []chk{{bindID, s}})
 	}
 }
 
 // wasmBindAttrCond wires a conditional attribute binding.
-func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
-	el := GetEl(elementID)
+func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
+	el := getEl(elementID)
 	if !ok(el) {
 		return
 	}
@@ -242,13 +218,13 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 }
 
 // wasmBindDynAttr wires a dynamic attribute binding.
-func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	localID := ctx.NextAttrID()
 	fullID := ctx.FullID(localID)
 
-	el := Document.Call("querySelector", `[data-attrbind="`+fullID+`"]`)
+	el := document.Call("querySelector", `[data-attrbind="`+fullID+`"]`)
 	if !ok(el) {
-		el = GetEl(fullID)
+		el = getEl(fullID)
 	}
 	if !ok(el) {
 		return
@@ -260,8 +236,8 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *Cleanup) 
 			switch v := part.(type) {
 			case string:
 				value += v
-			default:
-				value += storeToString(v)
+			case AnyGetter:
+				value += anyToString(v.GetAny())
 			}
 		}
 		el.Call("setAttribute", da.Name, value)
@@ -277,7 +253,7 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *Cleanup) 
 }
 
 // wasmBindIfNode wires an if-block with reactive condition evaluation.
-func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	localMarker := ctx.NextIfMarker()
 	markerID := ctx.FullID(localMarker)
 
@@ -313,7 +289,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 	}
 	setupIfBlocks[markerID] = true
 
-	currentCleanup := &Cleanup{}
+	currentCleanup := &cleanupBag{}
 	currentBranchIdx := -2
 
 	// Collect condition stores for subscription
@@ -357,7 +333,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 
 		// Release old bindings, wire new ones
 		currentCleanup.Release()
-		currentCleanup = &Cleanup{}
+		currentCleanup = &cleanupBag{}
 
 		// Re-walk the active branch nodes to wire bindings on new DOM
 		bindCtx := &WASMRenderContext{
@@ -415,7 +391,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 }
 
 // wasmBindEachNode wires an each-block with reactive list rendering.
-func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	localMarker := ctx.NextEachMarker()
 	markerID := ctx.FullID(localMarker)
 
@@ -434,7 +410,7 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *Clean
 		replaceMarkerContent(markerID, html)
 
 		// Re-walk each item's nodes to wire bindings
-		bindCleanup := &Cleanup{}
+		bindCleanup := &cleanupBag{}
 		switch list := eachNode.ListRef.(type) {
 		case *List[string]:
 			items := list.Get()
@@ -537,7 +513,7 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *Clean
 }
 
 // wasmBindStoreComponent wires a Store[Component] binding.
-func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup *cleanupBag) {
 	localMarker := ctx.NextRouteMarker()
 	markerID := ctx.FullID(localMarker)
 
@@ -590,7 +566,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 	}
 	setupComponentBlocks[markerID] = true
 
-	currentCleanup := &Cleanup{}
+	currentCleanup := &cleanupBag{}
 	currentName := ""
 	firstCall := true
 
@@ -659,7 +635,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 
 		// Release old bindings (fires OnDestroy), wire new ones
 		currentCleanup.Release()
-		currentCleanup = &Cleanup{}
+		currentCleanup = &cleanupBag{}
 
 		// Walk the same tree we just rendered (don't call Render() again)
 		bindCtx := &WASMRenderContext{
@@ -679,7 +655,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 }
 
 // wasmBindComponentNode wires a nested ComponentNode.
-func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *Cleanup) {
+func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	comp, ok2 := c.Instance.(Component)
 	if !ok2 {
 		return
@@ -727,11 +703,11 @@ func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *Cl
 // replaceMarkerContent replaces all DOM nodes between <!--{markerID}s--> and <!--{markerID}-->
 // with new HTML content.
 func replaceMarkerContent(markerID string, html string) {
-	endMarker := FindComment(markerID)
+	endMarker := findComment(markerID)
 	if endMarker.IsNull() {
 		return
 	}
-	startMarker := FindComment(markerID + "s")
+	startMarker := findComment(markerID + "s")
 	if startMarker.IsNull() {
 		return
 	}
@@ -748,7 +724,7 @@ func replaceMarkerContent(markerID string, html string) {
 
 	// Parse new HTML and insert before end marker
 	if html != "" {
-		tmpl := Document.Call("createElement", "template")
+		tmpl := document.Call("createElement", "template")
 		tmpl.Set("innerHTML", html)
 		frag := tmpl.Get("content")
 		parent.Call("insertBefore", frag, endMarker)
@@ -757,36 +733,9 @@ func replaceMarkerContent(markerID string, html string) {
 
 // subscribeToStore subscribes a callback to store changes.
 func subscribeToStore(store any, callback func()) {
-	switch s := store.(type) {
-	case *Store[int]:
-		s.OnChange(func(_ int) { callback() })
-	case *Store[string]:
-		s.OnChange(func(_ string) { callback() })
-	case *Store[bool]:
-		s.OnChange(func(_ bool) { callback() })
-	case *Store[float64]:
-		s.OnChange(func(_ float64) { callback() })
-	case *Store[Component]:
-		s.OnChange(func(_ Component) { callback() })
+	if s, ok := store.(AnySubscriber); ok {
+		s.OnChangeAny(callback)
 	}
-}
-
-// storeToString returns the string representation of a store's current value.
-func storeToString(store any) string {
-	switch s := store.(type) {
-	case *Store[string]:
-		return s.Get()
-	case *Store[int]:
-		return itoa(s.Get())
-	case *Store[bool]:
-		if s.Get() {
-			return "true"
-		}
-		return "false"
-	case *Store[float64]:
-		return ftoa(s.Get())
-	}
-	return ""
 }
 
 // SetSSRPath is a no-op in WASM (only used during SSR).

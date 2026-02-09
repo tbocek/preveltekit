@@ -58,33 +58,33 @@ func (c *Complex) Render() p.Node {
 			<h2>Shared Store</h2>
 			<p>Theme is shared between parent and all child components:</p>
 			<p>Current theme: <strong>`, c.Theme, `</strong></p>
-			<div class="buttons">
-				`, p.Html(`<button>Light</button>`).On("click", func() { c.Theme.Set("light"); c.Log.Append("Theme: light") }), `
-				`, p.Html(`<button>Dark</button>`).On("click", func() { c.Theme.Set("dark"); c.Log.Append("Theme: dark") }), `
-				`, p.Html(`<button>Blue</button>`).On("click", func() { c.Theme.Set("blue"); c.Log.Append("Theme: blue") }), `
-			</div>
+			<div class="buttons">`,
+		p.Html(`<button>Light</button>`).On("click", func() { c.Theme.Set("light"); c.Log.Append("Theme: light") }),
+		p.Html(`<button>Dark</button>`).On("click", func() { c.Theme.Set("dark"); c.Log.Append("Theme: dark") }),
+		p.Html(`<button>Blue</button>`).On("click", func() { c.Theme.Set("blue"); c.Log.Append("Theme: blue") }),
+		`</div>
 		</section>
 
 		<section>
 			<h2>Nested Store[Component] Tabs</h2>
 			<p>Store[Component] inside a child component (not router-level):</p>
-			<div class="tab-bar">
-				`, p.Html(`<button>Dashboard</button>`).On("click", func() { c.SetTab(c.tabDashboard); c.Log.Append("Tab: dashboard") }),
+			<div class="tab-bar">`,
+		p.Html(`<button>Dashboard</button>`).On("click", func() { c.SetTab(c.tabDashboard); c.Log.Append("Tab: dashboard") }),
 		p.Html(`<button>Settings</button>`).On("click", func() { c.SetTab(c.tabSettings); c.Log.Append("Tab: settings") }),
-		p.Html(`<button>Activity</button>`).On("click", func() { c.SetTab(c.tabActivity); c.Log.Append("Tab: activity") }), `
-			</div>
-			<div class="tab-content" `, p.Attr("data-theme", c.Theme), `>`,
-		c.ActiveTab,
+		p.Html(`<button>Activity</button>`).On("click", func() { c.SetTab(c.tabActivity); c.Log.Append("Tab: activity") }),
 		`</div>
+			<div class="tab-content" `, p.Attr("data-theme", c.Theme), `>`,
+		c.ActiveTab, `
+			</div>
 		</section>
 
 		<section>
 			<h2>Event Log (list inside if-block)</h2>
 			<p>Log entries: <strong>`, c.Log.Len(), `</strong></p>
-			<div class="buttons">
-				`, p.Html(`<button>Toggle Log</button>`).On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }), `
-				`, p.Html(`<button>Clear Log</button>`).On("click", c.ClearLog), `
-			</div>`,
+			<div class="buttons">`,
+		p.Html(`<button>Toggle Log</button>`).On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }),
+		p.Html(`<button>Clear Log</button>`).On("click", c.ClearLog),
+		`</div>`,
 		p.If(p.Cond(func() bool { return c.ShowLog.Get() }, c.ShowLog),
 			p.Html(`<ul class="log">`,
 				p.Each(c.Log, func(entry string, i int) p.Node {
@@ -154,10 +154,10 @@ func (d *Dashboard) Render() p.Node {
 		<h3>Dashboard</h3>
 		<p>Theme: <strong>`, d.Theme, `</strong></p>
 		<p>Stats value: <strong>`, d.Stats, `</strong></p>
-		<div class="buttons">
-			`, p.Html(`<button>+10</button>`).On("click", func() { d.Stats.Update(func(v int) int { return v + 10 }); d.Log.Append("Stats +10") }), `
-			`, p.Html(`<button>Reset</button>`).On("click", func() { d.Stats.Set(0); d.Log.Append("Stats reset") }), `
-		</div>
+		<div class="buttons">`,
+		p.Html(`<button>+10</button>`).On("click", func() { d.Stats.Update(func(v int) int { return v + 10 }); d.Log.Append("Stats +10") }),
+		p.Html(`<button>Reset</button>`).On("click", func() { d.Stats.Set(0); d.Log.Append("Stats reset") }),
+		`</div>
 	</div>`)
 }
 
@@ -172,16 +172,16 @@ func (s *Settings) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Settings</h3>
 		<p>Font size: <strong>`, s.FontSize, `</strong>px</p>
-		<div class="buttons">
-			`, p.Html(`<button>Small (12)</button>`).On("click", func() { s.FontSize.Set(12); s.Log.Append("Font: 12px") }), `
-			`, p.Html(`<button>Medium (14)</button>`).On("click", func() { s.FontSize.Set(14); s.Log.Append("Font: 14px") }), `
-			`, p.Html(`<button>Large (18)</button>`).On("click", func() { s.FontSize.Set(18); s.Log.Append("Font: 18px") }), `
-		</div>
+		<div class="buttons">`,
+		p.Html(`<button>Small (12)</button>`).On("click", func() { s.FontSize.Set(12); s.Log.Append("Font: 12px") }),
+		p.Html(`<button>Medium (14)</button>`).On("click", func() { s.FontSize.Set(14); s.Log.Append("Font: 14px") }),
+		p.Html(`<button>Large (18)</button>`).On("click", func() { s.FontSize.Set(18); s.Log.Append("Font: 18px") }),
+		`</div>
 		<p>Change theme from child:</p>
-		<div class="buttons">
-			`, p.Html(`<button>Light</button>`).On("click", func() { s.Theme.Set("light"); s.Log.Append("Settings: light") }), `
-			`, p.Html(`<button>Dark</button>`).On("click", func() { s.Theme.Set("dark"); s.Log.Append("Settings: dark") }), `
-		</div>
+		<div class="buttons">`,
+		p.Html(`<button>Light</button>`).On("click", func() { s.Theme.Set("light"); s.Log.Append("Settings: light") }),
+		p.Html(`<button>Dark</button>`).On("click", func() { s.Theme.Set("dark"); s.Log.Append("Settings: dark") }),
+		`</div>
 	</div>`)
 }
 
@@ -194,22 +194,20 @@ type Activity struct {
 func (a *Activity) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Activity</h3>
-		<p>Theme: <strong>`, a.Theme, `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>
-		`, p.If(p.Cond(func() bool { return a.Log.Len().Get() > 0 }, a.Log.Len()),
-		p.Html(`<ul class="activity-list">`,
-			p.Each(a.Log, func(entry string, i int) p.Node {
-				return p.Html(`<li>`, entry, `</li>`)
-			}),
-			`</ul>`),
-	).Else(
-		p.Html(`<p class="empty">No activity yet</p>`),
-	), `
-	</div>`)
+		<p>Theme: <strong>`, a.Theme, `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>`,
+		p.If(p.Cond(func() bool { return a.Log.Len().Get() > 0 }, a.Log.Len()),
+			p.Html(`<ul class="activity-list">`,
+				p.Each(a.Log, func(entry string, i int) p.Node {
+					return p.Html(`<li>`, entry, `</li>`)
+				}),
+				`</ul>`),
+		).Else(
+			p.Html(`<p class="empty">No activity yet</p>`),
+		), `</div>`)
 }
 
 func (a *Activity) Style() string {
 	return `
 .activity-list{list-style:none;padding:0;margin:5px 0}
-.activity-list li{padding:4px 8px;margin:2px 0;background:rgba(0,0,0,.05);border-radius:3px;font-size:13px}
-`
+.activity-list li{padding:4px 8px;margin:2px 0;background:rgba(0,0,0,.05);border-radius:3px;font-size:13px}`
 }

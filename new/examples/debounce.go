@@ -83,7 +83,6 @@ func (d *Debounce) Render() p.Node {
 			<p>Search triggers 300ms after you stop typing.</p>
 
 			`, p.Html(`<input type="text" placeholder="Type to search...">`).Bind(d.SearchInput), `
-
 			<div class="stats">
 				<span>Status: <strong>`, d.Status, `</strong></span>
 				<span>API calls: <strong>`, d.SearchCount, `</strong></span>

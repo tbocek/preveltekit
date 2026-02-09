@@ -150,7 +150,7 @@ type BindNode struct {
 func (b *BindNode) nodeType() string { return "bind" }
 
 // Bind creates a reactive text binding to a store.
-// The store must implement Bindable[T].
+// The store must implement bindable[T].
 func Bind[T any](store *Store[T]) *BindNode {
 	return &BindNode{
 		StoreRef: store,
@@ -463,15 +463,8 @@ func evalAttrValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
-	case *Store[string]:
-		return val.Get()
-	case *Store[int]:
-		return itoa(val.Get())
-	case *Store[bool]:
-		if val.Get() {
-			return "true"
-		}
-		return "false"
+	case AnyGetter:
+		return anyToString(val.GetAny())
 	}
 	return ""
 }
