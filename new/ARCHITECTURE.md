@@ -77,15 +77,36 @@ Stores are the reactive primitive. Every dynamic value is a `Store[T]` or `List[
 count := p.New(0)           // auto-ID: "s0"
 name := p.New("World")      // auto-ID: "s1"
 dark := p.New(false)         // auto-ID: "s2"
-path := p.NewWithID("mypath", "/home")  // explicit ID
 ```
 
 - `New(val)` → auto-generates ID (`s0`, `s1`, ...) via a global counter, registers in `storeRegistry`
-- `NewWithID(id, val)` → explicit ID, also registered
 - `Get()` → current value
 - `Set(v)` → updates value, fires all `OnChange` callbacks
 - `Update(fn func(T) T)` → transforms value via function
 - `OnChange(func(T))` → subscribes to changes
+
+Internally, `newWithID(id, val)` creates a store with an explicit ID instead of an auto-generated one. This is unexported and used only by the router (`id+".path"`), `LocalStore` (localStorage key as ID), and `List.Len()` (`listID+".len"`), where a predictable ID is needed for lookup.
+
+### Derived Stores
+
+Computed stores that update automatically when their sources change. Three variants for different arities:
+
+```go
+// Derived1 — one source
+uppercase := p.Derived1(name, strings.ToUpper)
+
+// Derived2 — two sources
+fullName := p.Derived2(first, last, func(f, l string) string {
+    return f + " " + l
+})
+
+// Derived3 — three sources
+summary := p.Derived3(first, last, age, func(f, l string, a int) string {
+    return f + " " + l + ", age " + itoa(a)
+})
+```
+
+Each `Derived` function creates a new `Store[R]` initialized with the computed value, then subscribes to all source stores via `OnChange`. When any source changes, the compute function re-runs and the derived store is updated, triggering its own subscribers. The derived store is a regular `Store[R]` — it can be used in `Html`, `Bind`, conditions, etc.
 
 ### List[T]
 

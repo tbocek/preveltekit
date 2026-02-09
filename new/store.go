@@ -173,12 +173,39 @@ func New[T any](initial T) *Store[T] {
 	return s
 }
 
-// NewWithID creates a reactive store with an explicit ID and initial value.
-// Use this only when a specific ID is required (e.g. router path store, localStorage).
-func NewWithID[T any](id string, initial T) *Store[T] {
+// newWithID creates a reactive store with an explicit ID and initial value.
+// Internal only — used by router, localStorage, and List.Len() where a predictable ID is needed.
+func newWithID[T any](id string, initial T) *Store[T] {
 	s := &Store[T]{id: id, value: initial}
 	storeRegistry[id] = s
 	return s
+}
+
+// Derived1 creates a store computed from one source store.
+// The derived store updates automatically when the source changes.
+func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
+	out := New(fn(a.Get()))
+	a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
+	return out
+}
+
+// Derived2 creates a store computed from two source stores.
+// The derived store updates automatically when either source changes.
+func Derived2[A, B, R any](a *Store[A], b *Store[B], fn func(A, B) R) *Store[R] {
+	out := New(fn(a.Get(), b.Get()))
+	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
+	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
+	return out
+}
+
+// Derived3 creates a store computed from three source stores.
+// The derived store updates automatically when any source changes.
+func Derived3[A, B, C, R any](a *Store[A], b *Store[B], c *Store[C], fn func(A, B, C) R) *Store[R] {
+	out := New(fn(a.Get(), b.Get(), c.Get()))
+	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+	c.OnChange(func(_ C) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+	return out
 }
 
 // ID returns the store's unique identifier
@@ -266,7 +293,7 @@ func (l *List[T]) Get() []T {
 // The store auto-updates when the list changes.
 func (l *List[T]) Len() *Store[int] {
 	if l.lenStore == nil {
-		l.lenStore = NewWithID(l.id+".len", len(l.items))
+		l.lenStore = newWithID(l.id+".len", len(l.items))
 		l.OnChange(func(_ []T) {
 			l.lenStore.Set(len(l.items))
 		})
