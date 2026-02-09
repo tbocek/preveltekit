@@ -19,14 +19,6 @@ func Hydrate(app ComponentRoot) {
 		app = hn.New().(ComponentRoot)
 	}
 
-	// Discover children from routes and initialize them
-	children := make(map[string]Component)
-	for _, route := range app.Routes() {
-		if route.Component != nil {
-			children[route.Path] = route.Component
-		}
-	}
-
 	// Call OnMount before Render to match SSR order
 	if om, ok := app.(HasOnMount); ok {
 		om.OnMount()
@@ -44,13 +36,6 @@ func Hydrate(app ComponentRoot) {
 	}
 	cleanup := &Cleanup{}
 	wasmWalkAndBind(app.Render(), ctx, cleanup)
-
-	// Run OnMount for all children
-	for _, child := range children {
-		if om, ok := child.(HasOnMount); ok {
-			om.OnMount()
-		}
-	}
 
 	// Keep WASM running
 	select {}
@@ -650,11 +635,22 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 				IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 				ScopeAttr: scopeAttr,
 			}
+			if om, ok2 := comp.(HasOnMount); ok2 {
+				om.OnMount()
+			}
+			if od, ok2 := comp.(HasOnDestroy); ok2 {
+				currentCleanup.AddDestroy(od.OnDestroy)
+			}
 			wasmWalkAndBind(tree, bindCtx, currentCleanup)
 			return
 		}
 
 		currentName = name
+
+		// Call OnMount on the new active component
+		if om, ok2 := comp.(HasOnMount); ok2 {
+			om.OnMount()
+		}
 
 		// Render new component to HTML (subsequent changes, not initial)
 		renderTree := comp.Render()
@@ -667,7 +663,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		html := wasmNodeToHTML(renderTree, renderCtx)
 		replaceMarkerContent(markerID, html)
 
-		// Release old bindings, wire new ones
+		// Release old bindings (fires OnDestroy), wire new ones
 		currentCleanup.Release()
 		currentCleanup = &Cleanup{}
 
@@ -677,6 +673,9 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		}
 		if _, ok2 := comp.(HasStyle); ok2 {
 			bindCtx.ScopeAttr = GetOrCreateScope(name)
+		}
+		if od, ok2 := comp.(HasOnDestroy); ok2 {
+			currentCleanup.AddDestroy(od.OnDestroy)
 		}
 		wasmWalkAndBind(renderTree, bindCtx, currentCleanup)
 	}
@@ -711,6 +710,16 @@ func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *Cl
 	tree := c.renderCache
 	if tree == nil {
 		tree = comp.Render()
+	}
+
+	// Call OnMount when the component is wired
+	if om, ok3 := comp.(HasOnMount); ok3 {
+		om.OnMount()
+	}
+
+	// Register OnDestroy if the component implements it
+	if od, ok3 := comp.(HasOnDestroy); ok3 {
+		cleanup.AddDestroy(od.OnDestroy)
 	}
 
 	// Walk component's own Render tree with child context

@@ -42,6 +42,12 @@ type HasOnMount interface {
 	OnMount()
 }
 
+// HasOnDestroy is implemented by components with cleanup logic.
+// Called when a component is removed from the DOM (route change, if-block swap).
+type HasOnDestroy interface {
+	OnDestroy()
+}
+
 // HasID is implemented by stores that have a user-defined ID.
 type HasID interface {
 	ID() string

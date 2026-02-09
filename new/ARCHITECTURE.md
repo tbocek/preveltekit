@@ -173,7 +173,8 @@ Optional interfaces (any component):
 | Interface | Method | Purpose |
 |---|---|---|
 | `HasNew` | `New() Component` | Factory/constructor — creates a fresh instance with initialized stores |
-| `HasOnMount` | `OnMount()` | Lifecycle hook (called before Render in both SSR and WASM) |
+| `HasOnMount` | `OnMount()` | Called when component becomes active (before Render) |
+| `HasOnDestroy` | `OnDestroy()` | Called when component is removed from DOM (route change, if-block swap) |
 | `HasStyle` | `Style() string` | Scoped CSS for this component |
 | `HasGlobalStyle` | `GlobalStyle() string` | Unscoped global CSS |
 

@@ -181,6 +181,13 @@ func (h *HtmlNode) renderParts(ctx *BuildContext) string {
 						}
 					}
 
+					// Call OnMount only on the active component
+					if optComp == comp {
+						if om, ok := optComp.(HasOnMount); ok {
+							om.OnMount()
+						}
+					}
+
 					branchHTML := nodeToHTML(optComp.Render(), branchCtx)
 
 					if optComp == comp {
@@ -426,6 +433,11 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 				scopeAttr = GetOrCreateScope(c.Name)
 			}
 		}
+	}
+
+	// Call OnMount when the component is rendered
+	if om, ok := comp.(HasOnMount); ok {
+		om.OnMount()
 	}
 
 	// Render slot content with current context

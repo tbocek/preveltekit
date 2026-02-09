@@ -25,10 +25,11 @@ func ok(el js.Value) bool {
 	return !el.IsNull() && !el.IsUndefined()
 }
 
-// Cleanup holds js.Func references for batch release.
+// Cleanup holds js.Func references and destroy callbacks for batch release.
 // Use this to prevent memory leaks when components unmount or re-render.
 type Cleanup struct {
-	funcs []js.Func
+	funcs     []js.Func
+	onDestroy []func()
 }
 
 // Add registers a js.Func for later cleanup.
@@ -40,9 +41,18 @@ func (c *Cleanup) Add(fn js.Func) {
 	c.funcs = append(c.funcs, fn)
 }
 
-// Release frees all registered js.Func references.
+// AddDestroy registers a destroy callback to run on Release.
+func (c *Cleanup) AddDestroy(fn func()) {
+	c.onDestroy = append(c.onDestroy, fn)
+}
+
+// Release runs all destroy callbacks and frees all registered js.Func references.
 // Safe to call multiple times.
 func (c *Cleanup) Release() {
+	for _, fn := range c.onDestroy {
+		fn()
+	}
+	c.onDestroy = nil
 	for _, fn := range c.funcs {
 		fn.Release()
 	}

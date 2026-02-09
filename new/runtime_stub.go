@@ -20,6 +20,9 @@ type Cleanup struct{}
 // Add is a no-op for SSR.
 func (c *Cleanup) Add(fn jsFunc) {}
 
+// AddDestroy is a no-op for SSR.
+func (c *Cleanup) AddDestroy(fn func()) {}
+
 // Release is a no-op for SSR.
 func (c *Cleanup) Release() {}
 
