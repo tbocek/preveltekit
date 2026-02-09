@@ -202,11 +202,11 @@ func wasmInjectChainedAttrs(h *HtmlNode, html string, ctx *WASMRenderContext) st
 
 	for _, ac := range h.AttrConds {
 		if ac.Cond.Eval() {
-			if tv := attrValStr(ac.TrueValue); tv != "" {
+			if tv := evalAttrValue(ac.TrueValue); tv != "" {
 				attrValues[ac.Name] = append(attrValues[ac.Name], tv)
 			}
 		} else {
-			if fv := attrValStr(ac.FalseValue); fv != "" {
+			if fv := evalAttrValue(ac.FalseValue); fv != "" {
 				attrValues[ac.Name] = append(attrValues[ac.Name], fv)
 			}
 		}
@@ -225,27 +225,6 @@ func wasmInjectChainedAttrs(h *HtmlNode, html string, ctx *WASMRenderContext) st
 	}
 
 	return injectIDAndMergeAttrs(html, elementID, attrValues, extraAttrs)
-}
-
-// attrValStr extracts a string value from an AttrCond value.
-func attrValStr(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.(type) {
-	case string:
-		return val
-	case *Store[string]:
-		return val.Get()
-	case *Store[int]:
-		return itoa(val.Get())
-	case *Store[bool]:
-		if val.Get() {
-			return "true"
-		}
-		return "false"
-	}
-	return ""
 }
 
 // wasmBindNodeToHTML renders a BindNode (text interpolation).

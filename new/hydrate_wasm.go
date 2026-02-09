@@ -221,8 +221,8 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 		active := ac.Cond.Eval()
 		if ac.Name == "class" {
 			classList := el.Get("classList")
-			trueVal := attrValStr(ac.TrueValue)
-			falseVal := attrValStr(ac.FalseValue)
+			trueVal := evalAttrValue(ac.TrueValue)
+			falseVal := evalAttrValue(ac.FalseValue)
 			if active && trueVal != "" {
 				classList.Call("add", trueVal)
 			} else if trueVal != "" {
@@ -236,9 +236,9 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 		} else {
 			var value string
 			if active {
-				value = attrValStr(ac.TrueValue)
+				value = evalAttrValue(ac.TrueValue)
 			} else {
-				value = attrValStr(ac.FalseValue)
+				value = evalAttrValue(ac.FalseValue)
 			}
 			if value != "" {
 				el.Call("setAttribute", ac.Name, value)

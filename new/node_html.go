@@ -240,31 +240,6 @@ func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
 	return injectIDAndMergeAttrs(html, elementID, attrValues, extraAttrs)
 }
 
-// evalAttrValue extracts the current string value from an AttrCond value.
-func evalAttrValue(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.(type) {
-	case string:
-		return val
-	case *Store[string]:
-		return val.Get()
-	case *Store[int]:
-		return itoa(val.Get())
-	case *Store[bool]:
-		if val.Get() {
-			return "true"
-		}
-		return "false"
-	default:
-		return ""
-	}
-}
-
-// injectIDAndMergeAttrs, injectAttrs, findTagEnd, escapeAttr, injectScopeClass
-// are in node_html_shared.go (shared between SSR and WASM).
-
 // attrToHTMLString renders a NodeAttr as an HTML attribute string.
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	switch a := attr.(type) {
