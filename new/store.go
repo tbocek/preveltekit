@@ -14,8 +14,10 @@ type Route struct {
 	Component Component // Component to render for this route
 }
 
-// HasRoutes is implemented by components that define routes.
-type HasRoutes interface {
+// ComponentRoot is the root app component passed to Hydrate().
+// It extends Component with Routes() for SSR page generation and runtime routing.
+type ComponentRoot interface {
+	Component
 	Routes() []Route
 }
 
@@ -179,33 +181,6 @@ func newWithID[T any](id string, initial T) *Store[T] {
 	s := &Store[T]{id: id, value: initial}
 	storeRegistry[id] = s
 	return s
-}
-
-// Derived1 creates a store computed from one source store.
-// The derived store updates automatically when the source changes.
-func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
-	out := New(fn(a.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
-	return out
-}
-
-// Derived2 creates a store computed from two source stores.
-// The derived store updates automatically when either source changes.
-func Derived2[A, B, R any](a *Store[A], b *Store[B], fn func(A, B) R) *Store[R] {
-	out := New(fn(a.Get(), b.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
-	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
-	return out
-}
-
-// Derived3 creates a store computed from three source stores.
-// The derived store updates automatically when any source changes.
-func Derived3[A, B, C, R any](a *Store[A], b *Store[B], c *Store[C], fn func(A, B, C) R) *Store[R] {
-	out := New(fn(a.Get(), b.Get(), c.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	c.OnChange(func(_ C) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	return out
 }
 
 // ID returns the store's unique identifier

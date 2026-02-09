@@ -7,34 +7,39 @@ import (
 )
 
 type Derived struct {
-	// Derived1: uppercase transform
+	// Derived from one source: uppercase transform
 	Name      *p.Store[string]
 	Uppercase *p.Store[string]
 
-	// Derived2: full name from first + last
+	// Derived from two sources: full name
 	First    *p.Store[string]
 	Last     *p.Store[string]
 	FullName *p.Store[string]
 
-	// Derived3: summary from first + last + age
+	// Derived from three sources: summary
 	Age     *p.Store[int]
 	Summary *p.Store[string]
 }
 
 func (d *Derived) New() p.Component {
 	name := p.New("hello")
-	uppercase := p.Derived1(name, strings.ToUpper)
+	uppercase := p.New(strings.ToUpper(name.Get()))
+	name.OnChange(func(v string) { uppercase.Set(strings.ToUpper(v)) })
 
 	first := p.New("John")
 	last := p.New("Doe")
-	fullName := p.Derived2(first, last, func(f, l string) string {
-		return f + " " + l
-	})
+	fullName := p.New(first.Get() + " " + last.Get())
+	first.OnChange(func(f string) { fullName.Set(f + " " + last.Get()) })
+	last.OnChange(func(l string) { fullName.Set(first.Get() + " " + l) })
 
 	age := p.New(30)
-	summary := p.Derived3(first, last, age, func(f, l string, a int) string {
-		return f + " " + l + ", age " + ditoa(a)
-	})
+	mkSummary := func() string {
+		return first.Get() + " " + last.Get() + ", age " + ditoa(age.Get())
+	}
+	summary := p.New(mkSummary())
+	first.OnChange(func(_ string) { summary.Set(mkSummary()) })
+	last.OnChange(func(_ string) { summary.Set(mkSummary()) })
+	age.OnChange(func(_ int) { summary.Set(mkSummary()) })
 
 	return &Derived{
 		Name:      name,
@@ -60,23 +65,23 @@ func (d *Derived) Render() p.Node {
 		<h1>Derived Stores</h1>
 
 		<section>
-			<h2>Derived1 — Single Source</h2>
-			<p class="hint">A store computed from one source. Type below to see the uppercase transform.</p>
+			<h2>Single Source</h2>
+			<p class="hint">A store derived from one source via OnChange.</p>
 			<label>Input: `, p.Html(`<input type="text">`).Bind(d.Name), `</label>
 			<p>Uppercase: <strong>`, d.Uppercase, `</strong></p>
 		</section>
 
 		<section>
-			<h2>Derived2 — Two Sources</h2>
-			<p class="hint">A store computed from two sources. Edit first or last name.</p>
+			<h2>Two Sources</h2>
+			<p class="hint">A store derived from two sources. Edit first or last name.</p>
 			<label>First: `, p.Html(`<input type="text">`).Bind(d.First), `</label>
 			<label>Last: `, p.Html(`<input type="text">`).Bind(d.Last), `</label>
 			<p>Full name: <strong>`, d.FullName, `</strong></p>
 		</section>
 
 		<section>
-			<h2>Derived3 — Three Sources</h2>
-			<p class="hint">A store computed from three sources. Change any input to update the summary.</p>
+			<h2>Three Sources</h2>
+			<p class="hint">A store derived from three sources. Change any input to update the summary.</p>
 			<p>Age: <strong>`, d.Age, `</strong></p>
 			`, p.Html(`<button>-1</button>`).On("click", d.DecrementAge), `
 			`, p.Html(`<button>+1</button>`).On("click", d.IncrementAge), `

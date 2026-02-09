@@ -13,19 +13,17 @@ var setupComponentBlocks = make(map[string]bool)
 
 // Hydrate sets up DOM bindings for reactivity.
 // Walks the Render() tree to discover all bindings directly — no bindings.bin needed.
-func Hydrate(app Component) {
+func Hydrate(app ComponentRoot) {
 	// Create fresh app instance with initialized stores
 	if hn, ok := app.(HasNew); ok {
-		app = hn.New()
+		app = hn.New().(ComponentRoot)
 	}
 
 	// Discover children from routes and initialize them
 	children := make(map[string]Component)
-	if hr, ok := app.(HasRoutes); ok {
-		for _, route := range hr.Routes() {
-			if route.Component != nil {
-				children[route.Path] = route.Component
-			}
+	for _, route := range app.Routes() {
+		if route.Component != nil {
+			children[route.Path] = route.Component
 		}
 	}
 

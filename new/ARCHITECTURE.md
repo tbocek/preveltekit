@@ -87,26 +87,35 @@ dark := p.New(false)         // auto-ID: "s2"
 
 Internally, `newWithID(id, val)` creates a store with an explicit ID instead of an auto-generated one. This is unexported and used only by the router (`id+".path"`), `LocalStore` (localStorage key as ID), and `List.Len()` (`listID+".len"`), where a predictable ID is needed for lookup.
 
-### Derived Stores
+### Derived Stores (User Pattern)
 
-Computed stores that update automatically when their sources change. Three variants for different arities:
+The framework doesn't include a built-in `Derived` type — it's not needed. Computed stores are built using `New` + `OnChange`, which is explicit and requires no extra API:
 
 ```go
-// Derived1 — one source
-uppercase := p.Derived1(name, strings.ToUpper)
+// Single source — uppercase transform
+name := p.New("hello")
+uppercase := p.New(strings.ToUpper(name.Get()))
+name.OnChange(func(v string) { uppercase.Set(strings.ToUpper(v)) })
 
-// Derived2 — two sources
-fullName := p.Derived2(first, last, func(f, l string) string {
-    return f + " " + l
-})
+// Two sources — full name
+first := p.New("John")
+last := p.New("Doe")
+fullName := p.New(first.Get() + " " + last.Get())
+first.OnChange(func(f string) { fullName.Set(f + " " + last.Get()) })
+last.OnChange(func(l string) { fullName.Set(first.Get() + " " + l) })
 
-// Derived3 — three sources
-summary := p.Derived3(first, last, age, func(f, l string, a int) string {
-    return f + " " + l + ", age " + itoa(a)
-})
+// Three sources — use a helper closure
+age := p.New(30)
+mkSummary := func() string {
+    return first.Get() + " " + last.Get() + ", age " + itoa(age.Get())
+}
+summary := p.New(mkSummary())
+first.OnChange(func(_ string) { summary.Set(mkSummary()) })
+last.OnChange(func(_ string) { summary.Set(mkSummary()) })
+age.OnChange(func(_ int) { summary.Set(mkSummary()) })
 ```
 
-Each `Derived` function creates a new `Store[R]` initialized with the computed value, then subscribes to all source stores via `OnChange`. When any source changes, the compute function re-runs and the derived store is updated, triggering its own subscribers. The derived store is a regular `Store[R]` — it can be used in `Html`, `Bind`, conditions, etc.
+The resulting store is a regular `Store[R]` — it works with `Html`, `Bind`, conditions, and everything else. For many sources, a shared closure (`mkSummary` above) keeps the wiring clean.
 
 ### List[T]
 
@@ -144,13 +153,21 @@ type Component interface {
 }
 ```
 
-Optional interfaces:
+The root app component passed to `Hydrate()` must implement `ComponentRoot`:
+
+```go
+type ComponentRoot interface {
+    Component
+    Routes() []Route
+}
+```
+
+Optional interfaces (any component):
 
 | Interface | Method | Purpose |
 |---|---|---|
-| `HasNew` | `New() Component` | Create fresh instance (required for SSR iteration) |
+| `HasNew` | `New() Component` | Factory/constructor — creates a fresh instance with initialized stores |
 | `HasOnMount` | `OnMount()` | Lifecycle hook (called before Render in both SSR and WASM) |
-| `HasRoutes` | `Routes() []Route` | Define routes for the app |
 | `HasStyle` | `Style() string` | Scoped CSS for this component |
 | `HasGlobalStyle` | `GlobalStyle() string` | Unscoped global CSS |
 

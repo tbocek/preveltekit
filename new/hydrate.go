@@ -13,18 +13,16 @@ import (
 // In SSR mode (native build), it generates static HTML files.
 // WASM discovers all bindings by walking the Render() tree directly,
 // so no bindings.bin is needed.
-func Hydrate(app Component) {
+func Hydrate(app ComponentRoot) {
 	// First pass: discover all SSR paths
 	if hn, ok := app.(HasNew); ok {
-		app = hn.New()
+		app = hn.New().(ComponentRoot)
 	}
 
 	var ssrPaths []Route
-	if hr, ok := app.(HasRoutes); ok {
-		for _, route := range hr.Routes() {
-			if route.SSRPath != "" {
-				ssrPaths = append(ssrPaths, route)
-			}
+	for _, route := range app.Routes() {
+		if route.SSRPath != "" {
+			ssrPaths = append(ssrPaths, route)
 		}
 	}
 
