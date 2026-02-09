@@ -58,7 +58,7 @@ func (s *Storage) Render() p.Node {
 		<section>
 			<h2>Persisted Theme (Auto-sync)</h2>
 			<p>Theme preference is automatically saved to localStorage.</p>
-			<p>Current theme: <strong>`, p.Bind(s.Theme.Store), `</strong></p>
+			<p>Current theme: <strong>`, s.Theme.Store, `</strong></p>
 			<div class="buttons">
 				`, p.Html(`<button>Light</button>`).On("click", s.SetLight), `
 				`, p.Html(`<button>Dark</button>`).On("click", s.SetDark), `
@@ -81,7 +81,7 @@ func (s *Storage) Render() p.Node {
 			`, p.Html(`<button class="danger">Clear All Storage</button>`).On("click", s.ClearAll), `
 		</section>
 
-		<p class="status">`, p.Bind(s.Status), `</p>
+		<p class="status">`, s.Status, `</p>
 	</div>`)
 }
 

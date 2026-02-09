@@ -119,14 +119,14 @@ func (b *Bitcoin) Render() p.Node {
 		p.If(b.Loading.Eq(true),
 			p.Html(`<p class="loading">Loading...</p>`),
 		).ElseIf(b.Error.Ne(""),
-			p.Html(`<p class="error">Error: `, p.Bind(b.Error), `</p>`,
+			p.Html(`<p class="error">Error: `, b.Error, `</p>`,
 				p.Html(`<button>Retry</button>`).On("click", b.Retry)),
 		).Else(
 			p.Html(`<div class="price-info">
-					<span class="symbol">`, p.Bind(b.Symbol), `</span>
-					<span class="update-time">Updated: `, p.Bind(b.UpdateTime), ` UTC</span>
+					<span class="symbol">`, b.Symbol, `</span>
+					<span class="update-time">Updated: `, b.UpdateTime, ` UTC</span>
 				</div>
-				<p class="price">`, p.Bind(b.Price), `</p>
+				<p class="price">`, b.Price, `</p>
 				<small class="disclaimer">Prices are volatile and for reference only.</small>`),
 		),
 		p.Html(`</section>

@@ -1,10 +1,13 @@
-//go:build js && wasm
+//go:build wasm
 
 package preveltekit
 
 import (
 	"syscall/js"
 )
+
+// IsBuildTime is always false in WASM - we're running in the browser.
+const IsBuildTime = false
 
 // Document is a cached reference to the DOM document
 var Document = js.Global().Get("document")

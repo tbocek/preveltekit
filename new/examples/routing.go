@@ -153,7 +153,7 @@ func (r *Routing) Render() p.Node {
 		p.Html(`<button>Previous</button>`).
 			AttrIf("class", r.CurrentStep.Eq(1), "disabled").
 			On("click", func() { r.PrevStep() }),
-		`<span>Step `, p.Bind(r.CurrentStep), ` of 4</span>`,
+		`<span>Step `, r.CurrentStep, ` of 4</span>`,
 		p.Html(`<button>Next</button>`).
 			AttrIf("class", r.CurrentStep.Eq(4), "disabled").
 			On("click", func() { r.NextStep() }),

@@ -97,7 +97,7 @@ func (b *Basics) Render() p.Node {
 		<section>
 			<h2>Two-Way Binding</h2>
 			<label>Your name: `, p.Html(`<input type="text" placeholder="Enter name">`).Bind(b.Name), `</label>
-			<p>Hello, `, p.Bind(b.Name), `!</p>
+			<p>Hello, `, b.Name, `!</p>
 		</section>
 
 		<section>
@@ -113,7 +113,7 @@ func (b *Basics) Render() p.Node {
 				<label>`, p.Html(`<input type="checkbox">`).Bind(b.Agreed), ` I agree to the terms</label>
 				<button type="submit">Submit</button>
 			</form>`).On("submit", b.Submit).PreventDefault(), `
-			<p class="message">`, p.Bind(b.Message), `</p>
+			<p class="message">`, b.Message, `</p>
 		</section>
 	</div>`)
 }

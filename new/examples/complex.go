@@ -57,7 +57,7 @@ func (c *Complex) Render() p.Node {
 		<section>
 			<h2>Shared Store</h2>
 			<p>Theme is shared between parent and all child components:</p>
-			<p>Current theme: <strong>`, p.Bind(c.Theme), `</strong></p>
+			<p>Current theme: <strong>`, c.Theme, `</strong></p>
 			<div class="buttons">
 				`, p.Html(`<button>Light</button>`).On("click", func() { c.Theme.Set("light"); c.Log.Append("Theme: light") }), `
 				`, p.Html(`<button>Dark</button>`).On("click", func() { c.Theme.Set("dark"); c.Log.Append("Theme: dark") }), `
@@ -125,8 +125,8 @@ type Dashboard struct {
 func (d *Dashboard) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Dashboard</h3>
-		<p>Theme: <strong>`, p.Bind(d.Theme), `</strong></p>
-		<p>Stats value: <strong>`, p.Bind(d.Stats), `</strong></p>
+		<p>Theme: <strong>`, d.Theme, `</strong></p>
+		<p>Stats value: <strong>`, d.Stats, `</strong></p>
 		<div class="buttons">
 			`, p.Html(`<button>+10</button>`).On("click", func() { d.Stats.Update(func(v int) int { return v + 10 }); d.Log.Append("Stats +10") }), `
 			`, p.Html(`<button>Reset</button>`).On("click", func() { d.Stats.Set(0); d.Log.Append("Stats reset") }), `
@@ -144,7 +144,7 @@ type Settings struct {
 func (s *Settings) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Settings</h3>
-		<p>Font size: <strong>`, p.Bind(s.FontSize), `</strong>px</p>
+		<p>Font size: <strong>`, s.FontSize, `</strong>px</p>
 		<div class="buttons">
 			`, p.Html(`<button>Small (12)</button>`).On("click", func() { s.FontSize.Set(12); s.Log.Append("Font: 12px") }), `
 			`, p.Html(`<button>Medium (14)</button>`).On("click", func() { s.FontSize.Set(14); s.Log.Append("Font: 14px") }), `
@@ -167,7 +167,7 @@ type Activity struct {
 func (a *Activity) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Activity</h3>
-		<p>Theme: <strong>`, p.Bind(a.Theme), `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>
+		<p>Theme: <strong>`, a.Theme, `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>
 		`, p.If(a.Log.Len().Gt(0),
 		p.Html(`<ul class="activity-list">`,
 			p.Each(a.Log, func(entry string, i int) p.Node {

@@ -1,4 +1,4 @@
-//go:build !js || !wasm
+//go:build !wasm
 
 package preveltekit
 
@@ -452,9 +452,6 @@ func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
 			}
 		}
 	}
-
-	// Set props on the component's stores
-	setComponentProps(comp, c.Props)
 
 	// Render slot content with current context
 	slotHTML := childrenToHTML(c.Children, ctx)

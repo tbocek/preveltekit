@@ -1,4 +1,4 @@
-//go:build js && wasm
+//go:build wasm
 
 package preveltekit
 
@@ -699,9 +699,6 @@ func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *Cl
 	if _, ok3 := c.Instance.(HasStyle); ok3 {
 		scopeAttr = GetOrCreateScope(c.Name)
 	}
-
-	// Set props
-	setComponentProps(comp, c.Props)
 
 	// Walk slot children with parent context
 	for _, child := range c.Children {

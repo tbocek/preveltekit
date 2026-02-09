@@ -76,12 +76,12 @@ func (d *Debounce) Render() p.Node {
 			`, p.Html(`<input type="text" placeholder="Type to search...">`).Bind(d.SearchInput), `
 
 			<div class="stats">
-				<span>Status: <strong>`, p.Bind(d.Status), `</strong></span>
-				<span>API calls: <strong>`, p.Bind(d.SearchCount), `</strong></span>
+				<span>Status: <strong>`, d.Status, `</strong></span>
+				<span>API calls: <strong>`, d.SearchCount, `</strong></span>
 			</div>`,
 
 		p.If(d.SearchResult.Ne(""),
-			p.Html(`<div class="result">`, p.Bind(d.SearchResult), `</div>`),
+			p.Html(`<div class="result">`, d.SearchResult, `</div>`),
 		),
 
 		p.Html(`<p class="hint">Type quickly - search only fires once you pause.</p>
@@ -94,8 +94,8 @@ func (d *Debounce) Render() p.Node {
 			`, p.Html(`<button>Click me rapidly!</button>`).On("click", d.OnClick), `
 
 			<div class="stats">
-				<span>Total clicks: <strong>`, p.Bind(d.ClickCount), `</strong></span>
-				<span>Throttled actions: <strong>`, p.Bind(d.ThrottleCount), `</strong></span>
+				<span>Total clicks: <strong>`, d.ClickCount, `</strong></span>
+				<span>Throttled actions: <strong>`, d.ThrottleCount, `</strong></span>
 			</div>
 
 			<p class="hint">Click fast - throttled count increases slowly.</p>

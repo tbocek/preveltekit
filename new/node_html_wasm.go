@@ -1,4 +1,4 @@
-//go:build js && wasm
+//go:build wasm
 
 package preveltekit
 
@@ -364,9 +364,6 @@ func wasmComponentNodeToHTML(c *ComponentNode, ctx *WASMRenderContext) string {
 	if _, ok3 := c.Instance.(HasStyle); ok3 {
 		scopeAttr = GetOrCreateScope(c.Name)
 	}
-
-	// Set props
-	setComponentProps(comp, c.Props)
 
 	// Render slot content with parent context
 	slotHTML := wasmChildrenToHTML(c.Children, ctx)

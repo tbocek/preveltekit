@@ -131,12 +131,12 @@ func (f *Fetch) Render() p.Node {
 			</div>`,
 
 		p.If(f.RawData.Ne(""),
-			p.Html(`<pre>`, p.Bind(f.RawData), `</pre>`),
+			p.Html(`<pre>`, f.RawData, `</pre>`),
 		).Else(
 			p.Html(`<pre>Click a button to fetch data</pre>`),
 		),
 
-		p.Html(`<p class="status">Status: `, p.Bind(f.Status), `</p>
+		p.Html(`<p class="status">Status: `, f.Status, `</p>
 		</section>
 
 		<section>

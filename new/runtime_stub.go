@@ -1,6 +1,9 @@
-//go:build !js || !wasm
+//go:build !wasm
 
 package preveltekit
+
+// IsBuildTime is true when running native (pre-rendering).
+const IsBuildTime = true
 
 // Stub implementations for non-WASM builds (SSR/pre-rendering)
 // These are no-ops since DOM manipulation only happens in the browser

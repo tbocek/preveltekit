@@ -84,7 +84,7 @@ func (c *Components) Render() p.Node {
 		<section>
 			<h2>Component Events</h2>
 			<p>Child components can emit events to parent:</p>
-			<p>Click count: <strong>`, p.Bind(c.ClickCount), `</strong></p>`,
+			<p>Click count: <strong>`, c.ClickCount, `</strong></p>`,
 		p.Comp(&Button{Label: p.New("Click Me"), OnClick: c.HandleButtonClick}),
 		p.Comp(&Button{Label: p.New("Also Click Me"), OnClick: c.HandleButtonClick}),
 		`</section>
@@ -104,7 +104,7 @@ func (c *Components) Render() p.Node {
 		<section>
 			<h2>Conditional Components</h2>
 			<p>Components with slots and props inside if-blocks:</p>
-			<p>Current view: <strong>`, p.Bind(c.ViewMode), `</strong></p>
+			<p>Current view: <strong>`, c.ViewMode, `</strong></p>
 			<div class="view-buttons">
 				`, p.Html(`<button>Card</button>`).On("click", func() { c.SetViewMode("card") }), `
 				`, p.Html(`<button>Badge</button>`).On("click", func() { c.SetViewMode("badge") }), `
@@ -138,7 +138,7 @@ type Badge struct {
 }
 
 func (b *Badge) Render() p.Node {
-	return p.Html(`<span class="badge">`, p.Bind(b.Label), `</span>`)
+	return p.Html(`<span class="badge">`, b.Label, `</span>`)
 }
 
 func (b *Badge) Style() string {
@@ -152,7 +152,7 @@ type Card struct {
 
 func (c *Card) Render() p.Node {
 	return p.Html(`<div class="card">
-		<div class="card-header">`, p.Bind(c.Title), `</div>
+		<div class="card-header">`, c.Title, `</div>
 		<div class="card-body">`, p.Slot(), `</div>
 	</div>`)
 }
@@ -169,9 +169,9 @@ type Button struct {
 
 func (b *Button) Render() p.Node {
 	if b.OnClick != nil {
-		return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`).On("click", b.OnClick)
+		return p.Html(`<button class="btn">`, b.Label, `</button>`).On("click", b.OnClick)
 	}
-	return p.Html(`<button class="btn">`, p.Bind(b.Label), `</button>`)
+	return p.Html(`<button class="btn">`, b.Label, `</button>`)
 }
 
 func (b *Button) Style() string {
@@ -186,8 +186,8 @@ type Alert struct {
 
 func (a *Alert) Render() p.Node {
 	return p.Html(`<div class="alert" `, p.Attr("data-type", a.Type), `>
-		<strong class="alert-title">`, p.Bind(a.Type), `</strong>
-		<span class="alert-message">`, p.Bind(a.Message), `</span>
+		<strong class="alert-title">`, a.Type, `</strong>
+		<span class="alert-message">`, a.Message, `</span>
 	</div>`)
 }
 

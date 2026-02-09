@@ -22,7 +22,6 @@ A Go/WASM web framework with SSR pre-rendering. Components are written in pure G
 - [Comment Marker System](#comment-marker-system)
 - [WASM Tree Walking](#wasm-tree-walking)
 - [Render Cache](#render-cache)
-- [File Reference](#file-reference)
 
 ---
 
@@ -265,7 +264,6 @@ store.Eq(false)        // store (bool) is false
 p.Attr("class", "btn primary")                      // static (no stores)
 p.Attr("href", "/user/", userIDStore)                // dynamic (string + store parts)
 p.Attr("data-theme", themeStore)                     // dynamic (single store)
-p.Prop("Title", titleStore)                          // component prop
 ```
 
 ---
@@ -671,54 +669,4 @@ type wasmCachedOption struct {
 var wasmRenderedTrees = make(map[string][]wasmCachedOption)
 ```
 
----
 
-## File Reference
-
-| File | Build Tag | Purpose |
-|------|-----------|---------|
-| `store.go` | (shared) | Stores, Lists, interfaces, registries |
-| `node.go` | (shared) | Node types, DSL functions, conditions, `ftoa` |
-| `id.go` | (shared) | ID counter types and generators |
-| `css_scope.go` | (shared) | CSS scoping logic |
-| `route_match.go` | (shared) | Route pattern matching |
-| `node_html_shared.go` | (shared) | Shared HTML utilities: `injectAttrs`, `injectScopeClass`, `setComponentProps` |
-| `node_html.go` | `!js \|\| !wasm` | SSR rendering: ToHTML methods, HTML generation |
-| `node_html_wasm.go` | `js && wasm` | WASM HTML generation: `wasmNodeToHTML`, render caches |
-| `hydrate.go` | `!js \|\| !wasm` | SSR entry point: route iteration, HTML document generation |
-| `hydrate_wasm.go` | `js && wasm` | WASM entry point: `Hydrate()`, `wasmWalkAndBind`, all `wasmBind*` functions |
-| `runtime.go` | `js && wasm` | DOM helpers: `FindComment`, `BindInput`, `BindCheckbox`, batch binding |
-| `runtime_stub.go` | `!js \|\| !wasm` | SSR DOM stubs |
-| `router.go` | `wasm` | Client-side SPA router |
-| `router_stub.go` | `!wasm` | SSR router stubs |
-| `js_stub.go` | `!wasm` | Fake JS API for SSR |
-| `codec.go` | `js && wasm` | WASM codec utilities |
-| `codec_stub.go` | `!js \|\| !wasm` | SSR codec stubs |
-| `fetch.go` | `js && wasm` | WASM fetch API |
-| `fetch_stub.go` | `!js \|\| !wasm` | SSR fetch stubs |
-| `storage.go` | `js && wasm` | WASM localStorage API |
-| `storage_stub.go` | `!js \|\| !wasm` | SSR storage stubs |
-| `ticker.go` | `js && wasm` | WASM timer utilities |
-| `ticker_stub.go` | `!js \|\| !wasm` | SSR ticker stubs |
-
-### Stub Pattern
-
-For each WASM-only file, there's a corresponding stub file for the SSR build:
-- `runtime.go` ↔ `runtime_stub.go`
-- `router.go` ↔ `router_stub.go`
-- `fetch.go` ↔ `fetch_stub.go`
-- `storage.go` ↔ `storage_stub.go`
-- `codec.go` ↔ `codec_stub.go`
-- `ticker.go` ↔ `ticker_stub.go`
-
-Stubs provide no-op implementations so the package compiles for native Go.
-
-### Key Shared vs Split Files
-
-```
-node_html_shared.go  (no build tag)  — HTML utilities used by both SSR and WASM
-node_html.go         (!js || !wasm)  — SSR: nodeToHTML, ToHTML methods
-node_html_wasm.go    (js && wasm)    — WASM: wasmNodeToHTML, render caches
-hydrate.go           (!js || !wasm)  — SSR: Hydrate entry, HTML document output
-hydrate_wasm.go      (js && wasm)    — WASM: Hydrate entry, wasmWalkAndBind
-```

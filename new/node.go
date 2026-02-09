@@ -272,7 +272,6 @@ func (e *EachNode) Else(children ...Node) *EachNode {
 type ComponentNode struct {
 	Name        string         // Component type name (derived from instance)
 	Instance    any            // The actual component instance
-	Props       map[string]any // Property values
 	Events      map[string]any // Event handlers
 	Children    []Node         // Slot content
 	renderCache Node           // cached Render() result (used by WASM to avoid double Render)
@@ -294,14 +293,10 @@ func Comp(instance any, content ...any) *ComponentNode {
 	c := &ComponentNode{
 		Name:     name,
 		Instance: instance,
-		Props:    make(map[string]any),
 		Events:   make(map[string]any),
 	}
 	for _, item := range content {
-		switch v := item.(type) {
-		case *PropAttr:
-			c.Props[v.Name] = v.Value
-		case Node:
+		if v, ok := item.(Node); ok {
 			c.Children = append(c.Children, v)
 		}
 	}
@@ -383,19 +378,6 @@ func Attr(name string, parts ...any) NodeAttr {
 		Name:  name,
 		Parts: parts,
 	}
-}
-
-// PropAttr represents a property passed to a child component.
-type PropAttr struct {
-	Name  string
-	Value any
-}
-
-func (p *PropAttr) attrType() string { return "prop" }
-
-// Prop creates a property to pass to a child component.
-func Prop(name string, value any) *PropAttr {
-	return &PropAttr{Name: name, Value: value}
 }
 
 // =============================================================================

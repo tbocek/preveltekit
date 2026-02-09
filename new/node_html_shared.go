@@ -1,7 +1,6 @@
 package preveltekit
 
 import (
-	"reflect"
 	"strings"
 )
 
@@ -228,59 +227,4 @@ func injectScopeClass(html, scopeClass string) string {
 		}
 	}
 	return sb.String()
-}
-
-// setComponentProps sets props on a component's stores using reflection.
-func setComponentProps(comp Component, props map[string]any) {
-	v := reflect.ValueOf(comp)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return
-	}
-
-	for propName, propValue := range props {
-		field := v.FieldByName(propName)
-		if !field.IsValid() {
-			field = v.FieldByName(strings.Title(propName))
-		}
-		if !field.IsValid() {
-			continue
-		}
-
-		// Check if prop value is a store (dynamic prop) - share the store pointer
-		switch pv := propValue.(type) {
-		case *Store[string]:
-			if field.CanSet() {
-				field.Set(reflect.ValueOf(pv))
-			}
-			continue
-		case *Store[int]:
-			if field.CanSet() {
-				field.Set(reflect.ValueOf(pv))
-			}
-			continue
-		case *Store[bool]:
-			if field.CanSet() {
-				field.Set(reflect.ValueOf(pv))
-			}
-			continue
-		}
-
-		// Static prop - set the value on the component's store
-		if field.Kind() == reflect.Ptr && !field.IsNil() {
-			setMethod := field.MethodByName("Set")
-			if setMethod.IsValid() {
-				switch pv := propValue.(type) {
-				case string:
-					setMethod.Call([]reflect.Value{reflect.ValueOf(pv)})
-				case int:
-					setMethod.Call([]reflect.Value{reflect.ValueOf(pv)})
-				case bool:
-					setMethod.Call([]reflect.Value{reflect.ValueOf(pv)})
-				}
-			}
-		}
-	}
 }
