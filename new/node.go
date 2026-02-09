@@ -344,19 +344,7 @@ func componentName(c Component) string {
 // Attributes
 // =============================================================================
 
-// ClassAttr represents a static class attribute.
-type ClassAttr struct {
-	Classes []string
-}
-
-func (c *ClassAttr) attrType() string { return "class" }
-
-// Class creates a class attribute with one or more class names.
-func Class(classes ...string) *ClassAttr {
-	return &ClassAttr{Classes: classes}
-}
-
-// StaticAttr represents a static attribute.
+// StaticAttr represents a static attribute (no reactive binding).
 type StaticAttr struct {
 	Name  string
 	Value string
@@ -364,27 +352,36 @@ type StaticAttr struct {
 
 func (s *StaticAttr) attrType() string { return "static" }
 
-// StaticAttribute creates a static attribute.
-func StaticAttribute(name, value string) *StaticAttr {
-	return &StaticAttr{Name: name, Value: value}
-}
-
-// DynAttrAttr represents a dynamic attribute with store bindings.
+// DynAttrAttr represents a dynamic attribute with mixed string/store parts.
 type DynAttrAttr struct {
-	Name     string
-	Template string // e.g., "/user/{UserID}"
-	Stores   []any  // Store references
+	Name  string
+	Parts []any // mix of string and *Store[T]
 }
 
 func (d *DynAttrAttr) attrType() string { return "dynattr" }
 
-// DynAttr creates a dynamic attribute that includes store values.
-// Template uses {0}, {1}, etc. as placeholders for store values.
-func DynAttr(name, template string, stores ...any) *DynAttrAttr {
+// Attr creates an attribute. Parts can be strings and stores.
+// With only string parts, it's static (no reactive binding).
+// With any store parts, it becomes a dynamic attribute that updates reactively.
+func Attr(name string, parts ...any) NodeAttr {
+	// Check if all parts are strings — if so, use StaticAttr
+	allStatic := true
+	for _, p := range parts {
+		if _, ok := p.(string); !ok {
+			allStatic = false
+			break
+		}
+	}
+	if allStatic {
+		var value string
+		for _, p := range parts {
+			value += p.(string)
+		}
+		return &StaticAttr{Name: name, Value: value}
+	}
 	return &DynAttrAttr{
-		Name:     name,
-		Template: template,
-		Stores:   stores,
+		Name:  name,
+		Parts: parts,
 	}
 }
 
@@ -565,29 +562,4 @@ func escapeHTML(s string) string {
 		}
 	}
 	return string(result)
-}
-
-// BoolCondition wraps a bool store for use in If nodes.
-type BoolCondition struct {
-	Store  *Store[bool] // Exported for address-based resolution
-	negate bool
-}
-
-func (c *BoolCondition) Eval() bool {
-	v := c.Store.Get()
-	if c.negate {
-		return !v
-	}
-	return v
-}
-func (c *BoolCondition) Deps() []string { return nil }
-
-// IsTrue creates a condition that's true when the bool store is true.
-func IsTrue(s *Store[bool]) Condition {
-	return &BoolCondition{Store: s}
-}
-
-// IsFalse creates a condition that's true when the bool store is false.
-func IsFalse(s *Store[bool]) Condition {
-	return &BoolCondition{Store: s, negate: true}
 }

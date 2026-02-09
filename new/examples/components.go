@@ -185,7 +185,7 @@ type Alert struct {
 }
 
 func (a *Alert) Render() p.Node {
-	return p.Html(`<div class="alert" `, p.DynAttr("data-type", "{0}", a.Type), `>
+	return p.Html(`<div class="alert" `, p.Attr("data-type", a.Type), `>
 		<strong class="alert-title">`, p.Bind(a.Type), `</strong>
 		<span class="alert-message">`, p.Bind(a.Message), `</span>
 	</div>`)

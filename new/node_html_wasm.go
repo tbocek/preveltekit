@@ -387,24 +387,21 @@ func wasmComponentNodeToHTML(c *ComponentNode, ctx *WASMRenderContext) string {
 // wasmAttrToHTML renders a NodeAttr to HTML string.
 func wasmAttrToHTML(attr NodeAttr, ctx *WASMRenderContext) string {
 	switch a := attr.(type) {
-	case *ClassAttr:
-		return `class="` + joinStrings(a.Classes, " ") + `"`
 	case *StaticAttr:
 		return a.Name + `="` + escapeAttr(a.Value) + `"`
 	case *DynAttrAttr:
 		localID := ctx.NextAttrID()
 		fullID := ctx.FullID(localID)
-		attrValue := a.Template
-		for i, store := range a.Stores {
-			placeholder := "{" + itoa(i) + "}"
-			var storeVal string
-			switch s := store.(type) {
+		var attrValue string
+		for _, part := range a.Parts {
+			switch v := part.(type) {
+			case string:
+				attrValue += v
 			case *Store[string]:
-				storeVal = s.Get()
+				attrValue += v.Get()
 			case *Store[int]:
-				storeVal = itoa(s.Get())
+				attrValue += itoa(v.Get())
 			}
-			attrValue = replaceAll(attrValue, placeholder, storeVal)
 		}
 		return `data-attrbind="` + fullID + `" ` + a.Name + `="` + escapeAttr(attrValue) + `"`
 	}
@@ -417,34 +414,4 @@ func wasmChildPrefix(ctx *WASMRenderContext, name string) string {
 		return ctx.Prefix + "_" + name
 	}
 	return name
-}
-
-// replaceAll replaces all occurrences of old with new in s.
-func replaceAll(s, old, new string) string {
-	if old == "" {
-		return s
-	}
-	var result []byte
-	for i := 0; i < len(s); {
-		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
-			result = append(result, new...)
-			i += len(old)
-		} else {
-			result = append(result, s[i])
-			i++
-		}
-	}
-	return string(result)
-}
-
-// joinStrings joins strings with a separator (avoids strings package).
-func joinStrings(ss []string, sep string) string {
-	var r string
-	for i, s := range ss {
-		if i > 0 {
-			r += sep
-		}
-		r += s
-	}
-	return r
 }

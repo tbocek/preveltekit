@@ -215,8 +215,6 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 	var condStore any
 	if sc, ok2 := ac.Cond.(*StoreCondition); ok2 {
 		condStore = sc.Store
-	} else if bc, ok2 := ac.Cond.(*BoolCondition); ok2 {
-		condStore = bc.Store
 	}
 
 	updateAttr := func() {
@@ -277,24 +275,25 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *Cleanup) 
 		return
 	}
 
-	var stores []any
-	for _, storeRef := range da.Stores {
-		stores = append(stores, storeRef)
-	}
-
 	updateAttr := func() {
-		value := da.Template
-		for i, store := range stores {
-			placeholder := "{" + itoa(i) + "}"
-			value = replaceAll(value, placeholder, storeToString(store))
+		var value string
+		for _, part := range da.Parts {
+			switch v := part.(type) {
+			case string:
+				value += v
+			default:
+				value += storeToString(v)
+			}
 		}
 		el.Call("setAttribute", da.Name, value)
 	}
 
 	updateAttr()
 
-	for _, store := range stores {
-		subscribeToStore(store, updateAttr)
+	for _, part := range da.Parts {
+		if _, ok := part.(string); !ok {
+			subscribeToStore(part, updateAttr)
+		}
 	}
 }
 
@@ -343,8 +342,6 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 	for _, branch := range ifNode.Branches {
 		if sc, ok2 := branch.Cond.(*StoreCondition); ok2 {
 			condStores = append(condStores, sc.Store)
-		} else if bc, ok2 := branch.Cond.(*BoolCondition); ok2 {
-			condStores = append(condStores, bc.Store)
 		}
 	}
 

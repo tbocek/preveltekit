@@ -250,21 +250,21 @@ p.Slot()                                                 // slot placeholder in 
 ### Conditions
 
 ```go
-store.Ge(90)          // store >= 90
-store.Gt(0)           // store > 0
-store.Lt(100)         // store < 100
-store.Eq("hello")     // store == "hello"
-store.Ne("goodbye")   // store != "goodbye"
-p.IsTrue(boolStore)   // bool store is true
-p.IsFalse(boolStore)  // bool store is false
+store.Ge(90)           // store >= 90
+store.Gt(0)            // store > 0
+store.Lt(100)          // store < 100
+store.Eq("hello")      // store == "hello"
+store.Ne("goodbye")    // store != "goodbye"
+store.Eq(true)         // store (bool) is true
+store.Eq(false)        // store (bool) is false
 ```
 
 ### Attributes
 
 ```go
-p.Class("btn", "primary")                          // static class
-p.StaticAttribute("data-id", "42")                  // static attribute
-p.DynAttr("href", "/user/{0}", userIDStore)         // dynamic attribute with placeholder
+p.Attr("class", "btn primary")                      // static (no stores)
+p.Attr("href", "/user/", userIDStore)                // dynamic (string + store parts)
+p.Attr("data-theme", themeStore)                     // dynamic (single store)
 p.Prop("Title", titleStore)                          // component prop
 ```
 

@@ -116,7 +116,7 @@ func (b *Bitcoin) Render() p.Node {
 		<h1>Bitcoin Price</h1>
 
 		<section class="bitcoin-card">`,
-		p.If(p.IsTrue(b.Loading),
+		p.If(b.Loading.Eq(true),
 			p.Html(`<p class="loading">Loading...</p>`),
 		).ElseIf(b.Error.Ne(""),
 			p.Html(`<p class="error">Error: `, p.Bind(b.Error), `</p>`,

@@ -73,7 +73,7 @@ func (c *Complex) Render() p.Node {
 		p.Html(`<button>Settings</button>`).On("click", func() { c.SetTab(c.tabSettings); c.Log.Append("Tab: settings") }),
 		p.Html(`<button>Activity</button>`).On("click", func() { c.SetTab(c.tabActivity); c.Log.Append("Tab: activity") }), `
 			</div>
-			<div class="tab-content" `, p.DynAttr("data-theme", "{0}", c.Theme), `>`,
+			<div class="tab-content" `, p.Attr("data-theme", c.Theme), `>`,
 		c.ActiveTab,
 		`</div>
 		</section>
@@ -85,7 +85,7 @@ func (c *Complex) Render() p.Node {
 				`, p.Html(`<button>Toggle Log</button>`).On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }), `
 				`, p.Html(`<button>Clear Log</button>`).On("click", c.ClearLog), `
 			</div>`,
-		p.If(p.IsTrue(c.ShowLog),
+		p.If(c.ShowLog.Eq(true),
 			p.Html(`<ul class="log">`,
 				p.Each(c.Log, func(entry string, i int) p.Node {
 					return p.Html(`<li class="log-entry"><span class="log-idx">`, itoa(i), `</span> `, entry, `</li>`)

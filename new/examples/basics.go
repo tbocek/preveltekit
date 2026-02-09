@@ -103,7 +103,7 @@ func (b *Basics) Render() p.Node {
 		<section>
 			<h2>Checkbox Binding</h2>
 			<label>`, p.Html(`<input type="checkbox">`).Bind(b.DarkMode), ` Dark Mode</label>
-			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", p.IsTrue(b.DarkMode), "dark"), `
+			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", b.DarkMode.Eq(true), "dark"), `
 		</section>
 
 		<section>

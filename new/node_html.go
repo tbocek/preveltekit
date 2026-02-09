@@ -268,24 +268,21 @@ func evalAttrValue(v any) string {
 // attrToHTMLString renders a NodeAttr as an HTML attribute string.
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	switch a := attr.(type) {
-	case *ClassAttr:
-		return fmt.Sprintf(`class="%s"`, strings.Join(a.Classes, " "))
 	case *StaticAttr:
 		return fmt.Sprintf(`%s="%s"`, a.Name, escapeAttr(a.Value))
 	case *DynAttrAttr:
 		localID := ctx.NextAttrID()
 		fullID := ctx.FullID(localID)
-		attrValue := a.Template
-		for i, store := range a.Stores {
-			placeholder := "{" + fmt.Sprintf("%d", i) + "}"
-			var storeVal string
-			switch s := store.(type) {
+		var attrValue string
+		for _, part := range a.Parts {
+			switch v := part.(type) {
+			case string:
+				attrValue += v
 			case *Store[string]:
-				storeVal = s.Get()
+				attrValue += v.Get()
 			case *Store[int]:
-				storeVal = fmt.Sprintf("%d", s.Get())
+				attrValue += fmt.Sprintf("%d", v.Get())
 			}
-			attrValue = strings.ReplaceAll(attrValue, placeholder, storeVal)
 		}
 		return fmt.Sprintf(`data-attrbind="%s" %s="%s"`, fullID, a.Name, escapeAttr(attrValue))
 	default:
