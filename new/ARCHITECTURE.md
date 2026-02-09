@@ -89,33 +89,40 @@ Internally, `newWithID(id, val)` creates a store with an explicit ID instead of 
 
 ### Derived Stores (User Pattern)
 
-The framework doesn't include a built-in `Derived` type — it's not needed. Computed stores are built using `New` + `OnChange`, which is explicit and requires no extra API:
+The framework doesn't include a built-in `Derived` type — it's not needed. Users can write their own helpers using `New` + `OnChange`:
 
 ```go
-// Single source — uppercase transform
-name := p.New("hello")
-uppercase := p.New(strings.ToUpper(name.Get()))
-name.OnChange(func(v string) { uppercase.Set(strings.ToUpper(v)) })
-
-// Two sources — full name
-first := p.New("John")
-last := p.New("Doe")
-fullName := p.New(first.Get() + " " + last.Get())
-first.OnChange(func(f string) { fullName.Set(f + " " + last.Get()) })
-last.OnChange(func(l string) { fullName.Set(first.Get() + " " + l) })
-
-// Three sources — use a helper closure
-age := p.New(30)
-mkSummary := func() string {
-    return first.Get() + " " + last.Get() + ", age " + itoa(age.Get())
+// User-defined helpers (in your app code)
+func Derived1[A, R any](a *p.Store[A], fn func(A) R) *p.Store[R] {
+    out := p.New(fn(a.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
+    return out
 }
-summary := p.New(mkSummary())
-first.OnChange(func(_ string) { summary.Set(mkSummary()) })
-last.OnChange(func(_ string) { summary.Set(mkSummary()) })
-age.OnChange(func(_ int) { summary.Set(mkSummary()) })
+
+func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
+    out := p.New(fn(a.Get(), b.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
+    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
+    return out
+}
+
+func Derived3[A, B, C, R any](a *p.Store[A], b *p.Store[B], c *p.Store[C], fn func(A, B, C) R) *p.Store[R] {
+    out := p.New(fn(a.Get(), b.Get(), c.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+    c.OnChange(func(_ C) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
+    return out
+}
+
+// Usage
+uppercase := Derived1(name, strings.ToUpper)
+fullName := Derived2(first, last, func(f, l string) string { return f + " " + l })
+summary := Derived3(first, last, age, func(f, l string, a int) string {
+    return f + " " + l + ", age " + itoa(a)
+})
 ```
 
-The resulting store is a regular `Store[R]` — it works with `Html`, `Bind`, conditions, and everything else. For many sources, a shared closure (`mkSummary` above) keeps the wiring clean.
+The resulting store is a regular `Store[R]` — it works with `Html`, `Bind`, conditions, and everything else.
 
 ### List[T]
 
