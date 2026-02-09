@@ -118,11 +118,6 @@ func nextHandlerID() string {
 	return id
 }
 
-// GetStore looks up a store by ID from the global registry
-func GetStore(id string) any {
-	return storeRegistry[id]
-}
-
 // GetHandler looks up a handler by ID from the global registry
 func GetHandler(id string) func() {
 	return handlerRegistry[id]

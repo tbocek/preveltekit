@@ -68,11 +68,6 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 // ToHTML implementations
 // =============================================================================
 
-// ToHTML generates HTML for a text node.
-func (t *TextNode) ToHTML(ctx *BuildContext) string {
-	return escapeHTML(t.Content)
-}
-
 // ToHTML generates HTML for a raw HTML node with embedded nodes.
 func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
 	html := h.renderParts(ctx)
@@ -275,15 +270,6 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	}
 }
 
-// ToHTML generates HTML for a fragment.
-func (f *Fragment) ToHTML(ctx *BuildContext) string {
-	var sb strings.Builder
-	for _, child := range f.Children {
-		sb.WriteString(nodeToHTML(child, ctx))
-	}
-	return sb.String()
-}
-
 // ToHTML generates HTML for a bind node (text interpolation).
 func (b *BindNode) ToHTML(ctx *BuildContext) string {
 	var value string
@@ -469,11 +455,7 @@ func (s *SlotNode) ToHTML(ctx *BuildContext) string {
 // nodeToHTML dispatches to the appropriate ToHTML method.
 func nodeToHTML(n Node, ctx *BuildContext) string {
 	switch node := n.(type) {
-	case *TextNode:
-		return node.ToHTML(ctx)
 	case *HtmlNode:
-		return node.ToHTML(ctx)
-	case *Fragment:
 		return node.ToHTML(ctx)
 	case *BindNode:
 		return node.ToHTML(ctx)

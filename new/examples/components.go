@@ -143,12 +143,12 @@ func (a *Alert) Style() string { return `+"`"+`.alert{...}`+"`"+` }</pre>
 				`, p.Html(`<button>Badge</button>`).On("click", func() { c.SetViewMode("badge") }), `
 				`, p.Html(`<button>Alert</button>`).On("click", func() { c.SetViewMode("alert") }), `
 			</div>
-			`, p.If(c.ViewMode.Eq("card"),
+			`, p.If(p.Cond(func() bool { return c.ViewMode.Get() == "card" }, c.ViewMode),
 			p.Comp(&Card{Title: c.CardTitle},
 				p.Html(`<p>This card appears conditionally.</p>
 				<p>It receives a <strong>dynamic prop</strong> and <strong>slot content</strong>.</p>`),
 			),
-		).ElseIf(c.ViewMode.Eq("badge"),
+		).ElseIf(p.Cond(func() bool { return c.ViewMode.Get() == "badge" }, c.ViewMode),
 			p.Comp(&Badge{Label: c.Message}),
 		).Else(
 			p.Comp(&Alert{Type: p.New("success"), Message: c.Message}),

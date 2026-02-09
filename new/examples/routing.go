@@ -79,20 +79,20 @@ func (r *Routing) Render() p.Node {
 
 			<div class="tabs">`,
 		// Chained: AttrIf + On
-		p.Html(`<button>Home</button>`).AttrIf("class", r.CurrentTab.Eq("home"), "active").On("click", func() { r.GoHome() }),
-		p.Html(`<button>Profile</button>`).AttrIf("class", r.CurrentTab.Eq("profile"), "active").On("click", func() { r.GoProfile() }),
-		p.Html(`<button>Settings</button>`).AttrIf("class", r.CurrentTab.Eq("settings"), "active").On("click", func() { r.GoSettings() }),
-		p.Html(`<button>Notifications</button>`).AttrIf("class", r.CurrentTab.Eq("notifications"), "active").On("click", func() { r.GoNotifications() }),
+		p.Html(`<button>Home</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "home" }, r.CurrentTab), "active").On("click", func() { r.GoHome() }),
+		p.Html(`<button>Profile</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "profile" }, r.CurrentTab), "active").On("click", func() { r.GoProfile() }),
+		p.Html(`<button>Settings</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "settings" }, r.CurrentTab), "active").On("click", func() { r.GoSettings() }),
+		p.Html(`<button>Notifications</button>`).AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "notifications" }, r.CurrentTab), "active").On("click", func() { r.GoNotifications() }),
 		`</div>
 
 			<div class="tab-content">`,
-		p.If(r.CurrentTab.Eq("home"),
+		p.If(p.Cond(func() bool { return r.CurrentTab.Get() == "home" }, r.CurrentTab),
 			p.Html(`<div class="tab-panel"><h3>Home</h3><p>Welcome to the home tab! This is the default view.</p></div>`),
-		).ElseIf(r.CurrentTab.Eq("profile"),
+		).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "profile" }, r.CurrentTab),
 			p.Html(`<div class="tab-panel"><h3>Profile</h3><p>View and edit your profile information here.</p></div>`),
-		).ElseIf(r.CurrentTab.Eq("settings"),
+		).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "settings" }, r.CurrentTab),
 			p.Html(`<div class="tab-panel"><h3>Settings</h3><p>Configure your application settings.</p></div>`),
-		).ElseIf(r.CurrentTab.Eq("notifications"),
+		).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "notifications" }, r.CurrentTab),
 			p.Html(`<div class="tab-panel"><h3>Notifications</h3><p>View your recent notifications.</p></div>`),
 		),
 		`</div>
@@ -108,42 +108,42 @@ func (r *Routing) Render() p.Node {
 					<button>1</button>
 					<span>Details</span>
 				</div>`).
-			AttrIf("class", r.CurrentStep.Gt(1), "completed").
-			AttrIf("class", r.CurrentStep.Eq(1), "active").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 1 }, r.CurrentStep), "completed").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep), "active").
 			On("click", func() { r.Step1() }),
-		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(1), "completed"),
+		p.Html(`<div class="step-line"></div>`).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 1 }, r.CurrentStep), "completed"),
 		p.Html(`<div class="step">
 					<button>2</button>
 					<span>Address</span>
 				</div>`).
-			AttrIf("class", r.CurrentStep.Gt(2), "completed").
-			AttrIf("class", r.CurrentStep.Eq(2), "active").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 2 }, r.CurrentStep), "completed").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 2 }, r.CurrentStep), "active").
 			On("click", func() { r.Step2() }),
-		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(2), "completed"),
+		p.Html(`<div class="step-line"></div>`).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 2 }, r.CurrentStep), "completed"),
 		p.Html(`<div class="step">
 					<button>3</button>
 					<span>Payment</span>
 				</div>`).
-			AttrIf("class", r.CurrentStep.Gt(3), "completed").
-			AttrIf("class", r.CurrentStep.Eq(3), "active").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 3 }, r.CurrentStep), "completed").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 3 }, r.CurrentStep), "active").
 			On("click", func() { r.Step3() }),
-		p.Html(`<div class="step-line"></div>`).AttrIf("class", r.CurrentStep.Gt(3), "completed"),
+		p.Html(`<div class="step-line"></div>`).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 3 }, r.CurrentStep), "completed"),
 		p.Html(`<div class="step">
 					<button>4</button>
 					<span>Confirm</span>
 				</div>`).
-			AttrIf("class", r.CurrentStep.Eq(4), "active").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep), "active").
 			On("click", func() { r.Step4() }),
 		`</div>
 
 			<div class="step-content">`,
-		p.If(r.CurrentStep.Eq(1),
+		p.If(p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep),
 			p.Html(`<div class="step-panel"><h3>Step 1: Personal Details</h3><p>Enter your name and email address.</p></div>`),
-		).ElseIf(r.CurrentStep.Eq(2),
+		).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 2 }, r.CurrentStep),
 			p.Html(`<div class="step-panel"><h3>Step 2: Shipping Address</h3><p>Enter your shipping address.</p></div>`),
-		).ElseIf(r.CurrentStep.Eq(3),
+		).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 3 }, r.CurrentStep),
 			p.Html(`<div class="step-panel"><h3>Step 3: Payment Method</h3><p>Choose your payment method.</p></div>`),
-		).ElseIf(r.CurrentStep.Eq(4),
+		).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep),
 			p.Html(`<div class="step-panel"><h3>Step 4: Confirmation</h3><p>Review and confirm your order.</p></div>`),
 		),
 		`</div>
@@ -151,18 +151,18 @@ func (r *Routing) Render() p.Node {
 			<div class="step-buttons">`,
 		// Chained: On with AttrIf for disabled state
 		p.Html(`<button>Previous</button>`).
-			AttrIf("class", r.CurrentStep.Eq(1), "disabled").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep), "disabled").
 			On("click", func() { r.PrevStep() }),
 		`<span>Step `, r.CurrentStep, ` of 4</span>`,
 		p.Html(`<button>Next</button>`).
-			AttrIf("class", r.CurrentStep.Eq(4), "disabled").
+			AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep), "disabled").
 			On("click", func() { r.NextStep() }),
 		`</div>
 
 		<pre class="code">// AttrIf: conditionally add classes (additive for same attribute)
 p.Html(`+"`"+`&lt;div class="step">...&lt;/div>`+"`"+`).
-    AttrIf("class", Step.Gt(2), "completed").
-    AttrIf("class", Step.Eq(2), "active").
+    AttrIf("class", p.Cond(func() bool { return Step.Get() > 2 }, Step), "completed").
+    AttrIf("class", p.Cond(func() bool { return Step.Get() == 2 }, Step), "active").
     On("click", GoToStep2)
 
 // chain multiple AttrIf + On calls on same node</pre>

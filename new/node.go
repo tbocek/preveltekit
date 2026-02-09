@@ -25,22 +25,6 @@ type Condition interface {
 }
 
 // =============================================================================
-// Text Node
-// =============================================================================
-
-// TextNode represents static text content.
-type TextNode struct {
-	Content string
-}
-
-func (t *TextNode) nodeType() string { return "text" }
-
-// Text creates a text node.
-func Text(content string) *TextNode {
-	return &TextNode{Content: content}
-}
-
-// =============================================================================
 // Raw HTML Node
 // =============================================================================
 
@@ -151,22 +135,6 @@ func (h *HtmlNode) StopPropagation() *HtmlNode {
 func (h *HtmlNode) Bind(store any) *HtmlNode {
 	h.BoundStore = store
 	return h
-}
-
-// =============================================================================
-// Fragment Node (multiple children without wrapper)
-// =============================================================================
-
-// Fragment represents multiple nodes without a wrapper element.
-type Fragment struct {
-	Children []Node
-}
-
-func (f *Fragment) nodeType() string { return "fragment" }
-
-// Frag creates a fragment containing multiple nodes.
-func Frag(children ...Node) *Fragment {
-	return &Fragment{Children: children}
 }
 
 // =============================================================================
@@ -383,78 +351,17 @@ func Attr(name string, parts ...any) NodeAttr {
 // Condition Helpers
 // =============================================================================
 
-// StoreCondition wraps a store with a comparison for use in If nodes.
-type StoreCondition struct {
-	Store    any    // Exported for address-based resolution
-	Op       string // Exported for class binding resolution
-	Operand  any    // Exported for class binding resolution
-	evalFunc func() bool
+// FuncCondition wraps a function and its dependent stores for use in If/AttrIf.
+type FuncCondition struct {
+	fn     func() bool
+	Stores []any
 }
 
-func (c *StoreCondition) Eval() bool { return c.evalFunc() }
+func (c *FuncCondition) Eval() bool { return c.fn() }
 
-// Ge creates a >= condition on a store.
-func (s *Store[T]) Ge(value T) Condition {
-	return &StoreCondition{
-		Store:    s,
-		Op:       ">=",
-		Operand:  value,
-		evalFunc: func() bool { return any(s.Get()).(int) >= any(value).(int) },
-	}
-}
-
-// Gt creates a > condition on a store.
-func (s *Store[T]) Gt(value T) Condition {
-	return &StoreCondition{
-		Store:    s,
-		Op:       ">",
-		Operand:  value,
-		evalFunc: func() bool { return any(s.Get()).(int) > any(value).(int) },
-	}
-}
-
-// Le creates a <= condition on a store.
-func (s *Store[T]) Le(value T) Condition {
-	return &StoreCondition{
-		Store:    s,
-		Op:       "<=",
-		Operand:  value,
-		evalFunc: func() bool { return any(s.Get()).(int) <= any(value).(int) },
-	}
-}
-
-// Lt creates a < condition on a store.
-func (s *Store[T]) Lt(value T) Condition {
-	return &StoreCondition{
-		Store:    s,
-		Op:       "<",
-		Operand:  value,
-		evalFunc: func() bool { return any(s.Get()).(int) < any(value).(int) },
-	}
-}
-
-// Eq creates an == condition on a store.
-func (s *Store[T]) Eq(value T) Condition {
-	return &StoreCondition{
-		Store:   s,
-		Op:      "==",
-		Operand: value,
-		evalFunc: func() bool {
-			return anyToString(s.Get()) == anyToString(value)
-		},
-	}
-}
-
-// Ne creates a != condition on a store.
-func (s *Store[T]) Ne(value T) Condition {
-	return &StoreCondition{
-		Store:   s,
-		Op:      "!=",
-		Operand: value,
-		evalFunc: func() bool {
-			return anyToString(s.Get()) != anyToString(value)
-		},
-	}
+// Cond creates a condition from a function and its dependent stores.
+func Cond(fn func() bool, stores ...any) *FuncCondition {
+	return &FuncCondition{fn: fn, Stores: stores}
 }
 
 // anyToString converts any value to string without fmt.

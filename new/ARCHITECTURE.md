@@ -241,8 +241,6 @@ p.Html(`<div>content</div>`).AttrIf("class", condition, "active")      // condit
 ### Other Node Types
 
 ```go
-p.Text("plain text")                                    // escaped text node
-p.Frag(node1, node2, node3)                              // fragment (no wrapper)
 p.Bind(store)                                            // reactive text interpolation
 p.BindAsHTML(store)                                      // reactive HTML interpolation
 p.If(cond, children...).ElseIf(cond, children...).Else(children...)  // conditional
@@ -254,13 +252,9 @@ p.Slot()                                                 // slot placeholder in 
 ### Conditions
 
 ```go
-store.Ge(90)           // store >= 90
-store.Gt(0)            // store > 0
-store.Lt(100)          // store < 100
-store.Eq("hello")      // store == "hello"
-store.Ne("goodbye")    // store != "goodbye"
-store.Eq(true)         // store (bool) is true
-store.Eq(false)        // store (bool) is false
+p.Cond(func() bool { return store.Get() >= 90 }, store)         // any comparison
+p.Cond(func() bool { return a.Get() > 0 && b.Get() != "" }, a, b) // multi-store
+p.Cond(func() bool { return boolStore.Get() }, boolStore)        // bool store
 ```
 
 ### Attributes
@@ -360,9 +354,9 @@ Conditional rendering with reactive branch switching.
 ### How It Works
 
 ```go
-p.If(score.Ge(90),
+p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
     p.Html(`<p class="a">Grade: A</p>`),
-).ElseIf(score.Ge(80),
+).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),
     p.Html(`<p class="b">Grade: B</p>`),
 ).Else(
     p.Html(`<p class="f">Grade: F</p>`),
@@ -473,7 +467,7 @@ p.DynAttr("href", "/user/{0}/post/{1}", userIDStore, postIDStore)
 ### Conditional Attributes
 
 ```go
-p.Html(`<div>content</div>`).AttrIf("class", score.Ge(90), "excellent")
+p.Html(`<div>content</div>`).AttrIf("class", p.Cond(func() bool { return score.Get() >= 90 }, score), "excellent")
 ```
 
 **SSR Output** (score=95):

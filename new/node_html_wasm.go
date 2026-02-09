@@ -35,12 +35,8 @@ func wasmNodeToHTML(n Node, ctx *WASMRenderContext) string {
 		return ""
 	}
 	switch node := n.(type) {
-	case *TextNode:
-		return escapeHTML(node.Content)
 	case *HtmlNode:
 		return wasmHtmlNodeToHTML(node, ctx)
-	case *Fragment:
-		return wasmFragmentToHTML(node, ctx)
 	case *BindNode:
 		return wasmBindNodeToHTML(node, ctx)
 	case *IfNode:
@@ -256,11 +252,6 @@ func wasmBindNodeToHTML(b *BindNode, ctx *WASMRenderContext) string {
 		value = escapeHTML(value)
 	}
 	return "<!--" + markerID + "s-->" + value + "<!--" + markerID + "-->"
-}
-
-// wasmFragmentToHTML renders a Fragment.
-func wasmFragmentToHTML(f *Fragment, ctx *WASMRenderContext) string {
-	return wasmChildrenToHTML(f.Children, ctx)
 }
 
 // wasmIfNodeToHTML renders an IfNode, evaluating conditions at runtime.

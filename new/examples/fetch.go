@@ -174,7 +174,7 @@ func (f *Fetch) Render() p.Node {
 				`, p.Html(`<button>GET Post</button>`).On("click", f.FetchPost), `
 			</div>`,
 
-		p.If(f.RawData.Ne(""),
+		p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
 			p.Html(`<pre>`, f.RawData, `</pre>`),
 		).Else(
 			p.Html(`<pre>Click a button to fetch data</pre>`),
@@ -192,7 +192,7 @@ func (f *Fetch) Render() p.Node {
 				`, p.Html(`<button>PATCH Title</button>`).On("click", f.PatchPost), `
 				`, p.Html(`<button>DELETE Post</button>`).On("click", f.DeletePost), `
 			</div>`,
-			p.If(f.RawData.Ne(""),
+			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
 				p.Html(`<pre>`, f.RawData, `</pre>`),
 			),
 			`</section>

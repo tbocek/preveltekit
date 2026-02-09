@@ -85,7 +85,7 @@ func (c *Complex) Render() p.Node {
 				`, p.Html(`<button>Toggle Log</button>`).On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }), `
 				`, p.Html(`<button>Clear Log</button>`).On("click", c.ClearLog), `
 			</div>`,
-		p.If(c.ShowLog.Eq(true),
+		p.If(p.Cond(func() bool { return c.ShowLog.Get() }, c.ShowLog),
 			p.Html(`<ul class="log">`,
 				p.Each(c.Log, func(entry string, i int) p.Node {
 					return p.Html(`<li class="log-entry"><span class="log-idx">`, p.Itoa(i), `</span> `, entry, `</li>`)
@@ -115,7 +115,7 @@ activeTab.WithOptions(dashboard, settings, activity)
 p.Html(`+"`"+`&lt;div>`+"`"+`).Attr("data-theme", theme)
 
 // nested reactivity: Each inside If
-p.If(showLog.Eq(true),
+p.If(p.Cond(func() bool { return showLog.Get() }, showLog),
     p.Html(`+"`"+`&lt;ul>`+"`"+`,
         p.Each(log, func(entry string, i int) p.Node {
             return p.Html(`+"`"+`&lt;li>`+"`"+`, entry, `+"`"+`&lt;/li>`+"`"+`)
@@ -195,7 +195,7 @@ func (a *Activity) Render() p.Node {
 	return p.Html(`<div>
 		<h3>Activity</h3>
 		<p>Theme: <strong>`, a.Theme, `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>
-		`, p.If(a.Log.Len().Gt(0),
+		`, p.If(p.Cond(func() bool { return a.Log.Len().Get() > 0 }, a.Log.Len()),
 		p.Html(`<ul class="activity-list">`,
 			p.Each(a.Log, func(entry string, i int) p.Node {
 				return p.Html(`<li>`, entry, `</li>`)

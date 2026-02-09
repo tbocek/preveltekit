@@ -87,13 +87,13 @@ p.Html(`+"`"+`&lt;button>+1&lt;/button>`+"`"+`).On("click", Increment)</pre>
 		<section>
 			<h2>Conditionals — If / ElseIf / Else</h2>
 			<p>Score: `, b.Score, `</p>
-			`, p.If(b.Score.Ge(90),
+			`, p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
 		p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
-	).ElseIf(b.Score.Ge(80),
+	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
 		p.Html(`<p class="grade b">Grade: B - Good</p>`),
-	).ElseIf(b.Score.Ge(70),
+	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
 		p.Html(`<p class="grade c">Grade: C - Average</p>`),
-	).ElseIf(b.Score.Ge(60),
+	).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
 		p.Html(`<p class="grade d">Grade: D - Below Average</p>`),
 	).Else(
 		p.Html(`<p class="grade f">Grade: F - Failing</p>`),
@@ -105,15 +105,15 @@ p.Html(`+"`"+`&lt;button>+1&lt;/button>`+"`"+`).On("click", Increment)</pre>
 				`, p.Html(`<button>D</button>`).On("click", func() { b.SetScore(65) }), `
 				`, p.Html(`<button>F</button>`).On("click", func() { b.SetScore(50) }), `
 			</div>
-			<pre class="code">p.If(Score.Ge(90),
+			<pre class="code">p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
     p.Html(`+"`"+`&lt;p>Grade: A&lt;/p>`+"`"+`),
-).ElseIf(Score.Ge(80),
+).ElseIf(p.Cond(func() bool { return Score.Get() >= 80 }, Score),
     p.Html(`+"`"+`&lt;p>Grade: B&lt;/p>`+"`"+`),
 ).Else(
     p.Html(`+"`"+`&lt;p>Grade: F&lt;/p>`+"`"+`),
 )
 
-// conditions: Eq, Ne, Gt, Ge, Lt, Le</pre>
+// p.Cond(func() bool, ...stores) — any logic you want</pre>
 		</section>
 
 		<section>
@@ -135,12 +135,12 @@ p.Html(`+"`"+`&lt;input type="text">`+"`"+`).Bind(Age) // *Store[int] binding</p
 		<section>
 			<h2>Checkbox Binding — Bool</h2>
 			<label>`, p.Html(`<input type="checkbox">`).Bind(b.DarkMode), ` Dark Mode</label>
-			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", b.DarkMode.Eq(true), "dark"), `
+			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", p.Cond(func() bool { return b.DarkMode.Get() }, b.DarkMode), "dark"), `
 			<pre class="code">DarkMode := p.New(false)
 p.Html(`+"`"+`&lt;input type="checkbox">`+"`"+`).Bind(DarkMode) // *Store[bool]
 
 // AttrIf: conditionally add a class
-p.Html(`+"`"+`&lt;div>...&lt;/div>`+"`"+`).AttrIf("class", DarkMode.Eq(true), "dark")</pre>
+p.Html(`+"`"+`&lt;div>...&lt;/div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")</pre>
 		</section>
 
 		<section>
@@ -180,24 +180,6 @@ p.Html(`+"`"+`&lt;button>Inner&lt;/button>`+"`"+`).On("click", handler).StopProp
 p.BindAsHTML(RawHTML) // renders as innerHTML (not escaped)</pre>
 		</section>
 
-		<section>
-			<h2>Text Node</h2>
-			<p>`, p.Text("This is a Text() node — plain text, no HTML parsing."), `</p>
-			<pre class="code">p.Text("plain text") // static text node, no HTML interpretation</pre>
-		</section>
-
-		<section>
-			<h2>Fragment — Frag()</h2>
-			`, p.Frag(
-		p.Html(`<p>First paragraph from Frag()</p>`),
-		p.Html(`<p>Second paragraph from Frag()</p>`),
-	), `
-			<pre class="code">// group nodes without a wrapper element
-p.Frag(
-    p.Html(`+"`"+`&lt;p>First&lt;/p>`+"`"+`),
-    p.Html(`+"`"+`&lt;p>Second&lt;/p>`+"`"+`),
-)</pre>
-		</section>
 	</div>`)
 }
 

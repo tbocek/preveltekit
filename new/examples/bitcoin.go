@@ -104,9 +104,9 @@ func (b *Bitcoin) Render() p.Node {
 		<h1>Bitcoin Price</h1>
 
 		<section class="bitcoin-card">`,
-		p.If(b.Loading.Eq(true),
+		p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
 			p.Html(`<p class="loading">Loading...</p>`),
-		).ElseIf(b.Error.Ne(""),
+		).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
 			p.Html(`<p class="error">Error: `, b.Error, `</p>`,
 				p.Html(`<button>Retry</button>`).On("click", b.Retry)),
 		).Else(

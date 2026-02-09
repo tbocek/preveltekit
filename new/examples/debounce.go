@@ -89,7 +89,7 @@ func (d *Debounce) Render() p.Node {
 				<span>API calls: <strong>`, d.SearchCount, `</strong></span>
 			</div>`,
 
-		p.If(d.SearchResult.Ne(""),
+		p.If(p.Cond(func() bool { return d.SearchResult.Get() != "" }, d.SearchResult),
 			p.Html(`<div class="result">`, d.SearchResult, `</div>`),
 		),
 

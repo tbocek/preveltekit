@@ -49,16 +49,8 @@ func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *Cleanup) {
 		return
 	}
 	switch node := n.(type) {
-	case *TextNode:
-		// Static text, nothing to bind
-
 	case *HtmlNode:
 		wasmBindHtmlNode(node, ctx, cleanup)
-
-	case *Fragment:
-		for _, child := range node.Children {
-			wasmWalkAndBind(child, ctx, cleanup)
-		}
 
 	case *BindNode:
 		wasmBindTextNode(node, ctx, cleanup)
@@ -198,10 +190,10 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 		return
 	}
 
-	// Extract condition store for subscription
-	var condStore any
-	if sc, ok2 := ac.Cond.(*StoreCondition); ok2 {
-		condStore = sc.Store
+	// Extract condition stores for subscription
+	var condStores []any
+	if fc, ok2 := ac.Cond.(*FuncCondition); ok2 {
+		condStores = fc.Stores
 	}
 
 	updateAttr := func() {
@@ -237,8 +229,8 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *Cleanup) {
 
 	updateAttr()
 
-	if condStore != nil {
-		subscribeToStore(condStore, updateAttr)
+	for _, cs := range condStores {
+		subscribeToStore(cs, updateAttr)
 	}
 	// Also subscribe to value stores if dynamic
 	if s, ok2 := ac.TrueValue.(*Store[string]); ok2 {
@@ -327,8 +319,8 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *Cleanup) {
 	// Collect condition stores for subscription
 	var condStores []any
 	for _, branch := range ifNode.Branches {
-		if sc, ok2 := branch.Cond.(*StoreCondition); ok2 {
-			condStores = append(condStores, sc.Store)
+		if fc, ok2 := branch.Cond.(*FuncCondition); ok2 {
+			condStores = append(condStores, fc.Stores...)
 		}
 	}
 
