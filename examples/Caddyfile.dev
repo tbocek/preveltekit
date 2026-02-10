@@ -10,7 +10,9 @@
 		}
 	}
 
-	root * dist/
-	try_files {path} {path}.html /index.html
-	file_server
+	handle {
+		root * dist/
+		try_files {path} {path}.html /index.html
+		file_server
+	}
 }
