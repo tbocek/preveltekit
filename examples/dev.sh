@@ -1,16 +1,12 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="${1:-.}"
-
 # Initial build
 echo "Initial build..."
-cd "$PROJECT_DIR"
 ./build.sh .
-cd - > /dev/null
 
 # Start livereload server
-go run ./cmd/livereload &
+go run github.com/tbocek/preveltekit/cmd/livereload@latest &
 LIVERELOAD_PID=$!
 
 # Start Caddy with dev config
@@ -29,9 +25,8 @@ echo "Watching for changes..."
 
 # Watch .go files and rebuild on change
 while true; do
-    find "$PROJECT_DIR" -name '*.go' -not -path '*/dist/*' -not -path '*/cmd/*' | entr -d -s "
-        echo 'Rebuilding...'
-        cd \"$PROJECT_DIR\" && ./build.sh . && cd - > /dev/null
-        curl -s -X POST http://localhost:3001/trigger > /dev/null && echo 'Reloaded.'
-    "
+    find . -name '*.go' -not -path '*/dist/*' | entr -d -s '
+        echo "Rebuilding..."
+        ./build.sh . && curl -s -X POST http://localhost:3001/trigger > /dev/null && echo "Reloaded."
+    '
 done

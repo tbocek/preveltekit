@@ -4,7 +4,6 @@
 *.log*
 
 # Dist
-node_modules
 dist
 
 # IDE
@@ -13,5 +12,4 @@ dist
 .idea
 
 # Tokens
-.npmrc
 **/dist

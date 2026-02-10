@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["./dev.sh", "examples"]
+CMD ["./dev.sh"]
