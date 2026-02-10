@@ -22,7 +22,7 @@ echo "Watching for changes..."
 
 # Watch .go files and rebuild on change
 while true; do
-    find . -name '*.go' -not -path '*/dist/*' | entr -d -s '
+    find . -name '*.go' -not -path '*/dist/*' | entr -dn -s '
         echo "Rebuilding..."
         ./build.sh . && curl -s -X POST http://localhost:3001/trigger > /dev/null && echo "Reloaded."
     '
