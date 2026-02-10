@@ -1,6 +1,6 @@
 package main
 
-import p "preveltekit"
+import p "github.com/tbocek/preveltekit"
 
 // Routing showcase - demonstrates navigation patterns
 type Routing struct {

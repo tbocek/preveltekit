@@ -1,6 +1,6 @@
 package main
 
-import p "preveltekit"
+import p "github.com/tbocek/preveltekit"
 
 func main() {
 	p.Hydrate(&App{})

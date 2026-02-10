@@ -1,6 +1,6 @@
 package main
 
-import p "preveltekit"
+import p "github.com/tbocek/preveltekit"
 
 // Links showcase - demonstrates link handling
 type Links struct {

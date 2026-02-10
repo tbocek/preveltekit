@@ -1,6 +1,6 @@
 package main
 
-import p "preveltekit"
+import p "github.com/tbocek/preveltekit"
 
 type App struct {
 	CurrentComponent *p.Store[p.Component]
