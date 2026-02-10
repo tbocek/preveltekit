@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	p "github.com/tbocek/preveltekit"
+	p "github.com/tbocek/preveltekit/v2"
 )
 
 // Derived1 creates a store computed from one source store.

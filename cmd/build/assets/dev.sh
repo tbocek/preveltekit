@@ -6,7 +6,7 @@ echo "Initial build..."
 ./build.sh .
 
 # Start livereload server
-go run github.com/tbocek/preveltekit/cmd/livereload@latest &
+go run github.com/tbocek/preveltekit/v2/cmd/livereload@latest &
 LIVERELOAD_PID=$!
 
 # Start Caddy with dev config

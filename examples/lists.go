@@ -1,6 +1,6 @@
 package main
 
-import p "github.com/tbocek/preveltekit"
+import p "github.com/tbocek/preveltekit/v2"
 
 type Lists struct {
 	Items   *p.List[string]

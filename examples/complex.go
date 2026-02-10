@@ -1,6 +1,6 @@
 package main
 
-import p "github.com/tbocek/preveltekit"
+import p "github.com/tbocek/preveltekit/v2"
 
 // Complex demonstrates nested stores, Store[Component] inside child components,
 // shared stores across parent/child, and deeply nested reactive blocks.

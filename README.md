@@ -1,4 +1,4 @@
-# PrevelteKit 1.0
+# PrevelteKit 2.0
 
 Build reactive web apps in Go. Components compile to WebAssembly, with server-side pre-rendering for instant page loads.
 
@@ -17,7 +17,7 @@ Build reactive web apps in Go. Components compile to WebAssembly, with server-si
 ## Quick Start
 
 ```go
-import p "preveltekit"
+import p "github.com/tbocek/preveltekit/v2"
 ```
 
 ### Hello World
@@ -332,9 +332,9 @@ The critical invariant: SSR and WASM must create stores and register handlers in
 
 ## History
 
-PrevelteKit went through several architectural stages on the way to 1.0. The core philosophy stayed the same throughout: minimal framework, static HTML output, clear separation between frontend and backend.
+PrevelteKit went through several architectural stages on the way to 2.0. The core philosophy stayed the same throughout: minimal framework, static HTML output, clear separation between frontend and backend.
 
-### 0.1 -- Svelte/TypeScript
+### 1.x -- Svelte/TypeScript
 
 The original PrevelteKit was a minimalistic (~500 LoC) web framework built on [Svelte 5](https://svelte.dev/), using [Rsbuild](https://rsbuild.dev/) as the bundler and [jsdom](https://github.com/jsdom/jsdom) for build-time pre-rendering. Components were standard Svelte files:
 
@@ -351,7 +351,7 @@ The motivation was simple: SvelteKit is powerful but heavy. PrevelteKit offered 
 
 This version worked well, but the dependency on the JavaScript ecosystem (Node.js, npm, bundlers) remained a friction point. The idea of writing the entire frontend in Go and compiling to WASM started to take shape.
 
-### 0.9.1 -- Go/WASM with DSL and Code Generation
+### 1.9.1 -- Go/WASM with DSL and Code Generation
 
 The first Go rewrite introduced a Svelte-inspired template DSL. Components had a `Template()` method returning a string with special syntax:
 
@@ -377,7 +377,7 @@ This approach worked but had significant drawbacks:
 - The generated Go code was hard to read and harder to debug
 - Two languages in one file (Go + template DSL) felt awkward
 
-### 0.9.2 -- Bindings Binary
+### 1.9.2 -- Bindings Binary
 
 The next iteration removed the template DSL in favor of writing UI trees directly in Go. But it introduced a different separation: SSR rendered HTML at build time, and a `bindings.bin` file was generated to tell the WASM runtime where all the reactive bindings, event handlers, and dynamic blocks lived. The WASM binary didn't contain any HTML -- it only read the bindings file and wired up interactivity.
 
@@ -387,9 +387,9 @@ This reduced WASM binary size since no HTML strings were compiled in, but added 
 - Any mismatch between the HTML and the bindings file caused subtle, hard-to-diagnose bugs
 - The indirection made the system harder to reason about
 
-Many intermediate prototypes were built and discarded between 0.9.1 and 0.9.2 (and between 0.9.2 and 1.0), often with the help of LLMs for rapid exploration of different approaches.
+Many intermediate prototypes were built and discarded between 1.9.1 and 1.9.2 (and between 1.9.2 and 2.0), often with the help of LLMs for rapid exploration of different approaches.
 
-### 1.0 -- Direct Tree Walk
+### 2.0 -- Direct Tree Walk
 
 The current version eliminates both code generation and the bindings binary. Components define their UI with a Go DSL using `Html()`, `If()`, `Each()`, `Comp()`, etc. The same `Render()` method runs at build time (native Go, SSR) and at runtime (WASM, hydration). Both walks advance the same global counters in the same order, so comment markers and element IDs match without any intermediate format.
 

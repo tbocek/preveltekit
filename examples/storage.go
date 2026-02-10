@@ -1,6 +1,6 @@
 package main
 
-import p "github.com/tbocek/preveltekit"
+import p "github.com/tbocek/preveltekit/v2"
 
 type Storage struct {
 	Theme  *p.LocalStore    // auto-persisted to localStorage
