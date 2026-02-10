@@ -84,8 +84,4 @@ func cmdInit() {
 		os.Exit(1)
 	}
 	fmt.Println("  Created main.go")
-
-	fmt.Println("\nDone! Next steps:")
-	fmt.Println("  go get github.com/tbocek/preveltekit/v2@latest")
-	fmt.Println("  ./build.sh")
 }

@@ -27,6 +27,28 @@ Open http://localhost:8080. Edit `main.go` and the browser reloads automatically
 
 For a production build: `./build.sh --release` outputs static files to `dist/`.
 
+### Docker Quick Start
+
+**Development** (live reload):
+
+```bash
+mkdir hello && cd hello
+go mod init hello
+go run github.com/tbocek/preveltekit/v2/cmd/build@latest init
+docker build -f Dockerfile.dev -t hello-dev .
+docker run --rm -it --init -p 8080:8080 -v $PWD:/app hello-dev
+```
+
+**Production** (multi-stage build with Caddy):
+
+```bash
+mkdir hello && cd hello
+go mod init hello
+go run github.com/tbocek/preveltekit/v2/cmd/build@latest init
+docker build -t hello .
+docker run -p 8080:8080 hello
+```
+
 ```go
 import p "github.com/tbocek/preveltekit/v2"
 ```
