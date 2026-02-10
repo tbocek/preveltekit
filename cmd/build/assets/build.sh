@@ -51,6 +51,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Resolve dependencies if needed
+if [ ! -f "$PROJECT_DIR/go.sum" ] || ! grep -q 'github.com/tbocek/preveltekit/v2' "$PROJECT_DIR/go.sum"; then
+    echo "Resolving dependencies..."
+    (cd "$PROJECT_DIR" && go get github.com/tbocek/preveltekit/v2@latest)
+fi
+
 echo "Cleaning dist folder..."
 rm -rf "$PROJECT_DIR/dist"
 mkdir -p "$PROJECT_DIR/dist"
