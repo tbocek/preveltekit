@@ -1,196 +1,226 @@
 # PrevelteKit 1.0
 
-A Go framework for building web applications that compile to WebAssembly. Write components in Go with a Svelte-like template syntax, get server-side rendering and client-side hydration.
+Build reactive web apps in Go. Components compile to WebAssembly, with server-side pre-rendering for instant page loads.
 
 ## Features
 
-- **Reactive stores** - `Store[T]`, `List[T]`, `Map[K,V]` with automatic DOM updates
-- **Component templates** - Svelte-inspired syntax with `{#if}`, `{#each}`, `{:else}`
-- **Two-way binding** - `bind:value`, `bind:checked` for form inputs
-- **Event handling** - `@click`, `@submit.preventDefault`
+- **Reactive stores** - `Store[T]`, `List[T]` with automatic DOM updates
+- **Go DSL** - build UI trees directly in Go, no template language or code generation
+- **Two-way binding** - `.Bind()` for text, number, and checkbox inputs
+- **Event handling** - `.On("click", fn)`, `.PreventDefault()`, `.StopPropagation()`
+- **Scoped CSS** - per-component styles with automatic class scoping
 - **Client-side routing** - SPA navigation with path parameters
-- **Typed fetch** - Generic HTTP client with automatic JSON encoding/decoding
-- **LocalStorage** - Persistent stores that sync automatically
-- **SSR + Hydration** - Pre-rendered HTML, then hydrated with WASM
+- **Typed fetch** - generic HTTP client with automatic JSON encoding/decoding
+- **LocalStorage** - persistent stores that sync automatically
+- **SSR + Hydration** - pre-rendered HTML at build time, hydrated with WASM at runtime
 
 ## Quick Start
 
 ```go
-package main
+import p "preveltekit"
+```
 
-import "preveltekit"
+### Hello World
 
+```go
+type Hello struct{}
+
+func (h *Hello) Render() p.Node {
+    return p.Html(`<h1>Hello, World!</h1>`)
+}
+```
+
+### Reactive Counter
+
+Stores hold reactive state. Embed them in HTML and they update the DOM automatically.
+
+```go
 type Counter struct {
-    Count *preveltekit.Store[int]
+    Count *p.Store[int]
 }
 
-func (c *Counter) Increment() {
-    c.Count.Update(func(v int) int { return v + 1 })
+func (c *Counter) New() p.Component {
+    return &Counter{Count: p.New(0)}
 }
 
-func (c *Counter) Template() string {
-    return `<div>
-        <p>Count: {Count}</p>
-        <button @click="Increment()">+1</button>
-    </div>`
+func (c *Counter) Render() p.Node {
+    return p.Html(`<div>
+        <p>Count: `, c.Count, `</p>`,
+        p.Html(`<button>+1</button>`).On("click", func() {
+            c.Count.Update(func(v int) int { return v + 1 })
+        }),
+    `</div>`)
 }
 ```
 
-Build with:
-
-```bash
-# Development (with file watching and auto-rebuild)
-./dev.sh myapp/counter.go
-
-# Production build
-./build.sh --release myapp/counter.go
-```
-
-Output goes to `myapp/dist/` - serve it with any static file server.
-
-## Template Syntax
-
-### Expressions
-
-```html
-<p>{Name}</p>
-<p>Score: {Score}</p>
-```
-
-### Conditionals
-
-```html
-{#if Score >= 90}
-    <p>Grade: A</p>
-{:else if Score >= 80}
-    <p>Grade: B</p>
-{:else}
-    <p>Grade: F</p>
-{/if}
-```
-
-### Lists
-
-```html
-{#each Items as item, i}
-    <li>{i}: {item}</li>
-{:else}
-    <li>No items</li>
-{/each}
-```
+`p.New(0)` creates a `*Store[int]` with initial value 0. Drop it into `Html()` and it becomes a live text node. `.On("click", fn)` wires up an event handler.
 
 ### Two-Way Binding
 
-```html
-<input type="text" bind:value="Name">
-<input type="checkbox" bind:checked="Agreed">
-```
-
-### Events
-
-```html
-<button @click="Save()">Save</button>
-<button @click="Add(5)">Add 5</button>
-<form @submit.preventDefault="Submit()">
-```
-
-### Dynamic Classes
-
-```html
-<div class:active={IsActive}>
-<div class:dark={DarkMode}>
-```
-
-### Dynamic Attributes
-
-```html
-<div data-state="{State}">
-<a href="/user/{UserID}">
-```
-
-### Components
-
-```html
-<Card title="Hello">
-    <p>Content goes in the slot</p>
-</Card>
-
-<Button label="Click" @click="HandleClick()" />
-```
-
-## Stores
-
-### Store[T]
-
-Basic reactive value:
+Bind a store to an input. Changes flow both ways.
 
 ```go
-type App struct {
-    Name  *preveltekit.Store[string]
-    Count *preveltekit.Store[int]
+type Greeter struct {
+    Name *p.Store[string]
 }
 
-// In methods:
-a.Name.Set("Alice")
-a.Count.Update(func(v int) int { return v + 1 })
-name := a.Name.Get()
-```
-
-### List[T]
-
-Reactive list with efficient diff updates:
-
-```go
-type App struct {
-    Items *preveltekit.List[string]
+func (g *Greeter) New() p.Component {
+    return &Greeter{Name: p.New("")}
 }
 
-a.Items.Append("new item")
-a.Items.RemoveAt(0)
-a.Items.Set([]string{"a", "b", "c"})  // computes minimal diff
-a.Items.Clear()
-```
-
-### LocalStore
-
-String store that persists to localStorage:
-
-```go
-type App struct {
-    Theme *preveltekit.LocalStore  // auto-saved with key "Theme"
+func (g *Greeter) Render() p.Node {
+    return p.Html(`<div>
+        <label>Name: `, p.Html(`<input type="text">`).Bind(g.Name), `</label>
+        <p>Hello, `, g.Name, `!</p>
+    </div>`)
 }
 ```
 
-## Routing
+`.Bind()` works with `*Store[string]`, `*Store[int]`, and `*Store[bool]` (checkbox).
+
+### Conditionals
 
 ```go
-func (a *App) OnMount() {
-    router := preveltekit.NewRouter()
+score := p.New(75)
 
-    router.Handle("/", func(p map[string]string) {
-        a.Page.Set("home")
-    })
-    router.Handle("/user/:id", func(p map[string]string) {
-        a.UserID.Set(p["id"])
-    })
-    router.NotFound(func() {
-        a.Page.Set("404")
-    })
+p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
+    p.Html(`<p>Grade: A</p>`),
+).ElseIf(p.Cond(func() bool { return score.Get() >= 70 }, score),
+    p.Html(`<p>Grade: C</p>`),
+).Else(
+    p.Html(`<p>Grade: F</p>`),
+)
+```
 
-    router.Start()
+`p.Cond(fn, ...stores)` pairs a boolean function with the stores it depends on so the framework knows when to re-evaluate.
+
+### Lists
+
+```go
+type Todos struct {
+    Items   *p.List[string]
+    NewItem *p.Store[string]
+}
+
+func (t *Todos) New() p.Component {
+    return &Todos{
+        Items:   p.NewList[string]("Buy milk", "Write code"),
+        NewItem: p.New(""),
+    }
+}
+
+func (t *Todos) Add() {
+    if item := t.NewItem.Get(); item != "" {
+        t.Items.Append(item)
+        t.NewItem.Set("")
+    }
+}
+
+func (t *Todos) Render() p.Node {
+    return p.Html(`<div>`,
+        p.Html(`<input type="text">`).Bind(t.NewItem),
+        p.Html(`<button>Add</button>`).On("click", t.Add),
+        p.Html(`<ul>`,
+            p.Each(t.Items, func(item string, i int) p.Node {
+                return p.Html(`<li>`, item, `</li>`)
+            }),
+        `</ul>`),
+    `</div>`)
 }
 ```
 
-Links are automatically intercepted for SPA navigation. Use the `external` attribute for full page loads:
+`p.NewList` creates a reactive slice. `p.Each` renders each item. The list re-renders when items change.
 
-```html
-<a href="/about">SPA navigation</a>
-<a href="/about" external>Full page load</a>
+### Components with Props and Slots
+
+Define a reusable component:
+
+```go
+type Card struct {
+    Title *p.Store[string]
+}
+
+func (c *Card) Render() p.Node {
+    return p.Html(`<div class="card">
+        <h2>`, c.Title, `</h2>
+        <div>`, p.Slot(), `</div>
+    </div>`)
+}
 ```
 
-## Fetch
+Use it:
 
-Typed HTTP client (must be called from a goroutine):
+```go
+p.Comp(&Card{Title: p.New("Welcome")},
+    p.Html(`<p>This content fills the slot.</p>`),
+)
+```
+
+Props are struct fields. `p.Slot()` renders child content passed to `p.Comp()`.
+
+### Component Events (Callbacks)
+
+Pass functions as props for child-to-parent communication:
+
+```go
+type Button struct {
+    Label   *p.Store[string]
+    OnClick func()
+}
+
+func (b *Button) Render() p.Node {
+    return p.Html(`<button>`, b.Label, `</button>`).On("click", b.OnClick)
+}
+
+// parent usage:
+p.Comp(&Button{Label: p.New("Save"), OnClick: func() {
+    status.Set("Saved!")
+}})
+```
+
+### Scoped CSS
+
+Return CSS from `Style()` and it's automatically scoped to the component:
+
+```go
+func (c *Card) Style() string {
+    return `.card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; }`
+}
+```
+
+No class name collisions across components.
+
+### Conditional Attributes
+
+```go
+darkMode := p.New(false)
+
+p.Html(`<div>`).AttrIf("class",
+    p.Cond(func() bool { return darkMode.Get() }, darkMode),
+    "dark",
+)
+```
+
+When `darkMode` is true, the `dark` class is added. When false, it's removed.
+
+### Derived Stores
+
+Compute values from other stores:
+
+```go
+func Derived1[A, R any](a *p.Store[A], fn func(A) R) *p.Store[R] {
+    out := p.New(fn(a.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
+    return out
+}
+
+name := p.New("hello")
+upper := Derived1(name, strings.ToUpper) // auto-updates when name changes
+```
+
+### Fetching Data
+
+Typed HTTP client with automatic JSON encoding/decoding:
 
 ```go
 type User struct {
@@ -198,237 +228,200 @@ type User struct {
     Name string `js:"name"`
 }
 
-func (a *App) LoadUser() {
+func (c *MyComponent) OnMount() {
+    if p.IsBuildTime {
+        return // skip during SSR
+    }
     go func() {
-        user, err := preveltekit.Get[User]("/api/user/1")
+        user, err := p.Get[User]("/api/user/1")
         if err != nil {
-            a.Error.Set(err.Error())
             return
         }
-        a.User.Set(user.Name)
+        c.UserName.Set(user.Name)
     }()
 }
 ```
 
-Available methods: `Get`, `Post`, `Put`, `Patch`, `Delete`.
+Also available: `p.Post[T]`, `p.Put[T]`, `p.Patch[T]`, `p.Delete[T]`.
 
-## Build
-
-Requirements:
-- Go 1.21+
-- TinyGo
-- wasm-strip (from wabt)
-
-```bash
-# Development build
-./build.sh app/main.go
-
-# Release build (smaller output)
-./build.sh --release app/main.go
-
-# Multiple components
-./build.sh app/main.go app/header.go app/sidebar.go
-```
-
-The build process:
-1. Transforms component syntax to valid Go
-2. Pre-renders HTML (SSR)
-3. Compiles to WASM with TinyGo
-4. Tree-shakes the JS runtime
-5. Assembles final output with gzip/brotli compression
-
-## Project Structure
-
-```
-myapp/
-  app.go           # main component
-  header.go        # child component
-  build/           # generated Go code (gitignore this)
-  dist/            # output files
-    index.html
-    app.wasm
-    wasm_exec.js
-```
-
-## Component Lifecycle
+### Routing
 
 ```go
 type App struct {
-    // Stores are auto-initialized
-    Count *preveltekit.Store[int]
+    CurrentPage *p.Store[p.Component]
+}
+
+func (a *App) Routes() []p.Route {
+    return []p.Route{
+        {Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: &Home{}},
+        {Path: "/about", HTMLFile: "about.html", SSRPath: "/about", Component: &About{}},
+    }
 }
 
 func (a *App) OnMount() {
-    // Called after component is mounted to DOM
-    // Set initial values, start timers, fetch data
-    a.Count.Set(0)
+    router := p.NewRouter(a.CurrentPage, a.Routes(), "app")
+    router.Start()
 }
 
-func (a *App) Template() string {
-    return `<div>...</div>`
-}
-
-func (a *App) Style() string {
-    return `.app { ... }`  // injected once per component type
+func (a *App) Render() p.Node {
+    return p.Html(`<div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+        <main>`, a.CurrentPage, `</main>
+    </div>`)
 }
 ```
+
+Internal `<a>` links are automatically intercepted for SPA navigation. Add the `external` attribute to opt out.
+
+### LocalStorage
+
+```go
+// auto-persists on every .Set()
+theme := p.NewLocalStore("theme", "light")
+theme.Set("dark") // saved to localStorage immediately
+
+// manual localStorage API
+p.SetStorage("key", "value")
+val := p.GetStorage("key")
+p.RemoveStorage("key")
+```
+
+### Lifecycle
+
+| Interface | Method | When |
+|-----------|--------|------|
+| `HasNew` | `New() Component` | Factory -- create stores and child components here |
+| `HasOnMount` | `OnMount()` | Component becomes active (fetch data, start timers) |
+| `HasOnDestroy` | `OnDestroy()` | Component removed (cleanup) |
+| `HasStyle` | `Style() string` | Scoped CSS for this component |
+| `HasGlobalStyle` | `GlobalStyle() string` | Global CSS (unscoped) |
+
+### Timers
+
+```go
+stop := p.SetInterval(1000, func() { /* runs every second */ })
+defer stop()
+
+cancel := p.SetTimeout(3000, func() { /* runs once after 3s */ })
+
+debounced, cleanup := p.Debounce(300, handler)
+defer cleanup()
+```
+
+## Build
+
+Output goes to `dist/` -- serve with any static file server.
+
+```
+dist/
+  index.html     # pre-rendered HTML
+  main.wasm      # compiled WASM binary
+  wasm_exec.js   # Go WASM runtime
+```
+
+## Architecture
+
+Both SSR (native Go at build time) and WASM (browser at runtime) execute the same component code. SSR pre-renders HTML with comment markers and element IDs. WASM walks the same `Render()` tree to discover bindings and wire them to the existing DOM. No intermediate binary format, no code generation -- just a direct tree walk.
+
+The critical invariant: SSR and WASM must create stores and register handlers in identical order so counter-based IDs match between pre-rendered HTML and the live WASM runtime.
+
+---
+
+## History
+
+PrevelteKit went through several architectural stages on the way to 1.0. The core philosophy stayed the same throughout: minimal framework, static HTML output, clear separation between frontend and backend.
+
+### 0.1 -- Svelte/TypeScript
+
+The original PrevelteKit was a minimalistic (~500 LoC) web framework built on [Svelte 5](https://svelte.dev/), using [Rsbuild](https://rsbuild.dev/) as the bundler and [jsdom](https://github.com/jsdom/jsdom) for build-time pre-rendering. Components were standard Svelte files:
+
+```svelte
+<script>
+    let count = $state(0);
+</script>
+
+<h1>Count: {count}</h1>
+<button onclick={() => count++}>Click me</button>
+```
+
+The motivation was simple: SvelteKit is powerful but heavy. PrevelteKit offered build-time pre-rendering without the meta-framework complexity. The output was purely static assets -- HTML, CSS, JS -- deployable to any CDN or web server with no server runtime required.
+
+This version worked well, but the dependency on the JavaScript ecosystem (Node.js, npm, bundlers) remained a friction point. The idea of writing the entire frontend in Go and compiling to WASM started to take shape.
+
+### 0.9.1 -- Go/WASM with DSL and Code Generation
+
+The first Go rewrite introduced a Svelte-inspired template DSL. Components had a `Template()` method returning a string with special syntax:
+
+```go
+func (c *Counter) Template() string {
+    return `<div>
+        <p>Count: {Count}</p>
+        <button @click="Increment()">+1</button>
+        {#if Count > 10}
+            <p>That's a lot!</p>
+        {:else}
+            <p>Keep clicking</p>
+        {/if}
+    </div>`
+}
+```
+
+A build step parsed these templates and generated Go code -- transforming `{Count}` into store reads, `@click` into handler registrations, `{#if}` / `{#each}` into conditional/iteration logic. The generated code was then compiled to WASM.
+
+This approach worked but had significant drawbacks:
+- A custom parser and code generator added complexity and maintenance burden
+- Template errors surfaced at generation time, not compile time -- debugging was indirect
+- The generated Go code was hard to read and harder to debug
+- Two languages in one file (Go + template DSL) felt awkward
+
+### 0.9.2 -- Bindings Binary
+
+The next iteration removed the template DSL in favor of writing UI trees directly in Go. But it introduced a different separation: SSR rendered HTML at build time, and a `bindings.bin` file was generated to tell the WASM runtime where all the reactive bindings, event handlers, and dynamic blocks lived. The WASM binary didn't contain any HTML -- it only read the bindings file and wired up interactivity.
+
+This reduced WASM binary size since no HTML strings were compiled in, but added its own complexity:
+- A custom binary format had to be designed, serialized at build time, and deserialized at runtime
+- The bindings file was another artifact to generate, serve, and keep in sync
+- Any mismatch between the HTML and the bindings file caused subtle, hard-to-diagnose bugs
+- The indirection made the system harder to reason about
+
+Many intermediate prototypes were built and discarded between 0.9.1 and 0.9.2 (and between 0.9.2 and 1.0), often with the help of LLMs for rapid exploration of different approaches.
+
+### 1.0 -- Direct Tree Walk
+
+The current version eliminates both code generation and the bindings binary. Components define their UI with a Go DSL using `Html()`, `If()`, `Each()`, `Comp()`, etc. The same `Render()` method runs at build time (native Go, SSR) and at runtime (WASM, hydration). Both walks advance the same global counters in the same order, so comment markers and element IDs match without any intermediate format.
+
+What changed:
+- **No code generation** -- the Go DSL is plain Go, checked by the compiler
+- **No bindings.bin** -- WASM discovers bindings by walking the same tree SSR walked
+- **No template language** -- conditionals, loops, and components are Go function calls
+- **Simpler mental model** -- one `Render()` method, two execution contexts
+
+The tradeoff is that WASM binaries include HTML string literals, making them slightly larger. In practice (~60kb gzipped) this is acceptable.
+
+What started as ~500 lines of glue code between Svelte, jsdom, and Rsbuild is now a ~4k LoC self-contained framework with no external dependencies beyond the Go standard library and the WASM runtime.
+
+### Why Static Output?
+
+Throughout all versions, the preference has been clear separation: the frontend is static assets (HTML/CSS/JS or HTML/CSS/WASM) served from any CDN. The backend is a separate service with `/api` endpoints. No server-side rendering runtime, no Node.js in production, no blurred boundaries between view code and server code.
+
+Meta-frameworks like Next.js, Nuxt, and SvelteKit blur this separation by requiring a JavaScript runtime for SSR, API routes, and build-time generation. Serving just static content is simpler: deploy anywhere (GitHub Pages, S3, any web server) with predictable performance.
+
+**Classic SSR** (Next.js, Nuxt): Server renders HTML on every request. Requires a runtime.
+
+**SPA** (React, Vue): Browser renders everything. User sees a blank page until JS loads.
+
+**Build-time Pre-rendering** (PrevelteKit): HTML is rendered once at build time. User sees content instantly. WASM hydrates for interactivity. No server runtime needed.
+
+### Inspiration
+
+- https://github.com/serge-hulne/Golid
+- https://github.com/maxence-charriere/go-app
+- https://github.com/hexops/vecty
+- https://github.com/vugu/vugu
 
 ## License
 
 MIT
-
----
-
-## History: PrevelteKit Origins (Svelte/TypeScript Version)
-
-PrevelteKit 1.0 (Go/WASM) is a complete rewrite. The original PrevelteKit was a minimalistic (>500 LoC) web application framework built on [Svelte 5](https://svelte.dev/), featuring single page applications with build-time pre-rendering using [Rsbuild](https://rsbuild.dev/) as the build/bundler tool and [jsdom](https://github.com/jsdom/jsdom) as the DOM environment for pre-rendering components during build.
-
-The inspiration for the original project came from the Vue SSR example in the [Rspack examples repository](https://github.com/rspack-contrib/rspack-examples/blob/main/rsbuild/ssr-express/prod-server.mjs). The project adapted those concepts for Svelte, providing a minimal setup.
-
-### Original Motivation
-
-While SvelteKit is the go-to solution for SSR with Svelte, the original PrevelteKit provided a minimalistic solution for build-time pre-rendering without the additional complexity.
-
-From an architectural standpoint, the preference was for clear separation between view code and server code, where the frontend requests data from the backend via dedicated `/api` endpoints. This treats the frontend as purely static assets (HTML/CSS/JS) that can be served from any CDN or simple web server.
-
-Meta-frameworks such as Next.js, Nuxt.js, and SvelteKit blur this separation by requiring a JavaScript runtime (Node.js, Deno, or Bun) for server-side rendering, API routes, and build-time generation. While platforms like Vercel and Netlify can help handle this complex setup, serving just static content is much simpler: deploy anywhere (GitHub Pages, S3, any web server) with predictable performance. You avoid the "full-stack JavaScript" complexity for your deployed frontend - it's just files on a server, nothing more.
-
-### Why Not SvelteKit + adapter-static?
-
-While SvelteKit with adapter-static can achieve similar static site generation, the original PrevelteKit offered a minimalistic alternative using Svelte + jsdom + Rsbuild. At less than 500 lines of code, it was essentially glue code between these libraries rather than a full framework. This provided a lightweight solution for those who wanted static pre-rendering without SvelteKit's additional complexity and features.
-
-### Why Rsbuild and not Vite?
-
-While [benchmarks](https://github.com/rspack-contrib/build-tools-performance) show that Rsbuild and Vite (Rolldown + Oxc) have comparable overall performance in many cases (not for the 10k component case), Rsbuild had a small advantage in producing the smallest compressed bundle size, while Vite (Rolldown + Oxc) had a small advantage in build time performance.
-
-In practice, Rsbuild "just works" after many updates out of the box with minimal configuration, which reduced friction and setup time. However, Vite (Rolldown + Oxc) was being watched closely as it progressed fast.
-
-### Original Key Features
-
-- Lightning Fast: Rsbuild bundles in the range of a couple hundred milliseconds
-- Simple Routing: Built-in routing system  
-- Layout and static content pre-rendered with Svelte and hydration
-- Zero Config: Works out of the box with sensible defaults
-- Hot reload in development, production-ready in minutes
-- Docker-based development environments to protect against supply chain attacks
-
-### Automatic Fetch Handling
-
-The original PrevelteKit automatically managed fetch requests during build-time pre-rendering:
-
-- Components render with loading states in the pre-rendered HTML
-- No need to wrap fetch calls in `window.__isBuildTime` checks
-- Use Svelte's `{#await}` blocks for clean loading/error/success states
-- If anything went missing, in the worst case, fetch calls timeout after 5 seconds during pre-rendering
-
-### Rendering Comparison
-
-The original project compared three rendering approaches:
-
-**SSR (classic SSR / Next.js / Nuxt)**
-- Initial Load: User sees fully rendered content instantly
-- After Script Execution: Content remains the same, scripts add interactivity
-
-**SPA (React App / pure Svelte)**
-- Initial Load: User sees blank page or loading spinner
-- After Script Execution: User sees full interactive content
-
-**SPA + Build-time Pre-Rendering (PrevelteKit approach)**
-- Initial Load: User sees pre-rendered static content
-- After Script Execution: Content becomes fully interactive
-
-The original repository included SVG diagrams (SSR.svg, SPA.svg, SPAwBR.svg) illustrating these differences visually.
-
-### Prerequisites (Original)
-
-- Node.js (Latest LTS version recommended)
-- npm/pnpm or similar
-
-### Original Quick Start
-
-```bash
-# Create test directory and go into this directory
-mkdir -p preveltekit/src && cd preveltekit 
-
-# Declare dependency and the dev script
-echo '{"devDependencies": {"preveltekit": "^1.2.25"},"dependencies": {"svelte": "^5.39.11"},"scripts": {"dev": "preveltekit dev"}}' > package.json 
-
-# Download dependencies
-npm install 
-
-# A very simple svelte file
-echo '<script>let count = $state(0);</script><h1>Count: {count}</h1><button onclick={() => count++}>Click me</button>' > src/Index.svelte 
-
-# And open a browser with localhost:3000
-npm run dev 
-```
-
-### Slow Start (Original)
-
-One example was within the project in the example folder, and another example was the [notary example](https://github.com/tbocek/notary-example). The CLI supported: dev/stage/prod.
-
-**Development Server**
-
-```bash
-npm run dev
-```
-
-This started an Express development server on http://localhost:3000, with:
-- Live reloading
-- No optimization for faster builds
-- Ideal for rapid development
-
-**Build for Production**
-
-```bash
-npm run build
-```
-
-The production build:
-- Generated pre-compressed static files for optimal serving with best compression:
-  - Brotli (`.br` files)
-  - Zstandard (`.zst` files)
-  - Zopfli (`.gz` files)
-- Optimized assets for production
-
-**Staging Environment**
-
-```bash
-npm run stage
-```
-
-The development server prioritized fast rebuilds and developer experience, while the production build focused on optimization and performance. Testing with a stage and production build before deploying was recommended.
-
-### Original Docker Support
-
-To build with docker in production mode:
-
-```bash
-docker build . -t preveltekit
-docker run -p3000:3000 preveltekit
-```
-
-To run in development mode with live reloading:
-
-```bash
-docker build -f Dockerfile.dev . -t preveltekit-dev
-docker run -p3000:3000 -v./src:/app/src preveltekit-dev
-```
-
-### Configuration (Original)
-
-The original PrevelteKit used rsbuild.config.ts for configuration with sensible defaults. To customize settings, you would create an rsbuild.config.ts file in your project - it would merge with the default configuration.
-
-The framework provided fallback files (index.html and index.ts) from the default folder when you didn't supply your own. Once you added your own index.html or index.ts files, PrevelteKit used those instead, ignoring the defaults.
-
-This approach followed a "convention over configuration" pattern where you only needed to specify what differed from the defaults.
-
-### Why the Rewrite?
-
-PrevelteKit 1.0 moves from TypeScript/Svelte to Go/WebAssembly while keeping the same philosophy: minimal framework, static output, clear separation of concerns. The Go version compiles to WASM for client-side execution while still supporting build-time pre-rendering.
-
-### Inspiration
-https://github.com/serge-hulne/Golid
-https://github.com/maxence-charriere/go-app
-https://github.com/hexops/vecty
-https://github.com/vugu/vugu
