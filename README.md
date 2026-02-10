@@ -16,6 +16,17 @@ Build reactive web apps in Go. Components compile to WebAssembly, with server-si
 
 ## Quick Start
 
+```bash
+mkdir hello && cd hello
+go mod init hello
+go run github.com/tbocek/preveltekit/v2/cmd/build@latest init
+./dev.sh
+```
+
+Open http://localhost:8080. Edit `main.go` and the browser reloads automatically.
+
+For a production build: `./build.sh --release` outputs static files to `dist/`.
+
 ```go
 import p "github.com/tbocek/preveltekit/v2"
 ```

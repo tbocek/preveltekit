@@ -15,11 +15,12 @@ var assetFiles = []string{"index.html", "wasm_exec.js"}
 
 // Files that go into project root (with permissions)
 var rootFiles = map[string]os.FileMode{
-	"build.sh":      0755,
-	"dev.sh":        0755,
-	"Dockerfile":    0644,
-	"Caddyfile":     0644,
-	"Caddyfile.dev": 0644,
+	"build.sh":       0755,
+	"dev.sh":         0755,
+	"Dockerfile":     0644,
+	"Dockerfile.dev": 0644,
+	"Caddyfile":      0644,
+	"Caddyfile.dev":  0644,
 }
 
 func main() {
