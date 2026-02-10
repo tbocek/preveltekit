@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // Hydrate is the main entry point for declarative components.
@@ -107,23 +108,18 @@ func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[s
 
 	var styles string
 	if allStyles != "" {
-		styles = "<style>" + minifyCSS(allStyles) + "</style>\n"
+		styles = "<style>" + minifyCSS(allStyles) + "</style>"
 	}
 
-	return fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-%s</head>
-<body>
-%s
-<script src="wasm_exec.js"></script>
-<script>
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
-  .then(result => go.run(result.instance));
-</script>
-</body>
-</html>`, styles, body)
+	// Read template from assets/index.html
+	tmpl, err := os.ReadFile("assets/index.html")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading assets/index.html: %v\n", err)
+		os.Exit(1)
+	}
+
+	result := string(tmpl)
+	result = strings.Replace(result, "<!--styles-->", styles, 1)
+	result = strings.Replace(result, "<!--body-->", body, 1)
+	return result
 }
