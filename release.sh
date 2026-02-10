@@ -3,25 +3,31 @@
 set -e
 
 # Default values
-VERSION_TYPE="minor"
+VERSION_TYPE="patch"
 
 # Function to show usage
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --minor     Increment minor version (default)"
+    echo "  --patch     Increment patch version (default)"
+    echo "  --minor     Increment minor version"
     echo "  --major     Increment major version"
     echo "  -h, --help  Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0              # Increment minor version"
+    echo "  $0              # Increment patch version"
+    echo "  $0 --minor      # Increment minor version"
     echo "  $0 --major      # Increment major version"
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --patch)
+            VERSION_TYPE="patch"
+            shift
+            ;;
         --minor)
             VERSION_TYPE="minor"
             shift
@@ -54,18 +60,24 @@ increment_version() {
     IFS='.' read -ra PARTS <<< "$version"
     major=${PARTS[0]}
     minor=${PARTS[1]:-0}
+    patch=${PARTS[2]:-0}
 
     case $type in
         major)
             major=$((major + 1))
             minor=0
+            patch=0
             ;;
         minor)
             minor=$((minor + 1))
+            patch=0
+            ;;
+        patch)
+            patch=$((patch + 1))
             ;;
     esac
 
-    echo "$major.$minor"
+    echo "$major.$minor.$patch"
 }
 
 # Check if we're in a git repository
@@ -115,9 +127,9 @@ echo "Finding latest tag..."
 LATEST_TAG=$(git tag --sort=-version:refname | head -n1)
 
 if [[ -z "$LATEST_TAG" ]]; then
-    echo "No existing tags found. Starting from v1.0"
-    LATEST_TAG="v1.0"
-    NEW_TAG="v1.0"
+    echo "No existing tags found. Starting from v1.0.0"
+    LATEST_TAG="v1.0.0"
+    NEW_TAG="v1.0.0"
 else
     echo "Latest tag: $LATEST_TAG"
     NEW_VERSION=$(increment_version "$LATEST_TAG" "$VERSION_TYPE")

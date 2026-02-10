@@ -22,53 +22,6 @@ var rootFiles = map[string]os.FileMode{
 	"Caddyfile.dev": 0644,
 }
 
-const goMod = `module %s
-
-go 1.25
-
-require github.com/tbocek/preveltekit/v2 v2.0.0
-`
-
-const mainGo = `package main
-
-import p "github.com/tbocek/preveltekit/v2"
-
-type App struct {
-	CurrentComponent *p.Store[p.Component]
-}
-
-func (a *App) New() p.Component {
-	return &App{
-		CurrentComponent: p.New[p.Component](&Hello{}),
-	}
-}
-
-func (a *App) Routes() []p.Route {
-	return []p.Route{
-		{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: &Hello{}},
-	}
-}
-
-func (a *App) OnMount() {
-	router := p.NewRouter(a.CurrentComponent, a.Routes(), "app")
-	router.Start()
-}
-
-func (a *App) Render() p.Node {
-	return p.Html(` + "`" + `<main>` + "`" + `, a.CurrentComponent, ` + "`" + `</main>` + "`" + `)
-}
-
-type Hello struct{}
-
-func (h *Hello) Render() p.Node {
-	return p.Html(` + "`" + `<h1>Hello, World!</h1>` + "`" + `)
-}
-
-func main() {
-	p.Hydrate(&App{})
-}
-`
-
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -77,12 +30,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "init":
-		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "Usage: preveltekit init <module-name>")
-			fmt.Fprintln(os.Stderr, "  e.g. preveltekit init hello")
-			os.Exit(1)
-		}
-		cmdInit(os.Args[2])
+		cmdInit()
 	default:
 		printUsage()
 		os.Exit(1)
@@ -91,19 +39,18 @@ func main() {
 
 func printUsage() {
 	fmt.Println("Usage: preveltekit <command>")
-	fmt.Println("  init <module-name>  Create a new project")
+	fmt.Println("  init  Scaffold a new project in the current directory")
 }
 
-func cmdInit(moduleName string) {
-	// Create project directory
-	if err := os.MkdirAll(moduleName, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create %s/: %v\n", moduleName, err)
+func cmdInit() {
+	// Check that go.mod exists
+	if _, err := os.Stat("go.mod"); err != nil {
+		fmt.Fprintln(os.Stderr, "Error: go.mod not found. Run 'go mod init <module-name>' first.")
 		os.Exit(1)
 	}
 
 	// Create assets/ subdirectory
-	assetsDir := filepath.Join(moduleName, "assets")
-	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+	if err := os.MkdirAll("assets", 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create assets/: %v\n", err)
 		os.Exit(1)
 	}
@@ -111,7 +58,7 @@ func cmdInit(moduleName string) {
 	// Copy asset files
 	for _, name := range assetFiles {
 		data, _ := assets.ReadFile(filepath.Join("assets", name))
-		dest := filepath.Join(assetsDir, name)
+		dest := filepath.Join("assets", name)
 		if err := os.WriteFile(dest, data, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", dest, err)
 			os.Exit(1)
@@ -122,32 +69,22 @@ func cmdInit(moduleName string) {
 	// Copy root files
 	for name, perm := range rootFiles {
 		data, _ := assets.ReadFile(filepath.Join("assets", name))
-		dest := filepath.Join(moduleName, name)
-		if err := os.WriteFile(dest, data, perm); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", dest, err)
+		if err := os.WriteFile(name, data, perm); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", name, err)
 			os.Exit(1)
 		}
-		fmt.Printf("  Created %s\n", dest)
+		fmt.Printf("  Created %s\n", name)
 	}
-
-	// Write go.mod
-	goModPath := filepath.Join(moduleName, "go.mod")
-	if err := os.WriteFile(goModPath, []byte(fmt.Sprintf(goMod, moduleName)), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to write go.mod: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  Created %s\n", goModPath)
 
 	// Write main.go
-	mainGoPath := filepath.Join(moduleName, "main.go")
-	if err := os.WriteFile(mainGoPath, []byte(mainGo), 0644); err != nil {
+	mainGoData, _ := assets.ReadFile("assets/main.go")
+	if err := os.WriteFile("main.go", mainGoData, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write main.go: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("  Created %s\n", mainGoPath)
+	fmt.Println("  Created main.go")
 
-	fmt.Printf("\nDone! To get started:\n")
-	fmt.Printf("  cd %s\n", moduleName)
-	fmt.Printf("  go get github.com/tbocek/preveltekit/v2@latest\n")
-	fmt.Printf("  ./build.sh\n")
+	fmt.Println("\nDone! Next steps:")
+	fmt.Println("  go get github.com/tbocek/preveltekit/v2@latest")
+	fmt.Println("  ./build.sh")
 }
