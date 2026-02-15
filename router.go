@@ -265,6 +265,9 @@ func resolvePath(href string) string {
 
 	path := current + href
 
+	// Preserve trailing slash (matters for relative resolution)
+	trailingSlash := strings.HasSuffix(path, "/")
+
 	// Clean up . and .. segments
 	segments := strings.Split(path, "/")
 	var clean []string
@@ -278,9 +281,9 @@ func resolvePath(href string) string {
 		}
 	}
 	path = "/" + strings.Join(clean, "/")
-
-	// Clean double slashes
-	path = cleanDoubleSlash(path)
+	if trailingSlash && !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
 
 	return path
 }
