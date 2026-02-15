@@ -123,7 +123,7 @@ func (h *Home) Render() p.Node {
 						<pre><code>mkdir myapp && cd myapp
 go mod init myapp
 go run github.com/tbocek/preveltekit/v2/cmd/build@latest init</code></pre>
-						<p class="step-hint">Scaffolds <code>main.go</code>, <code>build.sh</code>, <code>Dockerfile</code>, and assets. Or copy from <a href="https://github.com/tbocek/preveltekit/tree/main/examples" external>examples/</a>.</p>
+						<p class="step-hint">Scaffolds <code>main.go</code>, <code>build.sh</code>, <code>Dockerfile</code>, and assets. Or copy from <a href="https://github.com/tbocek/preveltekit/tree/main/cmd/build/assets">cmd/build/assets/</a>.</p>
 					</div>
 				</div>
 				<div class="step">
