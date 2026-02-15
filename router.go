@@ -265,21 +265,19 @@ func resolvePath(href string) string {
 
 	path := current + href
 
-	// Clean up ../ segments
-	if strings.Contains(path, "..") {
-		segments := strings.Split(path, "/")
-		var clean []string
-		for _, seg := range segments {
-			if seg == ".." {
-				if len(clean) > 0 {
-					clean = clean[:len(clean)-1]
-				}
-			} else if seg != "" && seg != "." {
-				clean = append(clean, seg)
+	// Clean up . and .. segments
+	segments := strings.Split(path, "/")
+	var clean []string
+	for _, seg := range segments {
+		if seg == ".." {
+			if len(clean) > 0 {
+				clean = clean[:len(clean)-1]
 			}
+		} else if seg != "" && seg != "." {
+			clean = append(clean, seg)
 		}
-		path = "/" + strings.Join(clean, "/")
 	}
+	path = "/" + strings.Join(clean, "/")
 
 	// Clean double slashes
 	path = cleanDoubleSlash(path)
