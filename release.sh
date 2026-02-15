@@ -95,26 +95,11 @@ if [[ -n $(git status --porcelain) ]]; then
     exit 1
 fi
 
-# Build site and copy to docs/
-echo "Building site..."
-(cd site && bash build.sh --release)
-echo "Copying site/dist to docs/..."
-rm -rf docs
-cp -r site/dist docs
-
-# Auto-commit docs/ changes
-git add docs/
-if [[ -n $(git diff --cached --name-only) ]]; then
-    echo "Committing updated docs/..."
-    git commit -m "update docs site"
-fi
-
-# Check for unpushed commits
+# Check for unpushed commits (before building, so the docs commit doesn't trigger this)
 LOCAL_COMMIT=$(git rev-parse HEAD)
 REMOTE_COMMIT=$(git rev-parse @{u} 2>/dev/null || echo "")
 
 if [[ -n "$REMOTE_COMMIT" && "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]]; then
-    # Check if we're ahead of remote
     if git merge-base --is-ancestor "$REMOTE_COMMIT" "$LOCAL_COMMIT"; then
         echo "Error: You have unpushed commits. Please push all commits before creating a release."
         echo ""
@@ -130,6 +115,20 @@ if [[ -n "$REMOTE_COMMIT" && "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]]; then
             exit 0
         fi
     fi
+fi
+
+# Build site and copy to docs/
+echo "Building site..."
+(cd site && bash build.sh --release)
+echo "Copying site/dist to docs/..."
+rm -rf docs
+cp -r site/dist docs
+
+# Auto-commit docs/ changes
+git add docs/
+if [[ -n $(git diff --cached --name-only) ]]; then
+    echo "Committing updated docs/..."
+    git commit -m "update docs site"
 fi
 
 # Fetch all tags from remote
@@ -164,8 +163,9 @@ fi
 echo "Creating tag $NEW_TAG..."
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
 
-# Push the tag to remote
-echo "Pushing tag to remote..."
+# Push the docs commit and tag to remote
+echo "Pushing to remote..."
+git push
 git push origin "$NEW_TAG"
 
 echo "Successfully created and pushed release $NEW_TAG"
