@@ -80,13 +80,6 @@ increment_version() {
     echo "$major.$minor.$patch"
 }
 
-# Build site and copy to docs/
-echo "Building site..."
-(cd site && bash build.sh --release)
-echo "Copying site/dist to docs/..."
-rm -rf docs
-cp -r site/dist docs
-
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "Error: Not in a git repository"
@@ -100,6 +93,20 @@ if [[ -n $(git status --porcelain) ]]; then
     echo "Uncommitted/untracked files:"
     git status --porcelain
     exit 1
+fi
+
+# Build site and copy to docs/
+echo "Building site..."
+(cd site && bash build.sh --release)
+echo "Copying site/dist to docs/..."
+rm -rf docs
+cp -r site/dist docs
+
+# Auto-commit docs/ changes
+git add docs/
+if [[ -n $(git diff --cached --name-only) ]]; then
+    echo "Committing updated docs/..."
+    git commit -m "update docs site"
 fi
 
 # Check for unpushed commits

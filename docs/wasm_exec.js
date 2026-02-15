@@ -199,25 +199,7 @@
           },
         },
         gojs: {
-          "runtime.ticks": () => {
-            return BigInt((timeOrigin + performance.now()) * 1e6);
-          },
-          // end
 
-          "runtime.sleepTicks": (timeout) => {
-            setTimeout(
-              () => {
-                if (this.exited) return;
-                try {
-                  this._inst.exports.go_scheduler();
-                } catch (e) {
-                  if (e !== wasmExit) throw e;
-                }
-              },
-              Number(timeout) / 1e6,
-            );
-          },
-          // end
 
           "syscall/js.finalizeRef": (v_ref) => {
             const id = v_ref & 0xffffffffn;
@@ -256,12 +238,6 @@
           },
           // end
 
-          "syscall/js.valueDelete": (v_ref, p_ptr, p_len) => {
-            const v = unboxValue(v_ref);
-            const p = loadString(p_ptr, p_len);
-            Reflect.deleteProperty(v, p);
-          },
-          // end
 
           "syscall/js.valueIndex": (v_ref, i) => {
             return boxValue(Reflect.get(unboxValue(v_ref), i));
@@ -296,24 +272,6 @@
           },
           // end
 
-          "syscall/js.valueInvoke": (
-            ret_addr,
-            v_ref,
-            args_ptr,
-            args_len,
-            args_cap,
-          ) => {
-            try {
-              const v = unboxValue(v_ref);
-              const args = loadSliceOfValues(args_ptr, args_len, args_cap);
-              storeValue(ret_addr, Reflect.apply(v, undefined, args));
-              mem().setUint8(ret_addr + 8, 1);
-            } catch (err) {
-              storeValue(ret_addr, err);
-              mem().setUint8(ret_addr + 8, 0);
-            }
-          },
-          // end
 
           "syscall/js.valueNew": (
             ret_addr,
@@ -358,58 +316,8 @@
           },
           // end
 
-          "syscall/js.valueInstanceOf": (v_ref, t_ref) => {
-            return unboxValue(v_ref) instanceof unboxValue(t_ref);
-          },
-          // end
 
-          "syscall/js.copyBytesToGo": (
-            ret_addr,
-            dest_addr,
-            dest_len,
-            dest_cap,
-            src_ref,
-          ) => {
-            let num_bytes_copied_addr = ret_addr;
-            let returned_status_addr = ret_addr + 4;
-            const dst = loadSlice(dest_addr, dest_len);
-            const src = unboxValue(src_ref);
-            if (
-              !(src instanceof Uint8Array || src instanceof Uint8ClampedArray)
-            ) {
-              mem().setUint8(returned_status_addr, 0);
-              return;
-            }
-            const toCopy = src.subarray(0, dst.length);
-            dst.set(toCopy);
-            mem().setUint32(num_bytes_copied_addr, toCopy.length, true);
-            mem().setUint8(returned_status_addr, 1);
-          },
-          // end
 
-          "syscall/js.copyBytesToJS": (
-            ret_addr,
-            dst_ref,
-            src_addr,
-            src_len,
-            src_cap,
-          ) => {
-            let num_bytes_copied_addr = ret_addr;
-            let returned_status_addr = ret_addr + 4;
-            const dst = unboxValue(dst_ref);
-            const src = loadSlice(src_addr, src_len);
-            if (
-              !(dst instanceof Uint8Array || dst instanceof Uint8ClampedArray)
-            ) {
-              mem().setUint8(returned_status_addr, 0);
-              return;
-            }
-            const toCopy = src.subarray(0, dst.length);
-            dst.set(toCopy);
-            mem().setUint32(num_bytes_copied_addr, toCopy.length, true);
-            mem().setUint8(returned_status_addr, 1);
-          },
-          // end
         },
       };
 
