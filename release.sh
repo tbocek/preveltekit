@@ -80,6 +80,13 @@ increment_version() {
     echo "$major.$minor.$patch"
 }
 
+# Build site and copy to docs/
+echo "Building site..."
+(cd site && bash build.sh --release)
+echo "Copying site/dist to docs/..."
+rm -rf docs
+cp -r site/dist docs
+
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "Error: Not in a git repository"
