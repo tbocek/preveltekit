@@ -7,6 +7,7 @@ type Router struct {
 	componentStore *Store[Component]
 	routes         []Route
 	id             string
+	basePath       string
 	notFound       func()
 	currentPath    *Store[string]
 	beforeNav      func(from, to string) bool
@@ -52,6 +53,8 @@ func (r *Router) Start() {
 	if path == "" {
 		path = "/"
 	}
+	// In SSR, the base path is always "/" since SSRPaths are root-relative
+	r.basePath = "/"
 	r.currentPath.Set(path)
 	r.handleRoute(path)
 }
@@ -67,12 +70,14 @@ func (r *Router) handleRoute(path string) {
 	}
 
 	// Find matching route (most specific first)
+	// Each route's Path is resolved against the base path before matching.
 	var bestMatch *Route
 	bestSpecificity := -1
 
 	for i := range r.routes {
 		route := &r.routes[i]
-		_, specificity, ok := matchRoute(route.Path, path)
+		resolved := resolveRoute(r.basePath, route.Path)
+		_, specificity, ok := matchRoute(resolved, path)
 		if ok && specificity > bestSpecificity {
 			bestMatch = route
 			bestSpecificity = specificity

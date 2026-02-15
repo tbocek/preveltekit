@@ -15,9 +15,9 @@ func (a *App) New() p.Component {
 	app := &App{
 		CurrentComponent: p.New(home),
 		routes: []p.Route{
-			{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: home},
-			{Path: "/manual", HTMLFile: "manual.html", SSRPath: "/manual", Component: manual},
-			{Path: "/bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
+			{Path: ".", HTMLFile: "index.html", SSRPath: "/", Component: home},
+			{Path: "manual", HTMLFile: "manual.html", SSRPath: "/manual", Component: manual},
+			{Path: "bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
 		},
 	}
 	return app
@@ -39,10 +39,10 @@ func (a *App) Render() p.Node {
 	return p.Html(`
 	<header class="header">
 		<div class="header-inner">
-			<a href="/" class="brand">PrevelteKit</a>
+			<a href="./" class="brand">PrevelteKit</a>
 			<nav class="nav">
-				<a href="/manual">Manual</a>
-				<a href="/bitcoin">Bitcoin Demo</a>
+				<a href="manual">Manual</a>
+				<a href="bitcoin">Bitcoin Demo</a>
 				<a href="https://github.com/tbocek/preveltekit" external>GitHub</a>
 			</nav>
 		</div>

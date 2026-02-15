@@ -12,6 +12,7 @@ type Router struct {
 	componentStore *Store[Component]
 	routes         []Route
 	id             string
+	basePath       string // detected at Start(), used to resolve relative route paths
 	notFound       func()
 	currentPath    *Store[string]
 	beforeNav      func(from, to string) bool // return false to cancel navigation
@@ -54,10 +55,43 @@ func (r *Router) CurrentPath() *Store[string] {
 	return r.currentPath
 }
 
+// detectBasePath determines the base path by matching the current pathname
+// against route SSRPaths. E.g., if pathname is "/preveltekit/manual" and a
+// route has SSRPath "/manual", the base path is "/preveltekit".
+func (r *Router) detectBasePath(pathname string) string {
+	// Normalize: strip trailing slash for matching (unless root)
+	norm := pathname
+	if len(norm) > 1 && norm[len(norm)-1] == '/' {
+		norm = norm[:len(norm)-1]
+	}
+
+	for _, route := range r.routes {
+		ssr := route.SSRPath
+		if ssr == "" {
+			continue
+		}
+		if ssr == "/" {
+			// Root route — base could be the entire pathname
+			// Only use this if no other route matches more specifically
+			continue
+		}
+		if strings.HasSuffix(norm, ssr) {
+			base := norm[:len(norm)-len(ssr)]
+			if base == "" {
+				return "/"
+			}
+			return base
+		}
+	}
+	// Fallback: the whole pathname is the base (root route matched)
+	return norm
+}
+
 // Start initializes the router and handles the current URL
 func (r *Router) Start() {
 	// Handle initial route
 	path := js.Global().Get("location").Get("pathname").String()
+	r.basePath = r.detectBasePath(path)
 	r.currentPath.Set(path)
 	r.handleRoute(path)
 
@@ -189,12 +223,14 @@ func (r *Router) handleRoute(path string) {
 	r.currentPath.Set(path)
 
 	// Find matching route (most specific first)
+	// Each route's Path is resolved against the base path before matching.
 	var bestMatch *Route
 	bestSpecificity := -1
 
 	for i := range r.routes {
 		route := &r.routes[i]
-		_, specificity, ok := matchRoute(route.Path, path)
+		resolved := resolveRoute(r.basePath, route.Path)
+		_, specificity, ok := matchRoute(resolved, path)
 		if ok && specificity > bestSpecificity {
 			bestMatch = route
 			bestSpecificity = specificity

@@ -50,16 +50,16 @@ func (h *Home) Render() p.Node {
 					<h3>Manual</h3>
 					<p>API reference covering stores, components, routing, fetch, and more.</p>
 					<div class="explore-links">
-						<a href="/manual">Client-side</a>
-						<a href="/manual" external>Server-side</a>
+						<a href="manual">Client-side</a>
+						<a href="manual" external>Server-side</a>
 					</div>
 				</div>
 				<div class="explore-card">
 					<h3>Bitcoin Price Demo</h3>
 					<p>Live Bitcoin price fetched from an API with auto-refresh — a real-world example.</p>
 					<div class="explore-links">
-						<a href="/bitcoin">Client-side</a>
-						<a href="/bitcoin" external>Server-side</a>
+						<a href="bitcoin">Client-side</a>
+						<a href="bitcoin" external>Server-side</a>
 					</div>
 				</div>
 				<div class="explore-card">

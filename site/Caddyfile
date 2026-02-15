@@ -4,9 +4,9 @@
 }
 
 :8080 {
-	root * dist/
-	try_files {path} {path}.html /index.html
-	file_server {
-		precompressed br gzip
+	handle {
+		root * dist/
+		try_files {path} {path}.html /index.html
+		file_server
 	}
 }
