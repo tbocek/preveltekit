@@ -159,7 +159,6 @@ p.Comp(&Button{Label: p.New("Click"), OnClick: handler})`),
 func (c *Components) Style() string {
 	return `
 .demo{max-width:700px}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .alert-buttons,.view-buttons{display:flex;gap:8px;margin-bottom:10px}
 `
 }

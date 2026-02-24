@@ -52,6 +52,14 @@ func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	case *HtmlNode:
 		wasmBindHtmlNode(node, ctx, cleanup)
 
+	case *RawHTMLNode:
+		// Static unescaped HTML, no bindings needed
+
+	case *FragmentNode:
+		for _, child := range node.Children {
+			wasmWalkAndBind(child, ctx, cleanup)
+		}
+
 	case *BindNode:
 		wasmBindTextNode(node, ctx, cleanup)
 
@@ -113,16 +121,14 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 		wasmBindInput(bindID, h.BoundStore, cleanup)
 	}
 
-	// Recurse into parts
-	for _, part := range h.Parts {
-		switch v := part.(type) {
+	// Recurse into DynAttrs then Children
+	for _, da := range h.DynAttrs {
+		wasmBindDynAttr(da, ctx, cleanup)
+	}
+	for _, child := range h.Children {
+		switch v := child.(type) {
 		case Node:
 			wasmWalkAndBind(v, ctx, cleanup)
-		case NodeAttr:
-			// Handle DynAttr bindings
-			if da, ok2 := v.(*DynAttrAttr); ok2 {
-				wasmBindDynAttr(da, ctx, cleanup)
-			}
 		case *Store[Component]:
 			wasmBindStoreComponent(v, ctx, cleanup)
 		case AnySubscriber:

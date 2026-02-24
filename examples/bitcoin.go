@@ -144,8 +144,7 @@ if p.IsBuildTime { return }`),
 func (b *Bitcoin) Style() string {
 	return `
 .demo{max-width:500px}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
-.bitcoin-card{background:#fff;padding:2rem;border-radius:8px;border:1px solid #ddd;text-align:center}
+.bitcoin-card{background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd;text-align:center}
 .price-info{display:flex;justify-content:space-between;margin-bottom:1rem;color:#666}
 .symbol{font-weight:600;color:#f7931a}
 .update-time{font-size:.875rem}

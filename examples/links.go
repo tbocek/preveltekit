@@ -80,7 +80,6 @@ p.Route{
 func (l *Links) Style() string {
 	return `
 .demo{max-width:700px}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo code{background:#f1f1f1;padding:2px 6px;border-radius:3px;font-size:.9em}
 .link-list{display:flex;flex-direction:column;gap:8px}
 .nav-link{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333}

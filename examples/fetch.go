@@ -245,7 +245,6 @@ abort() // cancel the request`),
 func (f *Fetch) Style() string {
 	return `
 .demo pre{min-height:60px}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0}
 .demo .status{color:#666;font-size:.9em;margin-top:10px}
 `
 }

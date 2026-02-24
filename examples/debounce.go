@@ -146,7 +146,6 @@ stop() // stop the interval`),
 
 func (d *Debounce) Style() string {
 	return `
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo input[type=text]{width:100%;padding:12px;font-size:16px}
 .stats{display:flex;gap:20px;margin:15px 0;padding:10px;background:#e3f2fd;border-radius:4px}
 .stats span{color:#1565c0}

@@ -9,16 +9,16 @@ func (m *Manual) New() p.Component {
 }
 
 func (m *Manual) Render() p.Node {
-	return p.Div(p.Attr("class", "manual"),
+	return p.Div(p.Attr("class", "manual page"),
 		p.Div(p.Attr("class", "container"),
 			p.H1("Manual"),
-			p.P(p.Attr("class", "intro"), "API reference for PrevelteKit. Each section shows the API and a code example."),
+			p.P(p.Attr("class", "page-intro"), "API reference for PrevelteKit. Each section shows the API and a code example."),
 
 			p.Nav(p.Attr("class", "toc"),
 				p.H2("Contents"),
 				p.Ul(
 					p.Li(p.A(p.Attr("href", "#stores"), p.Attr("external", ""), "Stores")),
-					p.Li(p.A(p.Attr("href", "#html-and-binding"), p.Attr("external", ""), "HTML & Binding")),
+					p.Li(p.A(p.Attr("href", "#elements-and-binding"), p.Attr("external", ""), "Elements & Binding")),
 					p.Li(p.A(p.Attr("href", "#events"), p.Attr("external", ""), "Events")),
 					p.Li(p.A(p.Attr("href", "#conditionals"), p.Attr("external", ""), "Conditionals")),
 					p.Li(p.A(p.Attr("href", "#lists"), p.Attr("external", ""), "Lists")),
@@ -52,55 +52,55 @@ count.OnChange(func(v int) {
 })`)),
 			),
 
-			p.Section(p.Attr("id", "html-and-binding"),
-				p.H2("HTML & Binding"),
-				p.P(p.Raw("Build DOM trees with <code>p.Html()</code>. Embed stores directly — they become live text nodes.")),
-				p.Pre(p.Code("// Static HTML with reactive store interpolation\np.Html(`<p>Count: <strong>`, count, `</strong></p>`)\n\n// Two-way binding for inputs\np.Html(`<input type=\"text\">`).Bind(name)     // *Store[string]\np.Html(`<input type=\"text\">`).Bind(age)      // *Store[int]\np.Html(`<input type=\"checkbox\">`).Bind(dark)  // *Store[bool]\np.Html(`<textarea>`).Bind(notes)              // *Store[string]\n\n// Dynamic attributes\np.Html(`<div>`).Attr(\"data-theme\", theme)\n\n// Conditional attributes (additive for same attribute name)\np.Html(`<div>`).AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)")),
+			p.Section(p.Attr("id", "elements-and-binding"),
+				p.H2("Elements & Binding"),
+				p.P(p.RawHTML("Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.")),
+				p.Pre(p.Code("// Typed element functions with reactive store interpolation\np.P(\"Count: \", p.Strong(count))\n\n// Two-way binding for inputs\np.Input(p.Attr(\"type\", \"text\")).Bind(name)       // *Store[string]\np.Input(p.Attr(\"type\", \"text\")).Bind(age)        // *Store[int]\np.Input(p.Attr(\"type\", \"checkbox\")).Bind(dark)    // *Store[bool]\np.Textarea().Bind(notes)                         // *Store[string]\n\n// Dynamic attributes\np.Div(\"content\").Attr(\"data-theme\", theme)\n\n// Conditional attributes (additive for same attribute name)\np.Div(\"content\").AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)\n\n// Static raw HTML (entities, inline markup)\np.RawHTML(\"&copy; 2024\")")),
 			),
 
 			p.Section(p.Attr("id", "events"),
 				p.H2("Events"),
-				p.P(p.Raw("Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.")),
-				p.Pre(p.Code("// Click handler\np.Html(`<button>Click</button>`).On(\"click\", handler)\n\n// Form submit with preventDefault\np.Html(`<form>...</form>`).On(\"submit\", handler).PreventDefault()\n\n// Stop event bubbling\np.Html(`<button>Inner</button>`).On(\"click\", handler).StopPropagation()\n\n// Inline handler\np.Html(`<button>+5</button>`).On(\"click\", func() {\n    count.Update(func(v int) int { return v + 5 })\n})")),
+				p.P(p.RawHTML("Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.")),
+				p.Pre(p.Code("// Click handler\np.Button(\"Click\").On(\"click\", handler)\n\n// Form submit with preventDefault\np.Form(...).On(\"submit\", handler).PreventDefault()\n\n// Stop event bubbling\np.Button(\"Inner\").On(\"click\", handler).StopPropagation()\n\n// Inline handler\np.Button(\"+5\").On(\"click\", func() {\n    count.Update(func(v int) int { return v + 5 })\n})")),
 			),
 
 			p.Section(p.Attr("id", "conditionals"),
 				p.H2("Conditionals"),
-				p.P(p.Raw("Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.")),
-				p.Pre(p.Code("// Simple if\np.If(p.Cond(func() bool { return count.Get() > 0 }, count),\n    p.Html(`<p>Positive</p>`),\n)\n\n// If / ElseIf / Else\np.If(p.Cond(func() bool { return score.Get() >= 90 }, score),\n    p.Html(`<p>Grade: A</p>`),\n).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),\n    p.Html(`<p>Grade: B</p>`),\n).Else(\n    p.Html(`<p>Grade: F</p>`),\n)\n\n// p.Cond(predicateFn, ...dependencyStores)")),
+				p.P(p.RawHTML("Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.")),
+				p.Pre(p.Code("// Simple if\np.If(p.Cond(func() bool { return count.Get() > 0 }, count),\n    p.P(\"Positive\"),\n)\n\n// If / ElseIf / Else\np.If(p.Cond(func() bool { return score.Get() >= 90 }, score),\n    p.P(\"Grade: A\"),\n).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),\n    p.P(\"Grade: B\"),\n).Else(\n    p.P(\"Grade: F\"),\n)\n\n// p.Cond(predicateFn, ...dependencyStores)")),
 			),
 
 			p.Section(p.Attr("id", "lists"),
 				p.H2("Lists"),
-				p.P(p.Raw("Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.")),
-				p.Pre(p.Code("// Create a reactive list\nitems := p.NewList[string](\"Apple\", \"Banana\", \"Cherry\")\n\n// Mutate — triggers re-render\nitems.Append(\"Date\")\nitems.RemoveAt(0)\nitems.Set([]string{\"Mango\", \"Papaya\"})\nitems.Clear()\n\n// Reactive length\nitems.Len()  // *Store[int] — updates automatically\n\n// Render each item\np.Each(items, func(item string, i int) p.Node {\n    return p.Html(`<li>`, p.Itoa(i), `: `, item, `</li>`)\n}).Else(\n    p.Html(`<p>No items</p>`),\n)")),
+				p.P(p.RawHTML("Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.")),
+				p.Pre(p.Code("// Create a reactive list\nitems := p.NewList[string](\"Apple\", \"Banana\", \"Cherry\")\n\n// Mutate — triggers re-render\nitems.Append(\"Date\")\nitems.RemoveAt(0)\nitems.Set([]string{\"Mango\", \"Papaya\"})\nitems.Clear()\n\n// Reactive length\nitems.Len()  // *Store[int] — updates automatically\n\n// Render each item\np.Each(items, func(item string, i int) p.Node {\n    return p.Li(p.Itoa(i), \": \", item)\n}).Else(\n    p.P(\"No items\"),\n)")),
 			),
 
 			p.Section(p.Attr("id", "components"),
 				p.H2("Components"),
-				p.P(p.Raw("Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.")),
-				p.Pre(p.Code("// Define a component\ntype Badge struct {\n    Label *p.Store[string]\n}\n\nfunc (b *Badge) Render() p.Node {\n    return p.Html(`<span class=\"badge\">`, b.Label, `</span>`)\n}\n\n// Scoped CSS\nfunc (b *Badge) Style() string {\n    return `.badge{background:#007bff;color:#fff}`\n}\n\n// Use a component (props are struct fields)\np.Comp(&Badge{Label: p.New(\"New\")})\n\n// Component with slot (child content)\np.Comp(&Card{Title: p.New(\"Hello\")},\n    p.Html(`<p>Slot content here</p>`),\n)\n\n// Inside the component, render slot content:\np.Slot()\n\n// Callback props for component events\ntype Button struct {\n    Label   *p.Store[string]\n    OnClick func()\n}\n\n// Shared stores: pass the same *Store to multiple components\ntheme := p.New(\"light\")\np.Comp(&Header{Theme: theme})\np.Comp(&Sidebar{Theme: theme})\n// both components read/write the same store")),
+				p.P(p.RawHTML("Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.")),
+				p.Pre(p.Code("// Define a component\ntype Badge struct {\n    Label *p.Store[string]\n}\n\nfunc (b *Badge) Render() p.Node {\n    return p.Span(p.Attr(\"class\", \"badge\"), b.Label)\n}\n\n// Scoped CSS\nfunc (b *Badge) Style() string {\n    return `.badge{background:#007bff;color:#fff}`\n}\n\n// Use a component (props are struct fields)\np.Comp(&Badge{Label: p.New(\"New\")})\n\n// Component with slot (child content)\np.Comp(&Card{Title: p.New(\"Hello\")},\n    p.P(\"Slot content here\"),\n)\n\n// Inside the component, render slot content:\np.Slot()\n\n// Callback props for component events\ntype Button struct {\n    Label   *p.Store[string]\n    OnClick func()\n}\n\n// Shared stores: pass the same *Store to multiple components\ntheme := p.New(\"light\")\np.Comp(&Header{Theme: theme})\np.Comp(&Sidebar{Theme: theme})\n// both components read/write the same store")),
 			),
 
 			p.Section(p.Attr("id", "routing"),
 				p.H2("Routing"),
-				p.P(p.Raw("Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.")),
+				p.P(p.RawHTML("Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.")),
 				p.Pre(p.Code("// Define routes\nroutes := []p.Route{\n    {Path: \"/\", HTMLFile: \"index.html\", SSRPath: \"/\", Component: home},\n    {Path: \"/about\", HTMLFile: \"about.html\", SSRPath: \"/about\", Component: about},\n}\n\n// Start the router (in OnMount)\nrouter := p.NewRouter(currentComponent, routes, \"unique-id\")\nrouter.NotFound(func() { currentComponent.Set(nil) })\nrouter.Start()\n\n// Store[Component] holds the active route component\ncurrentComponent *p.Store[p.Component]\n\n// Links: client-side (default) vs server-side\n// <a href=\"/about\">About</a>           (SPA navigation)\n// <a href=\"/about\" external>About</a>  (full page reload)\n\n// Store[Component] for local tabs (non-router):\nactiveTab := p.New[p.Component](tab1)\nactiveTab.WithOptions(tab1, tab2, tab3)\nactiveTab.Set(tab2)  // switches displayed component")),
 			),
 
 			p.Section(p.Attr("id", "fetch"),
 				p.H2("Fetch"),
-				p.P(p.Raw("Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.")),
+				p.P(p.RawHTML("Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.")),
 				p.Pre(p.Code("// Define response type with js tags\ntype User struct {\n    ID   int    `js:\"id\"`\n    Name string `js:\"name\"`\n}\n\n// GET\ngo func() {\n    user, err := p.Get[User](\"https://api.example.com/user/1\")\n}()\n\n// POST (send body, decode response)\ngo func() {\n    created, err := p.Post[User](url, newUser)\n}()\n\n// PUT, PATCH, DELETE\nresult, err := p.Put[T](url, body)\nresult, err := p.Patch[T](url, body)\nresult, err := p.Delete[T](url)\n\n// Advanced: custom headers and abort\nsignal, abort := p.NewAbortController()\ngo func() {\n    result, err := p.Fetch[T](url, &p.FetchOptions{\n        Method:  \"GET\",\n        Headers: map[string]string{\"Authorization\": \"Bearer token\"},\n        Signal:  signal,\n    })\n}()\nabort()  // cancel the request")),
 			),
 
 			p.Section(p.Attr("id", "storage"),
 				p.H2("Storage"),
-				p.P(p.Raw("Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.")),
+				p.P(p.RawHTML("Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.")),
 				p.Pre(p.Code(`// Auto-persisted store (syncs on every Set)
 theme := p.NewLocalStore("theme", "light")
 theme.Set("dark")  // automatically saved to localStorage
-theme.Store        // *Store[string] — use in Html() like any store
+theme.Store        // *Store[string] — use in any element like any store
 
 // Manual localStorage API
 p.SetStorage("notes", "hello")
@@ -149,10 +149,6 @@ stop()  // stop the interval`)),
 
 func (m *Manual) Style() string {
 	return `
-.manual{padding:40px 0}
-.manual h1{font-size:2.2em;color:#1a1a2e;margin-bottom:8px}
-.intro{color:#666;margin-bottom:32px;font-size:1.05em}
-
 .toc{margin-bottom:40px;padding:20px;background:#f8f9fa;border-radius:8px}
 .toc h2{font-size:1em;margin-bottom:12px;color:#1a1a2e}
 .toc ul{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
@@ -161,10 +157,7 @@ func (m *Manual) Style() string {
 
 .manual section{margin-bottom:32px;padding:24px;border:1px solid #e5e7eb;border-radius:8px;background:#fff}
 .manual section h2{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}
-.manual section > p{color:#555;margin-bottom:16px;font-size:.95em}
-.manual section code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}
-.manual section pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}
-.manual section pre code{background:transparent;padding:0;font-size:inherit}
+.manual section > p{color:#666;margin-bottom:16px;font-size:.95em}
 
 @media(max-width:768px){
 .toc ul{flex-direction:column}

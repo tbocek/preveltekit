@@ -99,10 +99,10 @@ func btcFormatPrice(f float64) string {
 }
 
 func (b *BitcoinDemo) Render() p.Node {
-	return p.Div(p.Attr("class", "btc-page"),
+	return p.Div(p.Attr("class", "btc-page page"),
 		p.Div(p.Attr("class", "container"),
 			p.H1("Bitcoin Price"),
-			p.P(p.Attr("class", "subtitle"), "Live price fetched from CryptoCompare API with auto-refresh every 60 seconds."),
+			p.P(p.Attr("class", "page-intro"), "Live price fetched from CryptoCompare API with auto-refresh every 60 seconds."),
 
 			p.Div(p.Attr("class", "btc-card"),
 				p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
@@ -122,7 +122,7 @@ func (b *BitcoinDemo) Render() p.Node {
 
 			p.Div(p.Attr("class", "btc-code"),
 				p.H2("How it works"),
-				p.P(p.Raw("This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.")),
+				p.P(p.RawHTML("This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.")),
 				p.Pre(p.Code(`type BitcoinDemo struct {
     Price       *p.Store[string]
     Loading     *p.Store[bool]
@@ -164,26 +164,19 @@ func (b *BitcoinDemo) FetchPrice() {
 
 func (b *BitcoinDemo) Style() string {
 	return `
-.btc-page{padding:40px 0}
-.btc-page h1{font-size:2.2em;color:#1a1a2e;margin-bottom:8px}
-.subtitle{color:#666;margin-bottom:32px;font-size:1.05em}
-
-.btc-card{background:#fff;padding:2rem;border-radius:8px;border:1px solid #e5e7eb;text-align:center;max-width:500px;margin-bottom:32px}
-.price-header{display:flex;justify-content:space-between;margin-bottom:1rem;color:#666}
+.btc-card{background:#fff;padding:24px;border-radius:8px;border:1px solid #e5e7eb;text-align:center;max-width:500px;margin-bottom:32px}
+.price-header{display:flex;justify-content:space-between;margin-bottom:16px;color:#666}
 .symbol{font-weight:600;color:#f7931a;font-size:1.1em}
-.update-time{font-size:.875rem}
-.price{font-size:2.5rem;font-weight:700;margin:1rem 0;color:#1a1a2e}
-.disclaimer{display:block;color:#888;margin-top:1rem;padding-top:1rem;border-top:1px solid #e9ecef;font-size:.8rem}
-.loading{color:#666;font-size:1.1rem;padding:2rem 0}
-.error{color:#e53e3e;margin-bottom:1rem}
+.update-time{font-size:14px}
+.price{font-size:2.5em;font-weight:700;margin:16px 0;color:#1a1a2e}
+.disclaimer{display:block;color:#999;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;font-size:.8em}
+.loading{color:#666;font-size:1.1em;padding:32px 0}
+.error{color:#e53e3e;margin-bottom:16px}
 .retry-btn{padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer}
 .retry-btn:hover{background:#0f3460}
 
 .btc-code{max-width:700px}
 .btc-code h2{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}
-.btc-code > p{color:#555;margin-bottom:16px;font-size:.95em}
-.btc-code code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}
-.btc-code pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}
-.btc-code pre code{background:transparent;padding:0;font-size:inherit}
+.btc-code > p{color:#666;margin-bottom:16px;font-size:.95em}
 `
 }

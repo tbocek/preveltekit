@@ -37,6 +37,14 @@ func wasmNodeToHTML(n Node, ctx *WASMRenderContext) string {
 	switch node := n.(type) {
 	case *HtmlNode:
 		return wasmHtmlNodeToHTML(node, ctx)
+	case *RawHTMLNode:
+		return node.HTML
+	case *FragmentNode:
+		var s string
+		for _, child := range node.Children {
+			s += wasmNodeToHTML(child, ctx)
+		}
+		return s
 	case *BindNode:
 		return wasmBindNodeToHTML(node, ctx)
 	case *IfNode:
@@ -66,45 +74,170 @@ func wasmChildrenToHTML(nodes []Node, ctx *WASMRenderContext) string {
 	return s
 }
 
-// wasmHtmlNodeToHTML renders an HtmlNode to HTML.
+// wasmHtmlNodeToHTML renders an HtmlNode to HTML via structured rendering.
 func wasmHtmlNodeToHTML(h *HtmlNode, ctx *WASMRenderContext) string {
-	html := wasmRenderParts(h, ctx)
-
-	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
-		html = wasmInjectChainedAttrs(h, html, ctx)
-	}
-
-	if h.BoundStore != nil {
-		html = wasmInjectBind(h, html, ctx)
-	}
-
-	return html
+	return wasmRenderStructured(h, ctx)
 }
 
-// wasmRenderParts renders the Parts slice of an HtmlNode.
-func wasmRenderParts(h *HtmlNode, ctx *WASMRenderContext) string {
-	var s string
-	for _, part := range h.Parts {
-		switch v := part.(type) {
-		case string:
-			if ctx.ScopeAttr != "" {
-				s += injectScopeClass(v, ctx.ScopeAttr)
-			} else {
-				s += v
-			}
-		case Node:
-			s += wasmNodeToHTML(v, ctx)
-		case NodeAttr:
-			s += wasmAttrToHTML(v, ctx)
-		case *Store[Component]:
-			s += wasmStoreComponentToHTML(v, ctx)
-		case AnyGetter:
-			bind := &BindNode{StoreRef: v, IsHTML: false}
-			s += wasmBindNodeToHTML(bind, ctx)
-		default:
-			s += escapeHTML(anyToString(v))
+// wasmRenderStructured renders a typed element directly from structured fields.
+func wasmRenderStructured(h *HtmlNode, ctx *WASMRenderContext) string {
+	// --- Advance counters (DynAttrs first, matching wasmRenderParts order) ---
+	dynAttrHTML := make([]string, len(h.DynAttrs))
+	for i, da := range h.DynAttrs {
+		dynAttrHTML[i] = wasmAttrToHTML(da, ctx)
+	}
+
+	// Element ID from events or AttrConds
+	var elementID string
+	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
+		if len(h.Events) > 0 {
+			elementID = h.Events[0].ID
+		} else {
+			localID := ctx.NextClassID()
+			elementID = ctx.FullID(localID)
 		}
 	}
+
+	// Bind ID
+	var bindID string
+	if h.BoundStore != nil {
+		localID := ctx.NextBindID()
+		bindID = ctx.FullID(localID)
+	}
+
+	// --- Build opening tag ---
+	var s string
+	s = "<" + h.Tag
+
+	// Collect class fragments
+	var classFragments []string
+	for _, attr := range h.Attrs {
+		if len(attr) > 7 && attr[:7] == `class="` {
+			classFragments = append(classFragments, attr[7:len(attr)-1])
+		}
+	}
+	if ctx.ScopeAttr != "" {
+		classFragments = append(classFragments, ctx.ScopeAttr)
+	}
+	for _, ac := range h.AttrConds {
+		if ac.Name != "class" {
+			continue
+		}
+		var val string
+		if ac.Cond.Eval() {
+			val = evalAttrValue(ac.TrueValue)
+		} else {
+			val = evalAttrValue(ac.FalseValue)
+		}
+		if val != "" {
+			classFragments = append(classFragments, val)
+		}
+	}
+
+	// Write id attr
+	if elementID != "" {
+		s += ` id="` + elementID + `"`
+	} else if bindID != "" {
+		s += ` id="` + bindID + `"`
+	}
+
+	// Write merged class attr
+	if len(classFragments) > 0 {
+		s += ` class="`
+		for i, c := range classFragments {
+			if i > 0 {
+				s += " "
+			}
+			s += c
+		}
+		s += `"`
+	}
+
+	// Write non-class static attrs
+	for _, attr := range h.Attrs {
+		if len(attr) > 7 && attr[:7] == `class="` {
+			continue
+		}
+		s += " " + attr
+	}
+
+	// Write non-class AttrCond attrs
+	for _, ac := range h.AttrConds {
+		if ac.Name == "class" {
+			continue
+		}
+		var val string
+		if ac.Cond.Eval() {
+			val = evalAttrValue(ac.TrueValue)
+		} else {
+			val = evalAttrValue(ac.FalseValue)
+		}
+		if val != "" {
+			s += " " + ac.Name + `="` + escapeAttr(val) + `"`
+		}
+	}
+
+	// Write bind value/checked
+	if bindID != "" {
+		switch st := h.BoundStore.(type) {
+		case *Store[string]:
+			if h.Tag != "textarea" {
+				s += ` value="` + escapeAttr(st.Get()) + `"`
+			}
+		case *Store[int]:
+			s += ` value="` + itoa(st.Get()) + `"`
+		case *Store[bool]:
+			if st.Get() {
+				s += ` checked`
+			}
+		}
+	}
+
+	// Write event data-on attr
+	if len(h.Events) > 0 {
+		s += ` data-on="`
+		for i, ev := range h.Events {
+			if i > 0 {
+				s += ","
+			}
+			s += ev.Event
+		}
+		s += `"`
+	}
+
+	// Write dynamic attrs
+	for _, das := range dynAttrHTML {
+		s += " " + das
+	}
+
+	s += ">"
+
+	// --- Children ---
+	if h.Tag == "textarea" && bindID != "" {
+		if st, ok := h.BoundStore.(*Store[string]); ok {
+			s += escapeHTML(st.Get())
+		}
+	} else {
+		for _, child := range h.Children {
+			switch v := child.(type) {
+			case Node:
+				s += wasmNodeToHTML(v, ctx)
+			case *Store[Component]:
+				s += wasmStoreComponentToHTML(v, ctx)
+			case AnyGetter:
+				bind := &BindNode{StoreRef: v, IsHTML: false}
+				s += wasmBindNodeToHTML(bind, ctx)
+			default:
+				s += escapeHTML(anyToString(v))
+			}
+		}
+	}
+
+	// --- Closing tag ---
+	if !h.IsVoid {
+		s += "</" + h.Tag + ">"
+	}
+
 	return s
 }
 
@@ -158,66 +291,6 @@ func wasmStoreComponentToHTML(v *Store[Component], ctx *WASMRenderContext) strin
 	wasmRenderedTrees[markerID] = cached
 
 	return "<!--" + markerID + "s-->" + activeHTML + "<!--" + markerID + "-->"
-}
-
-// wasmInjectBind handles two-way input binding.
-// Uses a unique bind ID (not the store ID) so multiple inputs can bind the same store.
-func wasmInjectBind(h *HtmlNode, html string, ctx *WASMRenderContext) string {
-	localID := ctx.NextBindID()
-	bindID := ctx.FullID(localID)
-
-	switch s := h.BoundStore.(type) {
-	case *Store[string]:
-		return injectAttrs(html, `id="`+bindID+`" value="`+escapeAttr(s.Get())+`"`)
-	case *Store[int]:
-		return injectAttrs(html, `id="`+bindID+`" value="`+itoa(s.Get())+`"`)
-	case *Store[bool]:
-		checked := ""
-		if s.Get() {
-			checked = " checked"
-		}
-		return injectAttrs(html, `id="`+bindID+`"`+checked)
-	}
-	return html
-}
-
-// wasmInjectChainedAttrs injects AttrConds and Events into the first HTML tag.
-func wasmInjectChainedAttrs(h *HtmlNode, html string, ctx *WASMRenderContext) string {
-	var elementID string
-	if len(h.Events) > 0 {
-		elementID = h.Events[0].ID
-	} else {
-		localID := ctx.NextClassID()
-		elementID = ctx.FullID(localID)
-	}
-
-	attrValues := make(map[string][]string)
-
-	for _, ac := range h.AttrConds {
-		if ac.Cond.Eval() {
-			if tv := evalAttrValue(ac.TrueValue); tv != "" {
-				attrValues[ac.Name] = append(attrValues[ac.Name], tv)
-			}
-		} else {
-			if fv := evalAttrValue(ac.FalseValue); fv != "" {
-				attrValues[ac.Name] = append(attrValues[ac.Name], fv)
-			}
-		}
-	}
-
-	var extraAttrs string
-	if len(h.Events) > 0 {
-		var names string
-		for i, ev := range h.Events {
-			if i > 0 {
-				names += ","
-			}
-			names += ev.Event
-		}
-		extraAttrs = ` data-on="` + names + `"`
-	}
-
-	return injectIDAndMergeAttrs(html, elementID, attrValues, extraAttrs)
 }
 
 // wasmBindNodeToHTML renders a BindNode (text interpolation).

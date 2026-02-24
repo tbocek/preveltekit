@@ -130,9 +130,3 @@ func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
 	)
 }
 
-func (d *Derived) Style() string {
-	return `
-.demo label{display:block;margin:8px 0}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
-`
-}

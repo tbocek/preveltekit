@@ -5,7 +5,7 @@ Build reactive web apps in Go. Components compile to WebAssembly, with server-si
 ## Features
 
 - **Reactive stores** - `Store[T]`, `List[T]` with automatic DOM updates
-- **Go DSL** - build UI trees directly in Go, no template language or code generation
+- **Typed Go DSL** - build UI trees with `Div()`, `P()`, `Button()`, etc. — no template language or code generation
 - **Two-way binding** - `.Bind()` for text, number, and checkbox inputs
 - **Event handling** - `.On("click", fn)`, `.PreventDefault()`, `.StopPropagation()`
 - **Scoped CSS** - per-component styles with automatic class scoping
@@ -59,13 +59,13 @@ import p "github.com/tbocek/preveltekit/v2"
 type Hello struct{}
 
 func (h *Hello) Render() p.Node {
-    return p.Html(`<h1>Hello, World!</h1>`)
+    return p.H1("Hello, World!")
 }
 ```
 
 ### Reactive Counter
 
-Stores hold reactive state. Embed them in HTML and they update the DOM automatically.
+Stores hold reactive state. Embed them in typed element functions and they update the DOM automatically.
 
 ```go
 type Counter struct {
@@ -77,16 +77,16 @@ func (c *Counter) New() p.Component {
 }
 
 func (c *Counter) Render() p.Node {
-    return p.Html(`<div>
-        <p>Count: `, c.Count, `</p>`,
-        p.Html(`<button>+1</button>`).On("click", func() {
+    return p.Div(
+        p.P("Count: ", p.Strong(c.Count)),
+        p.Button("+1").On("click", func() {
             c.Count.Update(func(v int) int { return v + 1 })
         }),
-    `</div>`)
+    )
 }
 ```
 
-`p.New(0)` creates a `*Store[int]` with initial value 0. Drop it into `Html()` and it becomes a live text node. `.On("click", fn)` wires up an event handler.
+`p.New(0)` creates a `*Store[int]` with initial value 0. Pass it as a child to any typed element and it becomes a live text node. `.On("click", fn)` wires up an event handler.
 
 ### Two-Way Binding
 
@@ -102,10 +102,10 @@ func (g *Greeter) New() p.Component {
 }
 
 func (g *Greeter) Render() p.Node {
-    return p.Html(`<div>
-        <label>Name: `, p.Html(`<input type="text">`).Bind(g.Name), `</label>
-        <p>Hello, `, g.Name, `!</p>
-    </div>`)
+    return p.Div(
+        p.Label("Name: ", p.Input(p.Attr("type", "text")).Bind(g.Name)),
+        p.P("Hello, ", g.Name, "!"),
+    )
 }
 ```
 
@@ -117,11 +117,11 @@ func (g *Greeter) Render() p.Node {
 score := p.New(75)
 
 p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
-    p.Html(`<p>Grade: A</p>`),
+    p.P("Grade: A"),
 ).ElseIf(p.Cond(func() bool { return score.Get() >= 70 }, score),
-    p.Html(`<p>Grade: C</p>`),
+    p.P("Grade: C"),
 ).Else(
-    p.Html(`<p>Grade: F</p>`),
+    p.P("Grade: F"),
 )
 ```
 
@@ -150,15 +150,15 @@ func (t *Todos) Add() {
 }
 
 func (t *Todos) Render() p.Node {
-    return p.Html(`<div>`,
-        p.Html(`<input type="text">`).Bind(t.NewItem),
-        p.Html(`<button>Add</button>`).On("click", t.Add),
-        p.Html(`<ul>`,
+    return p.Div(
+        p.Input(p.Attr("type", "text")).Bind(t.NewItem),
+        p.Button("Add").On("click", t.Add),
+        p.Ul(
             p.Each(t.Items, func(item string, i int) p.Node {
-                return p.Html(`<li>`, item, `</li>`)
+                return p.Li(item)
             }),
-        `</ul>`),
-    `</div>`)
+        ),
+    )
 }
 ```
 
@@ -174,10 +174,10 @@ type Card struct {
 }
 
 func (c *Card) Render() p.Node {
-    return p.Html(`<div class="card">
-        <h2>`, c.Title, `</h2>
-        <div>`, p.Slot(), `</div>
-    </div>`)
+    return p.Div(p.Attr("class", "card"),
+        p.H2(c.Title),
+        p.Div(p.Slot()),
+    )
 }
 ```
 
@@ -185,7 +185,7 @@ Use it:
 
 ```go
 p.Comp(&Card{Title: p.New("Welcome")},
-    p.Html(`<p>This content fills the slot.</p>`),
+    p.P("This content fills the slot."),
 )
 ```
 
@@ -202,7 +202,7 @@ type Button struct {
 }
 
 func (b *Button) Render() p.Node {
-    return p.Html(`<button>`, b.Label, `</button>`).On("click", b.OnClick)
+    return p.Button(b.Label).On("click", b.OnClick)
 }
 
 // parent usage:
@@ -228,7 +228,7 @@ No class name collisions across components.
 ```go
 darkMode := p.New(false)
 
-p.Html(`<div>`).AttrIf("class",
+p.Div("content").AttrIf("class",
     p.Cond(func() bool { return darkMode.Get() }, darkMode),
     "dark",
 )
@@ -297,13 +297,13 @@ func (a *App) OnMount() {
 }
 
 func (a *App) Render() p.Node {
-    return p.Html(`<div>
-        <nav>
-            <a href="/">Home</a>
-            <a href="/about">About</a>
-        </nav>
-        <main>`, a.CurrentPage, `</main>
-    </div>`)
+    return p.Div(
+        p.Nav(
+            p.A(p.Attr("href", "/"), "Home"),
+            p.A(p.Attr("href", "/about"), "About"),
+        ),
+        p.Main(a.CurrentPage),
+    )
 }
 ```
 
@@ -424,12 +424,13 @@ Many intermediate prototypes were built and discarded between 1.9.1 and 1.9.2 (a
 
 ### 2.0 -- Direct Tree Walk
 
-The current version eliminates both code generation and the bindings binary. Components define their UI with a Go DSL using `Html()`, `If()`, `Each()`, `Comp()`, etc. The same `Render()` method runs at build time (native Go, SSR) and at runtime (WASM, hydration). Both walks advance the same global counters in the same order, so comment markers and element IDs match without any intermediate format.
+The current version eliminates both code generation and the bindings binary. Components define their UI with typed Go functions — `Div()`, `Span()`, `Button()`, `If()`, `Each()`, `Comp()`, etc. The same `Render()` method runs at build time (native Go, SSR) and at runtime (WASM, hydration). Both walks advance the same global counters in the same order, so comment markers and element IDs match without any intermediate format.
 
 What changed:
 - **No code generation** -- the Go DSL is plain Go, checked by the compiler
 - **No bindings.bin** -- WASM discovers bindings by walking the same tree SSR walked
 - **No template language** -- conditionals, loops, and components are Go function calls
+- **Typed elements** -- `Div()`, `P()`, `Input()` etc. with structured rendering, no HTML string parsing
 - **Simpler mental model** -- one `Render()` method, two execution contexts
 
 The tradeoff is that WASM binaries include HTML string literals, making them slightly larger. In practice (~60kb gzipped) this is acceptable.

@@ -128,7 +128,6 @@ p.If(p.Cond(func() bool { return showLog.Get() }, showLog),
 
 func (c *Complex) Style() string {
 	return `
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .tab-bar{display:flex;gap:4px;margin-bottom:0}
 .tab-bar button{border-bottom:none;border-radius:4px 4px 0 0}
 .tab-content{border:1px solid #ddd;border-radius:0 4px 4px 4px;padding:15px;min-height:120px}

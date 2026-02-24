@@ -40,10 +40,16 @@ func (t *TextNode) nodeType() string { return "text" }
 // HTML Node
 // =============================================================================
 
-// HtmlNode represents an HTML element or raw HTML with embedded nodes.
+// HtmlNode represents a typed HTML element.
 // Supports chainable AttrIf, On, and Bind methods.
 type HtmlNode struct {
-	Parts      []any        // strings, Nodes, or values to stringify
+	Tag      string         // e.g. "div", "span"
+	Attrs    []string       // Pre-formatted static attrs: `class="foo"`, `type="text"`
+	DynAttrs []*DynAttrAttr // Dynamic attributes needing render-time IDs
+	Children []any          // Child content: Node, *Store[Component], AnyGetter, etc.
+	IsVoid   bool           // true for br, hr, img, input, etc.
+
+	// Chainable bindings
 	AttrConds  []*AttrCond  // conditional attributes applied to first tag
 	Events     []*HtmlEvent // event bindings applied to first tag
 	BoundStore any          // two-way binding store (*Store[string], *Store[int], *Store[bool])
@@ -67,12 +73,43 @@ type HtmlEvent struct {
 
 func (h *HtmlNode) nodeType() string { return "html" }
 
-// Raw creates a raw HTML node from strings and embedded nodes.
-// Strings are NOT escaped — use this when you need to embed raw HTML.
-// Example: Raw(`<pre class="code">some &lt;html&gt;</pre>`)
-func Raw(parts ...any) *HtmlNode {
-	return &HtmlNode{Parts: parts}
+// =============================================================================
+// RawHTML Node (unescaped inline HTML text)
+// =============================================================================
+
+// RawHTMLNode represents unescaped HTML text content.
+// Unlike TextNode (which escapes), this renders the string as-is.
+// Used for HTML entities (&#9889;) and inline markup (<code>foo</code>).
+type RawHTMLNode struct {
+	HTML string
 }
+
+func (r *RawHTMLNode) nodeType() string { return "rawhtml" }
+
+// RawHTML creates an unescaped HTML text node.
+// Example: RawHTML("&#9889;"), RawHTML("<code>foo</code>")
+func RawHTML(html string) *RawHTMLNode {
+	return &RawHTMLNode{HTML: html}
+}
+
+// =============================================================================
+// Fragment Node (groups multiple children without a parent element)
+// =============================================================================
+
+// FragmentNode groups multiple child nodes without adding a parent element.
+// Used where a single Node return is needed but multiple siblings are desired.
+type FragmentNode struct {
+	Children []Node
+}
+
+func (f *FragmentNode) nodeType() string { return "fragment" }
+
+// Fragment creates a node that groups children without a wrapping element.
+// Example: Fragment(Section(...), Section(...), Footer(...))
+func Fragment(children ...Node) *FragmentNode {
+	return &FragmentNode{Children: children}
+}
+
 
 // =============================================================================
 // Typed Element Functions
@@ -89,59 +126,23 @@ func isVoidElement(tag string) bool {
 }
 
 // element is the internal helper for typed element functions.
-// It separates NodeAttr from children, bakes StaticAttr into the opening tag,
-// wraps string children in TextNode for auto-escaping, and keeps DynAttrAttr
-// as Parts (they need render context for ID generation).
+// It populates structured fields (Tag, Attrs, DynAttrs, Children)
+// instead of pre-serializing HTML into Parts.
 func element(tag string, parts ...any) *HtmlNode {
-	var staticAttrs []string
-	var dynAttrs []any
-	var children []any
-
+	h := &HtmlNode{Tag: tag, IsVoid: isVoidElement(tag)}
 	for _, part := range parts {
 		switch v := part.(type) {
 		case *StaticAttr:
-			staticAttrs = append(staticAttrs, v.Name+`="`+escapeAttr(v.Value)+`"`)
-		case NodeAttr:
-			dynAttrs = append(dynAttrs, v)
+			h.Attrs = append(h.Attrs, v.Name+`="`+escapeAttr(v.Value)+`"`)
+		case *DynAttrAttr:
+			h.DynAttrs = append(h.DynAttrs, v)
 		case string:
-			children = append(children, &TextNode{Text: v})
+			h.Children = append(h.Children, &TextNode{Text: v})
 		default:
-			children = append(children, part)
+			h.Children = append(h.Children, part)
 		}
 	}
-
-	var result []any
-
-	if len(dynAttrs) > 0 {
-		opening := "<" + tag
-		for _, sa := range staticAttrs {
-			opening += " " + sa
-		}
-		opening += " "
-		result = append(result, opening)
-		for i, da := range dynAttrs {
-			if i > 0 {
-				result = append(result, " ")
-			}
-			result = append(result, da)
-		}
-		result = append(result, ">")
-	} else {
-		opening := "<" + tag
-		for _, sa := range staticAttrs {
-			opening += " " + sa
-		}
-		opening += ">"
-		result = append(result, opening)
-	}
-
-	result = append(result, children...)
-
-	if !isVoidElement(tag) {
-		result = append(result, "</"+tag+">")
-	}
-
-	return &HtmlNode{Parts: result}
+	return h
 }
 
 // El creates a typed element node for an arbitrary HTML tag.
@@ -688,229 +689,9 @@ func evalAttrValue(v any) string {
 	return ""
 }
 
-// =============================================================================
-// Shared HTML utilities (used by both SSR and WASM renderers)
-// =============================================================================
-
-// injectAttrs injects attributes into an HTML element string.
-// Finds the first > and inserts the attrs just before it.
-func injectAttrs(html, attrs string) string {
-	tagEnd := findTagEnd(html)
-	if tagEnd == -1 {
-		return html + " " + attrs
-	}
-	if tagEnd > 0 && html[tagEnd-1] == '/' {
-		return html[:tagEnd-1] + " " + attrs + " />" + html[tagEnd+1:]
-	}
-	return html[:tagEnd] + " " + attrs + html[tagEnd:]
-}
-
-// findTagEnd returns the index of the first '>' in html, or -1 if not found.
-func findTagEnd(html string) int {
-	for i := 0; i < len(html); i++ {
-		if html[i] == '>' {
-			return i
-		}
-	}
-	return -1
-}
-
 // escapeAttr escapes attribute values (quotes and ampersands).
 func escapeAttr(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, `"`, "&quot;")
 	return s
-}
-
-// injectIDAndMergeAttrs injects id and merges attribute values into the first HTML tag.
-// For "class", merges with existing class attribute. For others, values are space-joined.
-func injectIDAndMergeAttrs(html, id string, attrValues map[string][]string, extraAttrs string) string {
-	tagEnd := findTagEnd(html)
-	if tagEnd == -1 {
-		return html
-	}
-
-	openingTag := html[:tagEnd]
-	rest := html[tagEnd:]
-
-	if tagEnd > 0 && html[tagEnd-1] == '/' {
-		openingTag = html[:tagEnd-1]
-		rest = html[tagEnd-1:]
-	}
-
-	// Build new attributes
-	newAttrs := `id="` + id + `"`
-
-	// Handle class attribute specially - merge with existing
-	if classes, ok := attrValues["class"]; ok && len(classes) > 0 {
-		classIdx := strings.Index(openingTag, `class="`)
-		if classIdx != -1 {
-			classStart := classIdx + 7
-			classEnd := strings.Index(openingTag[classStart:], `"`)
-			if classEnd != -1 {
-				classEnd += classStart
-				existingClasses := openingTag[classStart:classEnd]
-				mergedClasses := existingClasses
-				for _, c := range classes {
-					if c != "" {
-						mergedClasses += " " + c
-					}
-				}
-				openingTag = openingTag[:classIdx] + openingTag[classEnd+1:]
-				newAttrs += ` class="` + strings.TrimSpace(mergedClasses) + `"`
-			}
-		} else {
-			newAttrs += ` class="` + strings.Join(classes, " ") + `"`
-		}
-		delete(attrValues, "class")
-	}
-
-	// Handle other attributes
-	for name, values := range attrValues {
-		if len(values) > 0 {
-			attrPattern := name + `="`
-			attrIdx := strings.Index(openingTag, attrPattern)
-			if attrIdx != -1 {
-				attrStart := attrIdx + len(attrPattern)
-				attrEnd := strings.Index(openingTag[attrStart:], `"`)
-				if attrEnd != -1 {
-					attrEnd += attrStart
-					existingValue := openingTag[attrStart:attrEnd]
-					mergedValue := existingValue
-					for _, v := range values {
-						if v != "" {
-							mergedValue += " " + v
-						}
-					}
-					openingTag = openingTag[:attrIdx] + openingTag[attrEnd+1:]
-					newAttrs += ` ` + name + `="` + strings.TrimSpace(mergedValue) + `"`
-				}
-			} else {
-				newAttrs += ` ` + name + `="` + strings.Join(values, " ") + `"`
-			}
-		}
-	}
-
-	newAttrs += extraAttrs
-
-	insertIdx := 0
-	for i := 1; i < len(openingTag); i++ {
-		if openingTag[i] == ' ' || openingTag[i] == '/' {
-			insertIdx = i
-			break
-		}
-	}
-	if insertIdx == 0 {
-		insertIdx = len(openingTag)
-	}
-
-	return openingTag[:insertIdx] + " " + newAttrs + openingTag[insertIdx:] + rest
-}
-
-// injectScopeClass injects a scope class into every opening HTML tag in the string.
-func injectScopeClass(html, scopeClass string) string {
-	var sb strings.Builder
-	sb.Grow(len(html) + len(html)/10)
-	i := 0
-	for i < len(html) {
-		if html[i] == '<' && i+1 < len(html) {
-			next := html[i+1]
-			if next == '/' || next == '!' {
-				end := strings.IndexByte(html[i:], '>')
-				if end == -1 {
-					sb.WriteString(html[i:])
-					break
-				}
-				sb.WriteString(html[i : i+end+1])
-				i += end + 1
-				continue
-			}
-			j := i + 1
-			inQuote := byte(0)
-			for j < len(html) {
-				if inQuote != 0 {
-					if html[j] == inQuote {
-						inQuote = 0
-					}
-				} else if html[j] == '"' || html[j] == '\'' {
-					inQuote = html[j]
-				} else if html[j] == '>' {
-					break
-				}
-				j++
-			}
-			if j >= len(html) {
-				// Tag not closed in this string part (split across parts).
-				// Still inject the scope class since a later part closes the tag.
-				tagContent := html[i:]
-				classIdx := strings.Index(tagContent, `class="`)
-				if classIdx != -1 {
-					quoteStart := classIdx + 7
-					quoteEnd := strings.IndexByte(tagContent[quoteStart:], '"')
-					if quoteEnd != -1 {
-						quoteEnd += quoteStart
-						sb.WriteString(tagContent[:quoteEnd])
-						sb.WriteByte(' ')
-						sb.WriteString(scopeClass)
-						sb.WriteString(tagContent[quoteEnd:])
-					} else {
-						// class attribute quote not closed — append before trailing space/end
-						sb.WriteString(tagContent)
-					}
-				} else {
-					// No class attribute — inject one before the trailing content
-					// Find end of tag name
-					k := 1
-					for k < len(tagContent) && tagContent[k] != ' ' && tagContent[k] != '/' {
-						k++
-					}
-					sb.WriteString(tagContent[:k])
-					sb.WriteString(` class="`)
-					sb.WriteString(scopeClass)
-					sb.WriteByte('"')
-					sb.WriteString(tagContent[k:])
-				}
-				break
-			}
-			tagContent := html[i:j]
-			selfClosing := j > 0 && html[j-1] == '/'
-			if selfClosing {
-				tagContent = html[i : j-1]
-			}
-
-			classIdx := strings.Index(tagContent, `class="`)
-			if classIdx != -1 {
-				quoteStart := classIdx + 7
-				quoteEnd := strings.IndexByte(tagContent[quoteStart:], '"')
-				if quoteEnd != -1 {
-					quoteEnd += quoteStart
-					sb.WriteString(tagContent[:quoteEnd])
-					sb.WriteByte(' ')
-					sb.WriteString(scopeClass)
-					sb.WriteString(tagContent[quoteEnd:])
-					if selfClosing {
-						sb.WriteString("/>")
-					} else {
-						sb.WriteByte('>')
-					}
-					i = j + 1
-					continue
-				}
-			}
-			sb.WriteString(tagContent)
-			sb.WriteString(` class="`)
-			sb.WriteString(scopeClass)
-			sb.WriteByte('"')
-			if selfClosing {
-				sb.WriteString("/>")
-			} else {
-				sb.WriteByte('>')
-			}
-			i = j + 1
-		} else {
-			sb.WriteByte(html[i])
-			i++
-		}
-	}
-	return sb.String()
 }

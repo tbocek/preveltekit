@@ -103,7 +103,6 @@ p.ClearStorage()`),
 
 func (s *Storage) Style() string {
 	return `
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .demo textarea{height:100px}
 .demo button.danger{background:#ffebee;border-color:#ef9a9a;color:#c62828}
 .demo button.danger:hover{background:#ffcdd2}

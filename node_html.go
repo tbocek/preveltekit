@@ -68,173 +68,262 @@ func (ctx *BuildContext) Child(compID string) *BuildContext {
 // ToHTML implementations
 // =============================================================================
 
-// ToHTML generates HTML for a raw HTML node with embedded nodes.
+// ToHTML generates HTML for a typed HTML element via structured rendering.
 func (h *HtmlNode) ToHTML(ctx *BuildContext) string {
-	html := h.renderParts(ctx)
-
-	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
-		html = h.injectChainedAttrs(html, ctx)
-	}
-
-	if h.BoundStore != nil {
-		html = h.injectBind(html, ctx)
-	}
-
-	return html
+	return h.renderStructured(ctx)
 }
 
-// injectBind handles two-way input binding by injecting id/value/checked attributes.
-// Uses a unique bind ID (not the store ID) so multiple inputs can bind the same store.
-func (h *HtmlNode) injectBind(html string, ctx *BuildContext) string {
-	localID := ctx.NextBindID()
-	bindID := ctx.FullID(localID)
-
-	switch s := h.BoundStore.(type) {
-	case *Store[string]:
-		if strings.HasPrefix(strings.TrimSpace(strings.ToLower(html)), "<textarea") {
-			return injectTextareaContent(html, bindID, s.Get())
-		}
-		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%s"`, bindID, escapeAttr(s.Get())))
-
-	case *Store[int]:
-		return injectAttrs(html, fmt.Sprintf(`id="%s" value="%d"`, bindID, s.Get()))
-
-	case *Store[bool]:
-		checked := ""
-		if s.Get() {
-			checked = " checked"
-		}
-		return injectAttrs(html, fmt.Sprintf(`id="%s"%s`, bindID, checked))
-	}
-
-	return html
-}
-
-// renderParts renders the Parts slice to HTML string.
-func (h *HtmlNode) renderParts(ctx *BuildContext) string {
+// renderStructured renders a typed element directly from structured fields.
+// No HTML string parsing — tag, attrs, children are all known.
+func (h *HtmlNode) renderStructured(ctx *BuildContext) string {
 	var sb strings.Builder
 
-	for i := 0; i < len(h.Parts); i++ {
-		part := h.Parts[i]
-		switch v := part.(type) {
-		case string:
-			if ctx.ScopeAttr != "" {
-				sb.WriteString(injectScopeClass(v, ctx.ScopeAttr))
-			} else {
-				sb.WriteString(v)
-			}
-		case Node:
-			sb.WriteString(nodeToHTML(v, ctx))
-		case NodeAttr:
-			sb.WriteString(attrToHTMLString(v, ctx))
-		case *Store[Component]:
-			comp := v.Get()
-			if comp != nil && len(v.Options()) > 0 {
-				localMarker := ctx.NextRouteMarker()
-				markerID := ctx.FullID(localMarker)
+	// --- Advance counters (DynAttrs first, matching renderParts order) ---
+	dynAttrHTML := make([]string, len(h.DynAttrs))
+	for i, da := range h.DynAttrs {
+		dynAttrHTML[i] = attrToHTMLString(da, ctx)
+	}
 
-				// Render ALL option components to advance counters in sync with WASM
-				var activeHTML string
-				seen := make(map[string]bool)
-				for _, opt := range v.Options() {
-					optComp, ok := opt.(Component)
-					if !ok || optComp == nil {
-						continue
-					}
-					name := componentName(optComp)
-					if seen[name] {
-						continue
-					}
-					seen[name] = true
-
-					branchCtx := ctx.Child(name)
-					branchCtx.CollectedStyles = ctx.CollectedStyles
-					branchCtx.CollectedGlobalStyles = ctx.CollectedGlobalStyles
-
-					if hgs, ok := optComp.(HasGlobalStyle); ok {
-						if _, exists := ctx.CollectedGlobalStyles[name]; !exists {
-							if gs := hgs.GlobalStyle(); gs != "" {
-								ctx.CollectedGlobalStyles[name] = gs
-							}
-						}
-					}
-
-					if hs, ok := optComp.(HasStyle); ok {
-						scopeAttr := GetOrCreateScope(name)
-						branchCtx.ScopeAttr = scopeAttr
-						if _, exists := ctx.CollectedStyles[name]; !exists {
-							ctx.CollectedStyles[name] = scopeCSS(hs.Style(), scopeAttr)
-						}
-					}
-
-					// Call OnMount only on the active component
-					if optComp == comp {
-						if om, ok := optComp.(HasOnMount); ok {
-							om.OnMount()
-						}
-					}
-
-					branchHTML := nodeToHTML(optComp.Render(), branchCtx)
-
-					if optComp == comp {
-						activeHTML = branchHTML
-					}
-				}
-
-				sb.WriteString(fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, activeHTML, markerID))
-			} else if comp != nil {
-				name := componentName(comp)
-				childCtx := ctx.Child(name)
-				html := nodeToHTML(comp.Render(), childCtx)
-				sb.WriteString(html)
-			}
-		case AnyGetter:
-			bindNode := &BindNode{StoreRef: v, IsHTML: false}
-			sb.WriteString(bindNode.ToHTML(ctx))
-		default:
-			sb.WriteString(escapeHTML(fmt.Sprintf("%v", v)))
+	// Element ID from events or AttrConds
+	var elementID string
+	if len(h.AttrConds) > 0 || len(h.Events) > 0 {
+		if len(h.Events) > 0 {
+			elementID = h.Events[0].ID
+		} else {
+			localID := ctx.NextClassID()
+			elementID = ctx.FullID(localID)
 		}
 	}
+
+	// Bind ID
+	var bindID string
+	if h.BoundStore != nil {
+		localID := ctx.NextBindID()
+		bindID = ctx.FullID(localID)
+	}
+
+	// --- Build opening tag ---
+	sb.WriteByte('<')
+	sb.WriteString(h.Tag)
+
+	// Collect class fragments
+	var classFragments []string
+	for _, attr := range h.Attrs {
+		if len(attr) > 7 && attr[:7] == `class="` {
+			classFragments = append(classFragments, attr[7:len(attr)-1])
+		}
+	}
+	if ctx.ScopeAttr != "" {
+		classFragments = append(classFragments, ctx.ScopeAttr)
+	}
+	for _, ac := range h.AttrConds {
+		if ac.Name != "class" {
+			continue
+		}
+		var val string
+		if ac.Cond.Eval() {
+			val = evalAttrValue(ac.TrueValue)
+		} else {
+			val = evalAttrValue(ac.FalseValue)
+		}
+		if val != "" {
+			classFragments = append(classFragments, val)
+		}
+	}
+
+	// Write id attr
+	if elementID != "" {
+		sb.WriteString(` id="`)
+		sb.WriteString(elementID)
+		sb.WriteByte('"')
+	} else if bindID != "" {
+		sb.WriteString(` id="`)
+		sb.WriteString(bindID)
+		sb.WriteByte('"')
+	}
+
+	// Write merged class attr
+	if len(classFragments) > 0 {
+		sb.WriteString(` class="`)
+		for i, c := range classFragments {
+			if i > 0 {
+				sb.WriteByte(' ')
+			}
+			sb.WriteString(c)
+		}
+		sb.WriteByte('"')
+	}
+
+	// Write non-class static attrs
+	for _, attr := range h.Attrs {
+		if len(attr) > 7 && attr[:7] == `class="` {
+			continue
+		}
+		sb.WriteByte(' ')
+		sb.WriteString(attr)
+	}
+
+	// Write non-class AttrCond attrs
+	for _, ac := range h.AttrConds {
+		if ac.Name == "class" {
+			continue
+		}
+		var val string
+		if ac.Cond.Eval() {
+			val = evalAttrValue(ac.TrueValue)
+		} else {
+			val = evalAttrValue(ac.FalseValue)
+		}
+		if val != "" {
+			sb.WriteByte(' ')
+			sb.WriteString(ac.Name)
+			sb.WriteString(`="`)
+			sb.WriteString(escapeAttr(val))
+			sb.WriteByte('"')
+		}
+	}
+
+	// Write bind value/checked
+	if bindID != "" {
+		switch s := h.BoundStore.(type) {
+		case *Store[string]:
+			if h.Tag != "textarea" {
+				sb.WriteString(` value="`)
+				sb.WriteString(escapeAttr(s.Get()))
+				sb.WriteByte('"')
+			}
+		case *Store[int]:
+			sb.WriteString(` value="`)
+			sb.WriteString(itoa(s.Get()))
+			sb.WriteByte('"')
+		case *Store[bool]:
+			if s.Get() {
+				sb.WriteString(` checked`)
+			}
+		}
+	}
+
+	// Write event data-on attr
+	if len(h.Events) > 0 {
+		sb.WriteString(` data-on="`)
+		for i, ev := range h.Events {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString(ev.Event)
+		}
+		sb.WriteByte('"')
+	}
+
+	// Write dynamic attrs
+	for _, das := range dynAttrHTML {
+		sb.WriteByte(' ')
+		sb.WriteString(das)
+	}
+
+	sb.WriteByte('>')
+
+	// --- Children ---
+	if h.Tag == "textarea" && bindID != "" {
+		if s, ok := h.BoundStore.(*Store[string]); ok {
+			sb.WriteString(escapeHTML(s.Get()))
+		}
+	} else {
+		for _, child := range h.Children {
+			sb.WriteString(renderChild(child, ctx))
+		}
+	}
+
+	// --- Closing tag ---
+	if !h.IsVoid {
+		sb.WriteString("</")
+		sb.WriteString(h.Tag)
+		sb.WriteByte('>')
+	}
+
 	return sb.String()
 }
 
-// injectChainedAttrs injects AttrConds and Events into the first HTML tag.
-func (h *HtmlNode) injectChainedAttrs(html string, ctx *BuildContext) string {
-	var elementID string
-	if len(h.Events) > 0 {
-		elementID = h.Events[0].ID
-	} else {
-		localID := ctx.NextClassID()
-		elementID = ctx.FullID(localID)
+// renderChild renders a single child element for the structured path.
+func renderChild(child any, ctx *BuildContext) string {
+	switch v := child.(type) {
+	case Node:
+		return nodeToHTML(v, ctx)
+	case *Store[Component]:
+		return renderStoreComponent(v, ctx)
+	case AnyGetter:
+		bindNode := &BindNode{StoreRef: v, IsHTML: false}
+		return bindNode.ToHTML(ctx)
+	default:
+		return escapeHTML(fmt.Sprintf("%v", v))
 	}
-
-	// Collect active values for each attribute (for SSR rendering)
-	attrValues := make(map[string][]string)
-
-	for _, ac := range h.AttrConds {
-		trueVal := evalAttrValue(ac.TrueValue)
-		falseVal := evalAttrValue(ac.FalseValue)
-
-		if ac.Cond.Eval() {
-			if trueVal != "" {
-				attrValues[ac.Name] = append(attrValues[ac.Name], trueVal)
-			}
-		} else if falseVal != "" {
-			attrValues[ac.Name] = append(attrValues[ac.Name], falseVal)
-		}
-	}
-
-	var extraAttrs string
-	if len(h.Events) > 0 {
-		var eventNames []string
-		for _, ev := range h.Events {
-			eventNames = append(eventNames, ev.Event)
-		}
-		extraAttrs = fmt.Sprintf(` data-on="%s"`, strings.Join(eventNames, ","))
-	}
-
-	return injectIDAndMergeAttrs(html, elementID, attrValues, extraAttrs)
 }
+
+// renderStoreComponent renders a Store[Component] value to HTML.
+// Shared by both renderParts (Raw path) and renderChild (structured path).
+func renderStoreComponent(v *Store[Component], ctx *BuildContext) string {
+	comp := v.Get()
+	if comp != nil && len(v.Options()) > 0 {
+		localMarker := ctx.NextRouteMarker()
+		markerID := ctx.FullID(localMarker)
+
+		// Render ALL option components to advance counters in sync with WASM
+		var activeHTML string
+		seen := make(map[string]bool)
+		for _, opt := range v.Options() {
+			optComp, ok := opt.(Component)
+			if !ok || optComp == nil {
+				continue
+			}
+			name := componentName(optComp)
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+
+			branchCtx := ctx.Child(name)
+			branchCtx.CollectedStyles = ctx.CollectedStyles
+			branchCtx.CollectedGlobalStyles = ctx.CollectedGlobalStyles
+
+			if hgs, ok := optComp.(HasGlobalStyle); ok {
+				if _, exists := ctx.CollectedGlobalStyles[name]; !exists {
+					if gs := hgs.GlobalStyle(); gs != "" {
+						ctx.CollectedGlobalStyles[name] = gs
+					}
+				}
+			}
+
+			if hs, ok := optComp.(HasStyle); ok {
+				scopeAttr := GetOrCreateScope(name)
+				branchCtx.ScopeAttr = scopeAttr
+				if _, exists := ctx.CollectedStyles[name]; !exists {
+					ctx.CollectedStyles[name] = scopeCSS(hs.Style(), scopeAttr)
+				}
+			}
+
+			// Call OnMount only on the active component
+			if optComp == comp {
+				if om, ok := optComp.(HasOnMount); ok {
+					om.OnMount()
+				}
+			}
+
+			branchHTML := nodeToHTML(optComp.Render(), branchCtx)
+
+			if optComp == comp {
+				activeHTML = branchHTML
+			}
+		}
+
+		return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, activeHTML, markerID)
+	} else if comp != nil {
+		name := componentName(comp)
+		childCtx := ctx.Child(name)
+		return nodeToHTML(comp.Render(), childCtx)
+	}
+	return ""
+}
+
 
 // attrToHTMLString renders a NodeAttr as an HTML attribute string.
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
@@ -273,28 +362,6 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 		return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, value, markerID)
 	}
 	return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, escapeHTML(value), markerID)
-}
-
-// =============================================================================
-// HTML Attribute Injection
-// =============================================================================
-
-// injectTextareaContent injects id attribute and replaces textarea content.
-func injectTextareaContent(html, id, value string) string {
-	tagEnd := findTagEnd(html)
-	if tagEnd == -1 {
-		return html
-	}
-
-	openTag := html[:tagEnd]
-	rest := html[tagEnd+1:]
-
-	closeTagIdx := strings.Index(strings.ToLower(rest), "</textarea>")
-	if closeTagIdx == -1 {
-		return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + rest
-	}
-
-	return openTag + fmt.Sprintf(` id="%s"`, id) + ">" + escapeHTML(value) + rest[closeTagIdx:]
 }
 
 // ToHTML generates HTML for an if node (conditional rendering).
@@ -442,6 +509,14 @@ func nodeToHTML(n Node, ctx *BuildContext) string {
 	switch node := n.(type) {
 	case *HtmlNode:
 		return node.ToHTML(ctx)
+	case *RawHTMLNode:
+		return node.HTML
+	case *FragmentNode:
+		var sb strings.Builder
+		for _, child := range node.Children {
+			sb.WriteString(nodeToHTML(child, ctx))
+		}
+		return sb.String()
 	case *BindNode:
 		return node.ToHTML(ctx)
 	case *IfNode:

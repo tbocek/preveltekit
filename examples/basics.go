@@ -78,11 +78,11 @@ func (b *Basics) Render() p.Node {
 Count.Set(5)                                 // set value
 Count.Update(func(v int) int { return v+1 }) // transform
 
-// embed in HTML — auto-updates in the DOM
-p.Html(`+"`"+`<p>Count: <strong>`+"`"+`, Count, `+"`"+`</strong></p>`+"`"+`)
+// embed in elements — auto-updates in the DOM
+p.P("Count: ", p.Strong(Count))
 
 // attach event handler
-p.Html(`+"`"+`<button>+1</button>`+"`"+`).On("click", Increment)`),
+p.Button("+1").On("click", Increment)`),
 		),
 
 		// Conditionals section
@@ -108,11 +108,11 @@ p.Html(`+"`"+`<button>+1</button>`+"`"+`).On("click", Increment)`),
 				p.Button("F").On("click", func() { b.SetScore(50) }),
 			),
 			p.Pre(p.Attr("class", "code"), `p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
-    p.Html(`+"`"+`<p>Grade: A</p>`+"`"+`),
+    p.P("Grade: A"),
 ).ElseIf(p.Cond(func() bool { return Score.Get() >= 80 }, Score),
-    p.Html(`+"`"+`<p>Grade: B</p>`+"`"+`),
+    p.P("Grade: B"),
 ).Else(
-    p.Html(`+"`"+`<p>Grade: F</p>`+"`"+`),
+    p.P("Grade: F"),
 )
 
 // p.Cond(func() bool, ...stores) — any logic you want`),
@@ -124,7 +124,7 @@ p.Html(`+"`"+`<button>+1</button>`+"`"+`).On("click", Increment)`),
 			p.Label("Your name: ", p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Enter name")).Bind(b.Name)),
 			p.P("Hello, ", b.Name, "!"),
 			p.Pre(p.Attr("class", "code"), `Name := p.New("")
-p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Name)`),
+p.Input(p.Attr("type", "text")).Bind(Name)`),
 		),
 
 		// Two-Way Binding — Int
@@ -133,7 +133,7 @@ p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Name)`),
 			p.Label("Age: ", p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Enter age")).Bind(b.Age)),
 			p.P("You are ", b.Age, " years old."),
 			p.Pre(p.Attr("class", "code"), `Age := p.New(25)
-p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Age) // *Store[int] binding`),
+p.Input(p.Attr("type", "text")).Bind(Age) // *Store[int] binding`),
 		),
 
 		// Checkbox Binding — Bool
@@ -142,10 +142,10 @@ p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Age) // *Store[int] binding`),
 			p.Label(p.Input(p.Attr("type", "checkbox")).Bind(b.DarkMode), " Dark Mode"),
 			p.Div("This box uses dark mode styling when checked.").AttrIf("class", p.Cond(func() bool { return b.DarkMode.Get() }, b.DarkMode), "dark"),
 			p.Pre(p.Attr("class", "code"), `DarkMode := p.New(false)
-p.Html(`+"`"+`<input type="checkbox">`+"`"+`).Bind(DarkMode) // *Store[bool]
+p.Input(p.Attr("type", "checkbox")).Bind(DarkMode) // *Store[bool]
 
 // AttrIf: conditionally add a class
-p.Html(`+"`"+`<div>...</div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")`),
+p.Div("...").AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")`),
 		),
 
 		// Form — PreventDefault
@@ -157,7 +157,7 @@ p.Html(`+"`"+`<div>...</div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return
 				p.Button(p.Attr("type", "submit"), "Submit"),
 			).On("submit", b.Submit).PreventDefault(),
 			p.P(p.Attr("class", "message"), b.Message),
-			p.Pre(p.Attr("class", "code"), `p.Html(`+"`"+`<form>...</form>`+"`"+`).On("submit", Submit).PreventDefault()
+			p.Pre(p.Attr("class", "code"), `p.Form(...).On("submit", Submit).PreventDefault()
 
 // also available: .StopPropagation()`),
 		),
@@ -176,7 +176,7 @@ p.Html(`+"`"+`<div>...</div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return
 			}),
 			p.P(p.Attr("class", "message"), b.Message),
 			p.Pre(p.Attr("class", "code"), `// inner button stops event from reaching outer div
-p.Html(`+"`"+`<button>Inner</button>`+"`"+`).On("click", handler).StopPropagation()`),
+p.Button("Inner").On("click", handler).StopPropagation()`),
 		),
 
 		// BindAsHTML — Raw HTML Rendering
@@ -192,8 +192,6 @@ p.BindAsHTML(RawHTML) // renders as innerHTML (not escaped)`),
 
 func (b *Basics) Style() string {
 	return `
-.demo label{display:block;margin:8px 0}
-.demo pre.code{background:#1a1a2e;color:#e0e0e0;font-size:12px;margin-top:12px}
 .grade{padding:10px;border-radius:4px;font-weight:700}
 .grade.a{background:#d4edda;color:#155724}
 .grade.b{background:#cce5ff;color:#004085}

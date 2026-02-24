@@ -36,7 +36,7 @@ func (a *App) Routes() []p.Route {
 }
 
 func (a *App) Render() p.Node {
-	return p.Raw(
+	return p.Fragment(
 		p.Header(p.Attr("class", "header"),
 			p.Div(p.Attr("class", "header-inner"),
 				p.A(p.Attr("href", "./"), p.Attr("class", "brand"), "PrevelteKit"),
@@ -52,7 +52,7 @@ func (a *App) Render() p.Node {
 		),
 		p.Footer(p.Attr("class", "footer"),
 			p.Div(p.Attr("class", "container"),
-				p.P(p.Raw("SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required")),
+				p.P(p.RawHTML("SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required")),
 			),
 		),
 	)
@@ -73,6 +73,14 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .nav{display:flex;gap:24px}
 .nav a{color:#ccc;font-size:14px;transition:color .2s}
 .nav a:hover{color:#fff}
+
+.page{padding:40px 0}
+.page h1{font-size:2.2em;color:#1a1a2e;margin-bottom:8px}
+.page-intro{color:#666;margin-bottom:32px;font-size:1.05em}
+
+pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}
+pre code{background:transparent;padding:0;font-size:inherit}
+code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}
 
 .footer{padding:32px 0;background:#1a1a2e;color:#999;text-align:center;font-size:.9em}
 

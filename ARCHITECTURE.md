@@ -125,7 +125,7 @@ summary := Derived3(first, last, age, func(f, l string, a int) string {
 })
 ```
 
-The resulting store is a regular `Store[R]` — it works with `Html`, `Bind`, conditions, and everything else.
+The resulting store is a regular `Store[R]` — it works with typed elements, `Bind`, conditions, and everything else.
 
 ### List[T]
 
@@ -146,7 +146,7 @@ items.Len()  // derived Store[int] with ID "s3.len"
 ### Handlers
 
 ```go
-p.Html(`<button>Click</button>`).On("click", myFunc)
+p.Button("Click").On("click", myFunc)
 ```
 
 When `.On()` is called, the handler is registered via `RegisterHandler(fn)` which auto-generates an ID (`h0`, `h1`, ...) and stores it in `handlerRegistry`. The WASM side looks up handlers by ID via `GetHandler(id)`.
@@ -198,10 +198,10 @@ func (c *Counter) Increment() {
 }
 
 func (c *Counter) Render() p.Node {
-    return p.Html(`<div>
-        <p>Count: <strong>`, c.Count, `</strong></p>
-        `, p.Html(`<button>+1</button>`).On("click", c.Increment), `
-    </div>`)
+    return p.Div(
+        p.P("Count: ", p.Strong(c.Count)),
+        p.Button("+1").On("click", c.Increment),
+    )
 }
 
 func main() {
@@ -215,27 +215,27 @@ func main() {
 
 Components build their UI using the node DSL. All functions return `Node` values that form a tree.
 
-### Html
+### Typed Elements
 
-The primary building block. Accepts a mix of strings (raw HTML), nodes, and stores:
+The primary building blocks. Each HTML tag has a corresponding Go function that accepts a mix of attributes (`Attr()`), strings (auto-escaped), nodes, and stores:
 
 ```go
-p.Html(`<div>`, "hello", `</div>`)          // static HTML
-p.Html(`<p>Count: `, myStore, `</p>`)        // auto-binds store as text
-p.Html(`<p>`, p.Bind(myStore), `</p>`)       // explicit text binding
+p.Div(p.Attr("class", "card"), "hello")      // <div class="card">hello</div>
+p.P("Count: ", p.Strong(myStore))            // store auto-binds as text
+p.P(p.Bind(myStore))                         // explicit text binding
 ```
 
-When a `*Store[T]` is passed directly as a part, it's automatically wrapped in a `BindNode`.
+When a `*Store[T]` is passed as a child, it's automatically wrapped in a `BindNode`.
 
 When a `*Store[Component]` with registered options is passed, it becomes a ComponentBlock (see [Component Blocks](#component-blocks)).
 
-### Chainable Methods on Html
+### Chainable Methods
 
 ```go
-p.Html(`<button>Click</button>`).On("click", handler)                 // event
-p.Html(`<button>Submit</button>`).On("click", handler).PreventDefault() // with modifier
-p.Html(`<input type="text">`).Bind(nameStore)                          // two-way binding
-p.Html(`<div>content</div>`).AttrIf("class", condition, "active")      // conditional attr
+p.Button("Click").On("click", handler)                          // event
+p.Button("Submit").On("click", handler).PreventDefault()        // with modifier
+p.Input(p.Attr("type", "text")).Bind(nameStore)                 // two-way binding
+p.Div("content").AttrIf("class", condition, "active")           // conditional attr
 ```
 
 ### Other Node Types
@@ -243,6 +243,8 @@ p.Html(`<div>content</div>`).AttrIf("class", condition, "active")      // condit
 ```go
 p.Bind(store)                                            // reactive text interpolation
 p.BindAsHTML(store)                                      // reactive HTML interpolation
+p.RawHTML("&#9889;")                                     // unescaped inline HTML
+p.Fragment(nodeA, nodeB, nodeC)                          // group nodes without wrapper
 p.If(cond, children...).ElseIf(cond, children...).Else(children...)  // conditional
 p.Each(list, func(item T, i int) Node { ... })           // list iteration
 p.Comp(&MyComponent{Prop: store}, slotContent...)         // nested component
@@ -274,7 +276,7 @@ Text bindings display a store's value in the DOM and update it reactively.
 ### How It Works
 
 ```go
-p.Html(`<p>Hello, `, p.Bind(nameStore), `!</p>`)
+p.P("Hello, ", p.Bind(nameStore), "!")
 ```
 
 **SSR Output:**
@@ -297,7 +299,7 @@ Event bindings connect DOM events to Go handler functions.
 ### How It Works
 
 ```go
-p.Html(`<button>+1</button>`).On("click", c.Increment)
+p.Button("+1").On("click", c.Increment)
 ```
 
 **SSR Output:**
@@ -321,8 +323,8 @@ Two-way data binding between form elements and stores.
 ### How It Works
 
 ```go
-p.Html(`<input type="text">`).Bind(nameStore)
-p.Html(`<input type="checkbox">`).Bind(boolStore)
+p.Input(p.Attr("type", "text")).Bind(nameStore)
+p.Input(p.Attr("type", "checkbox")).Bind(boolStore)
 ```
 
 Each `.Bind()` call gets its own unique element ID via `NextBindID()` (`b0`, `b1`, ...), separate from the store's ID. This allows multiple inputs to bind the same store without duplicate HTML IDs.
@@ -355,11 +357,11 @@ Conditional rendering with reactive branch switching.
 
 ```go
 p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
-    p.Html(`<p class="a">Grade: A</p>`),
+    p.P(p.Attr("class", "a"), "Grade: A"),
 ).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),
-    p.Html(`<p class="b">Grade: B</p>`),
+    p.P(p.Attr("class", "b"), "Grade: B"),
 ).Else(
-    p.Html(`<p class="f">Grade: F</p>`),
+    p.P(p.Attr("class", "f"), "Grade: F"),
 )
 ```
 
@@ -394,9 +396,9 @@ List rendering with template-based item generation.
 
 ```go
 p.Each(items, func(item string, i int) p.Node {
-    return p.Html(`<li>`, p.Itoa(i), `: `, item, `</li>`)
+    return p.Li(p.Itoa(i), ": ", item)
 }).Else(
-    p.Html(`<p>No items</p>`),
+    p.P("No items"),
 )
 ```
 
@@ -424,7 +426,7 @@ type App struct {
 }
 
 func (a *App) Render() p.Node {
-    return p.Html(`<main>`, a.Current, `</main>`)
+    return p.Main(a.Current)
 }
 ```
 
@@ -451,10 +453,10 @@ When `NewRouter` is called, it registers all possible components via `componentS
 
 ### Dynamic Attributes
 
-Template-based attributes with store placeholders:
+Attributes with store parts become dynamic — they update reactively:
 
 ```go
-p.DynAttr("href", "/user/{0}/post/{1}", userIDStore, postIDStore)
+p.A(p.Attr("href", "/user/", userIDStore, "/post/", postIDStore), "View Post")
 ```
 
 **SSR Output:**
@@ -467,7 +469,7 @@ p.DynAttr("href", "/user/{0}/post/{1}", userIDStore, postIDStore)
 ### Conditional Attributes
 
 ```go
-p.Html(`<div>content</div>`).AttrIf("class", p.Cond(func() bool { return score.Get() >= 90 }, score), "excellent")
+p.Div("content").AttrIf("class", p.Cond(func() bool { return score.Get() >= 90 }, score), "excellent")
 ```
 
 **SSR Output** (score=95):
@@ -513,10 +515,8 @@ func (c *Counter) Style() string {
 .demo.v0 button.v0 { color: blue; }
 ```
 
-3. All HTML tags rendered within that component get the scope class injected via `injectScopeClass()`
+3. All typed elements rendered within that component get the scope class added to their `class` attribute during structured rendering (via `ctx.ScopeAttr`)
 4. Scoped CSS is collected during SSR and emitted in a `<style>` tag in the HTML head
-
-The `injectScopeClass` function handles tags split across multiple `HtmlNode` parts (e.g., `<div class="alert" ` + DynAttr + `>`) by injecting the scope class even when the closing `>` isn't in the current string part.
 
 ---
 
