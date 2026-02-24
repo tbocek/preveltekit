@@ -9,32 +9,32 @@ func (m *Manual) New() p.Component {
 }
 
 func (m *Manual) Render() p.Node {
-	return p.Html(`<div class="manual">
-	<div class="container">
-		<h1>Manual</h1>
-		<p class="intro">API reference for PrevelteKit. Each section shows the API and a code example.</p>
+	return p.Div(p.Attr("class", "manual"),
+		p.Div(p.Attr("class", "container"),
+			p.H1("Manual"),
+			p.P(p.Attr("class", "intro"), "API reference for PrevelteKit. Each section shows the API and a code example."),
 
-		<nav class="toc">
-			<h2>Contents</h2>
-			<ul>
-				<li><a href="#stores" external>Stores</a></li>
-				<li><a href="#html-and-binding" external>HTML &amp; Binding</a></li>
-				<li><a href="#events" external>Events</a></li>
-				<li><a href="#conditionals" external>Conditionals</a></li>
-				<li><a href="#lists" external>Lists</a></li>
-				<li><a href="#components" external>Components</a></li>
-				<li><a href="#routing" external>Routing</a></li>
-				<li><a href="#fetch" external>Fetch</a></li>
-				<li><a href="#storage" external>Storage</a></li>
-				<li><a href="#timers" external>Timers</a></li>
-				<li><a href="#lifecycle" external>Lifecycle</a></li>
-			</ul>
-		</nav>
+			p.Nav(p.Attr("class", "toc"),
+				p.H2("Contents"),
+				p.Ul(
+					p.Li(p.A(p.Attr("href", "#stores"), p.Attr("external", ""), "Stores")),
+					p.Li(p.A(p.Attr("href", "#html-and-binding"), p.Attr("external", ""), "HTML & Binding")),
+					p.Li(p.A(p.Attr("href", "#events"), p.Attr("external", ""), "Events")),
+					p.Li(p.A(p.Attr("href", "#conditionals"), p.Attr("external", ""), "Conditionals")),
+					p.Li(p.A(p.Attr("href", "#lists"), p.Attr("external", ""), "Lists")),
+					p.Li(p.A(p.Attr("href", "#components"), p.Attr("external", ""), "Components")),
+					p.Li(p.A(p.Attr("href", "#routing"), p.Attr("external", ""), "Routing")),
+					p.Li(p.A(p.Attr("href", "#fetch"), p.Attr("external", ""), "Fetch")),
+					p.Li(p.A(p.Attr("href", "#storage"), p.Attr("external", ""), "Storage")),
+					p.Li(p.A(p.Attr("href", "#timers"), p.Attr("external", ""), "Timers")),
+					p.Li(p.A(p.Attr("href", "#lifecycle"), p.Attr("external", ""), "Lifecycle")),
+				),
+			),
 
-		<section id="stores">
-			<h2>Stores</h2>
-			<p>Reactive state containers. When a store value changes, all bound DOM elements update automatically.</p>
-			<pre><code>// Create a store with an initial value
+			p.Section(p.Attr("id", "stores"),
+				p.H2("Stores"),
+				p.P("Reactive state containers. When a store value changes, all bound DOM elements update automatically."),
+				p.Pre(p.Code(`// Create a store with an initial value
 count := p.New(0)              // *Store[int]
 name := p.New("hello")         // *Store[string]
 dark := p.New(false)           // *Store[bool]
@@ -49,201 +49,55 @@ count.Update(func(v int) int { // transform current value
 // Subscribe to changes
 count.OnChange(func(v int) {
     // called whenever count changes
-})</code></pre>
-		</section>
+})`)),
+			),
 
-		<section id="html-and-binding">
-			<h2>HTML &amp; Binding</h2>
-			<p>Build DOM trees with <code>p.Html()</code>. Embed stores directly — they become live text nodes.</p>
-			<pre><code>// Static HTML with reactive store interpolation
-p.Html(` + "`" + `&lt;p>Count: &lt;strong>` + "`" + `, count, ` + "`" + `&lt;/strong>&lt;/p>` + "`" + `)
+			p.Section(p.Attr("id", "html-and-binding"),
+				p.H2("HTML & Binding"),
+				p.P(p.Raw("Build DOM trees with <code>p.Html()</code>. Embed stores directly — they become live text nodes.")),
+				p.Pre(p.Code("// Static HTML with reactive store interpolation\np.Html(`<p>Count: <strong>`, count, `</strong></p>`)\n\n// Two-way binding for inputs\np.Html(`<input type=\"text\">`).Bind(name)     // *Store[string]\np.Html(`<input type=\"text\">`).Bind(age)      // *Store[int]\np.Html(`<input type=\"checkbox\">`).Bind(dark)  // *Store[bool]\np.Html(`<textarea>`).Bind(notes)              // *Store[string]\n\n// Dynamic attributes\np.Html(`<div>`).Attr(\"data-theme\", theme)\n\n// Conditional attributes (additive for same attribute name)\np.Html(`<div>`).AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)")),
+			),
 
-// Two-way binding for inputs
-p.Html(` + "`" + `&lt;input type="text">` + "`" + `).Bind(name)     // *Store[string]
-p.Html(` + "`" + `&lt;input type="text">` + "`" + `).Bind(age)      // *Store[int]
-p.Html(` + "`" + `&lt;input type="checkbox">` + "`" + `).Bind(dark)  // *Store[bool]
-p.Html(` + "`" + `&lt;textarea>` + "`" + `).Bind(notes)              // *Store[string]
+			p.Section(p.Attr("id", "events"),
+				p.H2("Events"),
+				p.P(p.Raw("Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.")),
+				p.Pre(p.Code("// Click handler\np.Html(`<button>Click</button>`).On(\"click\", handler)\n\n// Form submit with preventDefault\np.Html(`<form>...</form>`).On(\"submit\", handler).PreventDefault()\n\n// Stop event bubbling\np.Html(`<button>Inner</button>`).On(\"click\", handler).StopPropagation()\n\n// Inline handler\np.Html(`<button>+5</button>`).On(\"click\", func() {\n    count.Update(func(v int) int { return v + 5 })\n})")),
+			),
 
-// Dynamic attributes
-p.Html(` + "`" + `&lt;div>` + "`" + `).Attr("data-theme", theme)
+			p.Section(p.Attr("id", "conditionals"),
+				p.H2("Conditionals"),
+				p.P(p.Raw("Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.")),
+				p.Pre(p.Code("// Simple if\np.If(p.Cond(func() bool { return count.Get() > 0 }, count),\n    p.Html(`<p>Positive</p>`),\n)\n\n// If / ElseIf / Else\np.If(p.Cond(func() bool { return score.Get() >= 90 }, score),\n    p.Html(`<p>Grade: A</p>`),\n).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),\n    p.Html(`<p>Grade: B</p>`),\n).Else(\n    p.Html(`<p>Grade: F</p>`),\n)\n\n// p.Cond(predicateFn, ...dependencyStores)")),
+			),
 
-// Conditional attributes (additive for same attribute name)
-p.Html(` + "`" + `&lt;div>` + "`" + `).AttrIf("class",
-    p.Cond(func() bool { return dark.Get() }, dark), "active")
+			p.Section(p.Attr("id", "lists"),
+				p.H2("Lists"),
+				p.P(p.Raw("Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.")),
+				p.Pre(p.Code("// Create a reactive list\nitems := p.NewList[string](\"Apple\", \"Banana\", \"Cherry\")\n\n// Mutate — triggers re-render\nitems.Append(\"Date\")\nitems.RemoveAt(0)\nitems.Set([]string{\"Mango\", \"Papaya\"})\nitems.Clear()\n\n// Reactive length\nitems.Len()  // *Store[int] — updates automatically\n\n// Render each item\np.Each(items, func(item string, i int) p.Node {\n    return p.Html(`<li>`, p.Itoa(i), `: `, item, `</li>`)\n}).Else(\n    p.Html(`<p>No items</p>`),\n)")),
+			),
 
-// Raw HTML rendering (not escaped)
-p.BindAsHTML(rawHTML)</code></pre>
-		</section>
+			p.Section(p.Attr("id", "components"),
+				p.H2("Components"),
+				p.P(p.Raw("Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.")),
+				p.Pre(p.Code("// Define a component\ntype Badge struct {\n    Label *p.Store[string]\n}\n\nfunc (b *Badge) Render() p.Node {\n    return p.Html(`<span class=\"badge\">`, b.Label, `</span>`)\n}\n\n// Scoped CSS\nfunc (b *Badge) Style() string {\n    return `.badge{background:#007bff;color:#fff}`\n}\n\n// Use a component (props are struct fields)\np.Comp(&Badge{Label: p.New(\"New\")})\n\n// Component with slot (child content)\np.Comp(&Card{Title: p.New(\"Hello\")},\n    p.Html(`<p>Slot content here</p>`),\n)\n\n// Inside the component, render slot content:\np.Slot()\n\n// Callback props for component events\ntype Button struct {\n    Label   *p.Store[string]\n    OnClick func()\n}\n\n// Shared stores: pass the same *Store to multiple components\ntheme := p.New(\"light\")\np.Comp(&Header{Theme: theme})\np.Comp(&Sidebar{Theme: theme})\n// both components read/write the same store")),
+			),
 
-		<section id="events">
-			<h2>Events</h2>
-			<p>Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.</p>
-			<pre><code>// Click handler
-p.Html(` + "`" + `&lt;button>Click&lt;/button>` + "`" + `).On("click", handler)
+			p.Section(p.Attr("id", "routing"),
+				p.H2("Routing"),
+				p.P(p.Raw("Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.")),
+				p.Pre(p.Code("// Define routes\nroutes := []p.Route{\n    {Path: \"/\", HTMLFile: \"index.html\", SSRPath: \"/\", Component: home},\n    {Path: \"/about\", HTMLFile: \"about.html\", SSRPath: \"/about\", Component: about},\n}\n\n// Start the router (in OnMount)\nrouter := p.NewRouter(currentComponent, routes, \"unique-id\")\nrouter.NotFound(func() { currentComponent.Set(nil) })\nrouter.Start()\n\n// Store[Component] holds the active route component\ncurrentComponent *p.Store[p.Component]\n\n// Links: client-side (default) vs server-side\n// <a href=\"/about\">About</a>           (SPA navigation)\n// <a href=\"/about\" external>About</a>  (full page reload)\n\n// Store[Component] for local tabs (non-router):\nactiveTab := p.New[p.Component](tab1)\nactiveTab.WithOptions(tab1, tab2, tab3)\nactiveTab.Set(tab2)  // switches displayed component")),
+			),
 
-// Form submit with preventDefault
-p.Html(` + "`" + `&lt;form>...&lt;/form>` + "`" + `).On("submit", handler).PreventDefault()
+			p.Section(p.Attr("id", "fetch"),
+				p.H2("Fetch"),
+				p.P(p.Raw("Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.")),
+				p.Pre(p.Code("// Define response type with js tags\ntype User struct {\n    ID   int    `js:\"id\"`\n    Name string `js:\"name\"`\n}\n\n// GET\ngo func() {\n    user, err := p.Get[User](\"https://api.example.com/user/1\")\n}()\n\n// POST (send body, decode response)\ngo func() {\n    created, err := p.Post[User](url, newUser)\n}()\n\n// PUT, PATCH, DELETE\nresult, err := p.Put[T](url, body)\nresult, err := p.Patch[T](url, body)\nresult, err := p.Delete[T](url)\n\n// Advanced: custom headers and abort\nsignal, abort := p.NewAbortController()\ngo func() {\n    result, err := p.Fetch[T](url, &p.FetchOptions{\n        Method:  \"GET\",\n        Headers: map[string]string{\"Authorization\": \"Bearer token\"},\n        Signal:  signal,\n    })\n}()\nabort()  // cancel the request")),
+			),
 
-// Stop event bubbling
-p.Html(` + "`" + `&lt;button>Inner&lt;/button>` + "`" + `).On("click", handler).StopPropagation()
-
-// Inline handler
-p.Html(` + "`" + `&lt;button>+5&lt;/button>` + "`" + `).On("click", func() {
-    count.Update(func(v int) int { return v + 5 })
-})</code></pre>
-		</section>
-
-		<section id="conditionals">
-			<h2>Conditionals</h2>
-			<p>Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.</p>
-			<pre><code>// Simple if
-p.If(p.Cond(func() bool { return count.Get() > 0 }, count),
-    p.Html(` + "`" + `&lt;p>Positive&lt;/p>` + "`" + `),
-)
-
-// If / ElseIf / Else
-p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
-    p.Html(` + "`" + `&lt;p>Grade: A&lt;/p>` + "`" + `),
-).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),
-    p.Html(` + "`" + `&lt;p>Grade: B&lt;/p>` + "`" + `),
-).Else(
-    p.Html(` + "`" + `&lt;p>Grade: F&lt;/p>` + "`" + `),
-)
-
-// p.Cond(predicateFn, ...dependencyStores)</code></pre>
-		</section>
-
-		<section id="lists">
-			<h2>Lists</h2>
-			<p>Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.</p>
-			<pre><code>// Create a reactive list
-items := p.NewList[string]("Apple", "Banana", "Cherry")
-
-// Mutate — triggers re-render
-items.Append("Date")
-items.RemoveAt(0)
-items.Set([]string{"Mango", "Papaya"})
-items.Clear()
-
-// Reactive length
-items.Len()  // *Store[int] — updates automatically
-
-// Render each item
-p.Each(items, func(item string, i int) p.Node {
-    return p.Html(` + "`" + `&lt;li>` + "`" + `, p.Itoa(i), ` + "`" + `: ` + "`" + `, item, ` + "`" + `&lt;/li>` + "`" + `)
-}).Else(
-    p.Html(` + "`" + `&lt;p>No items&lt;/p>` + "`" + `),
-)</code></pre>
-		</section>
-
-		<section id="components">
-			<h2>Components</h2>
-			<p>Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.</p>
-			<pre><code>// Define a component
-type Badge struct {
-    Label *p.Store[string]
-}
-
-func (b *Badge) Render() p.Node {
-    return p.Html(` + "`" + `&lt;span class="badge">` + "`" + `, b.Label, ` + "`" + `&lt;/span>` + "`" + `)
-}
-
-// Scoped CSS
-func (b *Badge) Style() string {
-    return ` + "`" + `.badge{background:#007bff;color:#fff}` + "`" + `
-}
-
-// Use a component (props are struct fields)
-p.Comp(&amp;Badge{Label: p.New("New")})
-
-// Component with slot (child content)
-p.Comp(&amp;Card{Title: p.New("Hello")},
-    p.Html(` + "`" + `&lt;p>Slot content here&lt;/p>` + "`" + `),
-)
-
-// Inside the component, render slot content:
-p.Slot()
-
-// Callback props for component events
-type Button struct {
-    Label   *p.Store[string]
-    OnClick func()
-}
-
-// Shared stores: pass the same *Store to multiple components
-theme := p.New("light")
-p.Comp(&amp;Header{Theme: theme})
-p.Comp(&amp;Sidebar{Theme: theme})
-// both components read/write the same store</code></pre>
-		</section>
-
-		<section id="routing">
-			<h2>Routing</h2>
-			<p>Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.</p>
-			<pre><code>// Define routes
-routes := []p.Route{
-    {Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: home},
-    {Path: "/about", HTMLFile: "about.html", SSRPath: "/about", Component: about},
-}
-
-// Start the router (in OnMount)
-router := p.NewRouter(currentComponent, routes, "unique-id")
-router.NotFound(func() { currentComponent.Set(nil) })
-router.Start()
-
-// Store[Component] holds the active route component
-currentComponent *p.Store[p.Component]
-
-// Links: client-side (default) vs server-side
-// &lt;a href="/about">About&lt;/a>           (SPA navigation)
-// &lt;a href="/about" external>About&lt;/a>  (full page reload)
-
-// Store[Component] for local tabs (non-router):
-activeTab := p.New[p.Component](tab1)
-activeTab.WithOptions(tab1, tab2, tab3)
-activeTab.Set(tab2)  // switches displayed component</code></pre>
-		</section>
-
-		<section id="fetch">
-			<h2>Fetch</h2>
-			<p>Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.</p>
-			<pre><code>// Define response type with js tags
-type User struct {
-    ID   int    ` + "`" + `js:"id"` + "`" + `
-    Name string ` + "`" + `js:"name"` + "`" + `
-}
-
-// GET
-go func() {
-    user, err := p.Get[User]("https://api.example.com/user/1")
-}()
-
-// POST (send body, decode response)
-go func() {
-    created, err := p.Post[User](url, newUser)
-}()
-
-// PUT, PATCH, DELETE
-result, err := p.Put[T](url, body)
-result, err := p.Patch[T](url, body)
-result, err := p.Delete[T](url)
-
-// Advanced: custom headers and abort
-signal, abort := p.NewAbortController()
-go func() {
-    result, err := p.Fetch[T](url, &amp;p.FetchOptions{
-        Method:  "GET",
-        Headers: map[string]string{"Authorization": "Bearer token"},
-        Signal:  signal,
-    })
-}()
-abort()  // cancel the request</code></pre>
-		</section>
-
-		<section id="storage">
-			<h2>Storage</h2>
-			<p>Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.</p>
-			<pre><code>// Auto-persisted store (syncs on every Set)
+			p.Section(p.Attr("id", "storage"),
+				p.H2("Storage"),
+				p.P(p.Raw("Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.")),
+				p.Pre(p.Code(`// Auto-persisted store (syncs on every Set)
 theme := p.NewLocalStore("theme", "light")
 theme.Set("dark")  // automatically saved to localStorage
 theme.Store        // *Store[string] — use in Html() like any store
@@ -252,13 +106,13 @@ theme.Store        // *Store[string] — use in Html() like any store
 p.SetStorage("notes", "hello")
 saved := p.GetStorage("notes")
 p.RemoveStorage("notes")
-p.ClearStorage()</code></pre>
-		</section>
+p.ClearStorage()`)),
+			),
 
-		<section id="timers">
-			<h2>Timers</h2>
-			<p>Debounce, throttle, setTimeout, and setInterval — all return cleanup functions.</p>
-			<pre><code>// Debounce: fires after idle period
+			p.Section(p.Attr("id", "timers"),
+				p.H2("Timers"),
+				p.P("Debounce, throttle, setTimeout, and setInterval — all return cleanup functions."),
+				p.Pre(p.Code(`// Debounce: fires after idle period
 doSearch, cleanup := p.Debounce(300, func() {
     // fires 300ms after last call
 })
@@ -280,47 +134,17 @@ cancel()  // cancel before it fires
 stop := p.SetInterval(60000, func() {
     // fires every 60 seconds
 })
-stop()  // stop the interval</code></pre>
-		</section>
+stop()  // stop the interval`)),
+			),
 
-		<section id="lifecycle">
-			<h2>Lifecycle</h2>
-			<p>Components can implement lifecycle hooks for setup and teardown.</p>
-			<pre><code>// OnMount: called when component becomes active
-func (c *MyComp) OnMount() {
-    if p.IsBuildTime {
-        return  // skip side effects during SSR
-    }
-    // fetch data, start timers, etc.
-}
+			p.Section(p.Attr("id", "lifecycle"),
+				p.H2("Lifecycle"),
+				p.P("Components can implement lifecycle hooks for setup and teardown."),
+				p.Pre(p.Code("// OnMount: called when component becomes active\nfunc (c *MyComp) OnMount() {\n    if p.IsBuildTime {\n        return  // skip side effects during SSR\n    }\n    // fetch data, start timers, etc.\n}\n\n// OnDestroy: called when component is removed (e.g. route change)\nfunc (c *MyComp) OnDestroy() {\n    if c.stopTimer != nil {\n        c.stopTimer()\n    }\n}\n\n// New: constructor — create stores, initialize state\nfunc (c *MyComp) New() p.Component {\n    return &MyComp{\n        Count: p.New(0),\n        Name:  p.New(\"\"),\n    }\n}\n\n// GlobalStyle: CSS applied to entire page (on App component)\nfunc (a *App) GlobalStyle() string { return `body{margin:0}` }\n\n// Style: scoped CSS (auto-prefixed to this component)\nfunc (c *MyComp) Style() string { return `.btn{color:red}` }\n\n// p.IsBuildTime: true during SSR, false in WASM\n// Use to guard browser-only code (fetch, timers, DOM access)")),
+			),
 
-// OnDestroy: called when component is removed (e.g. route change)
-func (c *MyComp) OnDestroy() {
-    if c.stopTimer != nil {
-        c.stopTimer()
-    }
-}
-
-// New: constructor — create stores, initialize state
-func (c *MyComp) New() p.Component {
-    return &amp;MyComp{
-        Count: p.New(0),
-        Name:  p.New(""),
-    }
-}
-
-// GlobalStyle: CSS applied to entire page (on App component)
-func (a *App) GlobalStyle() string { return ` + "`" + `body{margin:0}` + "`" + ` }
-
-// Style: scoped CSS (auto-prefixed to this component)
-func (c *MyComp) Style() string { return ` + "`" + `.btn{color:red}` + "`" + ` }
-
-// p.IsBuildTime: true during SSR, false in WASM
-// Use to guard browser-only code (fetch, timers, DOM access)</code></pre>
-		</section>
-
-	</div>
-	</div>`)
+		),
+	)
 }
 
 func (m *Manual) Style() string {

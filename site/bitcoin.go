@@ -99,31 +99,31 @@ func btcFormatPrice(f float64) string {
 }
 
 func (b *BitcoinDemo) Render() p.Node {
-	return p.Html(`<div class="btc-page">
-	<div class="container">
-		<h1>Bitcoin Price</h1>
-		<p class="subtitle">Live price fetched from CryptoCompare API with auto-refresh every 60 seconds.</p>
+	return p.Div(p.Attr("class", "btc-page"),
+		p.Div(p.Attr("class", "container"),
+			p.H1("Bitcoin Price"),
+			p.P(p.Attr("class", "subtitle"), "Live price fetched from CryptoCompare API with auto-refresh every 60 seconds."),
 
-		<div class="btc-card">`,
-		p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
-			p.Html(`<p class="loading">Loading...</p>`),
-		).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
-			p.Html(`<p class="error">`, b.Error, `</p>`,
-				p.Html(`<button class="retry-btn">Retry</button>`).On("click", b.Retry)),
-		).Else(
-			p.Html(`<div class="price-header">
-					<span class="symbol">`, b.Symbol, `</span>
-					<span class="update-time">Updated: `, b.UpdateTime, ` UTC</span>
-				</div>
-				<p class="price">`, b.Price, `</p>
-				<small class="disclaimer">Prices are volatile and for reference only.</small>`),
-		),
-		p.Html(`</div>
+			p.Div(p.Attr("class", "btc-card"),
+				p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
+					p.P(p.Attr("class", "loading"), "Loading..."),
+				).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
+					p.P(p.Attr("class", "error"), b.Error),
+					p.Button(p.Attr("class", "retry-btn"), "Retry").On("click", b.Retry),
+				).Else(
+					p.Div(p.Attr("class", "price-header"),
+						p.Span(p.Attr("class", "symbol"), b.Symbol),
+						p.Span(p.Attr("class", "update-time"), "Updated: ", b.UpdateTime, " UTC"),
+					),
+					p.P(p.Attr("class", "price"), b.Price),
+					p.Small(p.Attr("class", "disclaimer"), "Prices are volatile and for reference only."),
+				),
+			),
 
-		<div class="btc-code">
-			<h2>How it works</h2>
-			<p>This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.</p>
-			<pre><code>type BitcoinDemo struct {
+			p.Div(p.Attr("class", "btc-code"),
+				p.H2("How it works"),
+				p.P(p.Raw("This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.")),
+				p.Pre(p.Code(`type BitcoinDemo struct {
     Price       *p.Store[string]
     Loading     *p.Store[bool]
     Error       *p.Store[string]
@@ -156,10 +156,9 @@ func (b *BitcoinDemo) FetchPrice() {
         b.Price.Set(formatPrice(resp.RAW.PRICE))
         b.Loading.Set(false)
     }()
-}</code></pre>
-		</div>
-	</div>
-	</div>`),
+}`)),
+			),
+		),
 	)
 }
 

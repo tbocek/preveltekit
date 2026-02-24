@@ -14,52 +14,52 @@ func (l *Links) New() p.Component {
 }
 
 func (l *Links) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Links</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Links"),
 
-		<section>
-			<h2>Client-Side vs Server-Side</h2>
-			<p>Same URL, different behavior:</p>
+		p.Section(
+			p.H2("Client-Side vs Server-Side"),
+			p.P("Same URL, different behavior:"),
 
-			<div class="link-list">
-				<a href="/lists" class="nav-link">
-					<span class="link-icon">-></span>
-					<span>/lists</span>
-					<span class="link-type">Client-side</span>
-				</a>
-				<a href="/lists" external class="nav-link external">
-					<span class="link-icon">^</span>
-					<span>/lists</span>
-					<span class="link-type">Server (reload)</span>
-				</a>
-			</div>
-			<p class="hint">Click both - first one is instant, second reloads the page.</p>
-		</section>
+			p.Div(p.Attr("class", "link-list"),
+				p.A(p.Attr("href", "/lists"), p.Attr("class", "nav-link"),
+					p.Span(p.Attr("class", "link-icon"), "->"),
+					p.Span("/lists"),
+					p.Span(p.Attr("class", "link-type"), "Client-side"),
+				),
+				p.A(p.Attr("href", "/lists"), p.Attr("external", ""), p.Attr("class", "nav-link external"),
+					p.Span(p.Attr("class", "link-icon"), "^"),
+					p.Span("/lists"),
+					p.Span(p.Attr("class", "link-type"), "Server (reload)"),
+				),
+			),
+			p.P(p.Attr("class", "hint"), "Click both - first one is instant, second reloads the page."),
+		),
 
-		<section>
-			<h2>When to use <code>external</code></h2>
-			<ul class="info-list">
-				<li>Server-side routes (API, auth, downloads)</li>
-				<li>Full page refresh needed</li>
-				<li>Links to other apps on same domain</li>
-			</ul>
-		</section>
+		p.Section(
+			p.H2("When to use ", p.Code("external")),
+			p.Ul(p.Attr("class", "info-list"),
+				p.Li("Server-side routes (API, auth, downloads)"),
+				p.Li("Full page refresh needed"),
+				p.Li("Links to other apps on same domain"),
+			),
+		),
 
-		<section>
-			<h2>Try It</h2>
-			<div class="button-links">
-				<a href="/basics" class="btn-link primary">Basics (SPA)</a>
-				<a href="/basics" external class="btn-link secondary">Basics (Reload)</a>
-			</div>
-		</section>
+		p.Section(
+			p.H2("Try It"),
+			p.Div(p.Attr("class", "button-links"),
+				p.A(p.Attr("href", "/basics"), p.Attr("class", "btn-link primary"), "Basics (SPA)"),
+				p.A(p.Attr("href", "/basics"), p.Attr("external", ""), p.Attr("class", "btn-link secondary"), "Basics (Reload)"),
+			),
+		),
 
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// client-side navigation (SPA) — default
-&lt;a href="/basics">Basics&lt;/a>
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"), `// client-side navigation (SPA) — default
+<a href="/basics">Basics</a>
 
 // server-side navigation (full reload)
-&lt;a href="/basics" external>Basics&lt;/a>
+<a href="/basics" external>Basics</a>
 
 // router setup in App.OnMount():
 router := p.NewRouter(CurrentComponent, routes, "id")
@@ -72,9 +72,9 @@ p.Route{
     HTMLFile:  "basics.html",
     SSRPath:   "/basics",
     Component: basics,
-}</pre>
-		</section>
-	</div>`)
+}`),
+		),
+	)
 }
 
 func (l *Links) Style() string {

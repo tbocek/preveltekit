@@ -62,126 +62,132 @@ func (b *Basics) Submit() {
 }
 
 func (b *Basics) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Basics</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Basics"),
 
-		<section>
-			<h2>Counter — Store, Set, Update, On</h2>
-			<p>Count: <strong>`, b.Count, `</strong></p>`,
-		p.Html(`<button>-1</button>`).On("click", b.Decrement),
-		p.Html(`<button>+1</button>`).On("click", b.Increment),
-		p.Html(`<button>+5</button>`).On("click", func() { b.Add(5) }),
-		p.Html(`<button>Double</button>`).On("click", b.Double),
-		p.Html(`<button>Reset</button>`).On("click", b.Reset),
-		`<pre class="code">Count := p.New(0)                           // create store
+		// Counter section
+		p.Section(
+			p.H2("Counter — Store, Set, Update, On"),
+			p.P("Count: ", p.Strong(b.Count)),
+			p.Button("-1").On("click", b.Decrement),
+			p.Button("+1").On("click", b.Increment),
+			p.Button("+5").On("click", func() { b.Add(5) }),
+			p.Button("Double").On("click", b.Double),
+			p.Button("Reset").On("click", b.Reset),
+			p.Pre(p.Attr("class", "code"), `Count := p.New(0)                           // create store
 Count.Set(5)                                 // set value
 Count.Update(func(v int) int { return v+1 }) // transform
 
 // embed in HTML — auto-updates in the DOM
-p.Html(`+"`"+`&lt;p>Count: &lt;strong>`+"`"+`, Count, `+"`"+`&lt;/strong>&lt;/p>`+"`"+`)
+p.Html(`+"`"+`<p>Count: <strong>`+"`"+`, Count, `+"`"+`</strong></p>`+"`"+`)
 
 // attach event handler
-p.Html(`+"`"+`&lt;button>+1&lt;/button>`+"`"+`).On("click", Increment)</pre>
-		</section>
+p.Html(`+"`"+`<button>+1</button>`+"`"+`).On("click", Increment)`),
+		),
 
-		<section>
-			<h2>Conditionals — If / ElseIf / Else</h2>
-			<p>Score: `, b.Score, `</p>
-			`,
-		p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
-			p.Html(`<p class="grade a">Grade: A - Excellent!</p>`),
-		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
-			p.Html(`<p class="grade b">Grade: B - Good</p>`),
-		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
-			p.Html(`<p class="grade c">Grade: C - Average</p>`),
-		).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
-			p.Html(`<p class="grade d">Grade: D - Below Average</p>`),
-		).Else(
-			p.Html(`<p class="grade f">Grade: F - Failing</p>`),
-		), `
-			<div class="buttons">`,
-		p.Html(`<button>A</button>`).On("click", func() { b.SetScore(95) }),
-		p.Html(`<button>B</button>`).On("click", func() { b.SetScore(85) }),
-		p.Html(`<button>C</button>`).On("click", func() { b.SetScore(75) }),
-		p.Html(`<button>D</button>`).On("click", func() { b.SetScore(65) }),
-		p.Html(`<button>F</button>`).On("click", func() { b.SetScore(50) }),
-		`</div>
-			<pre class="code">p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
-    p.Html(`+"`"+`&lt;p>Grade: A&lt;/p>`+"`"+`),
+		// Conditionals section
+		p.Section(
+			p.H2("Conditionals — If / ElseIf / Else"),
+			p.P("Score: ", b.Score),
+			p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
+				p.P(p.Attr("class", "grade a"), "Grade: A - Excellent!"),
+			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
+				p.P(p.Attr("class", "grade b"), "Grade: B - Good"),
+			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
+				p.P(p.Attr("class", "grade c"), "Grade: C - Average"),
+			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
+				p.P(p.Attr("class", "grade d"), "Grade: D - Below Average"),
+			).Else(
+				p.P(p.Attr("class", "grade f"), "Grade: F - Failing"),
+			),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("A").On("click", func() { b.SetScore(95) }),
+				p.Button("B").On("click", func() { b.SetScore(85) }),
+				p.Button("C").On("click", func() { b.SetScore(75) }),
+				p.Button("D").On("click", func() { b.SetScore(65) }),
+				p.Button("F").On("click", func() { b.SetScore(50) }),
+			),
+			p.Pre(p.Attr("class", "code"), `p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
+    p.Html(`+"`"+`<p>Grade: A</p>`+"`"+`),
 ).ElseIf(p.Cond(func() bool { return Score.Get() >= 80 }, Score),
-    p.Html(`+"`"+`&lt;p>Grade: B&lt;/p>`+"`"+`),
+    p.Html(`+"`"+`<p>Grade: B</p>`+"`"+`),
 ).Else(
-    p.Html(`+"`"+`&lt;p>Grade: F&lt;/p>`+"`"+`),
+    p.Html(`+"`"+`<p>Grade: F</p>`+"`"+`),
 )
 
-// p.Cond(func() bool, ...stores) — any logic you want</pre>
-		</section>
+// p.Cond(func() bool, ...stores) — any logic you want`),
+		),
 
-		<section>
-			<h2>Two-Way Binding — String</h2>
-			<label>Your name: `, p.Html(`<input type="text" placeholder="Enter name">`).Bind(b.Name), `</label>
-			<p>Hello, `, b.Name, `!</p>
-			<pre class="code">Name := p.New("")
-p.Html(`+"`"+`&lt;input type="text">`+"`"+`).Bind(Name)</pre>
-		</section>
+		// Two-Way Binding — String
+		p.Section(
+			p.H2("Two-Way Binding — String"),
+			p.Label("Your name: ", p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Enter name")).Bind(b.Name)),
+			p.P("Hello, ", b.Name, "!"),
+			p.Pre(p.Attr("class", "code"), `Name := p.New("")
+p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Name)`),
+		),
 
-		<section>
-			<h2>Two-Way Binding — Int</h2>
-			<label>Age: `, p.Html(`<input type="text" placeholder="Enter age">`).Bind(b.Age), `</label>
-			<p>You are `, b.Age, ` years old.</p>
-			<pre class="code">Age := p.New(25)
-p.Html(`+"`"+`&lt;input type="text">`+"`"+`).Bind(Age) // *Store[int] binding</pre>
-		</section>
+		// Two-Way Binding — Int
+		p.Section(
+			p.H2("Two-Way Binding — Int"),
+			p.Label("Age: ", p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Enter age")).Bind(b.Age)),
+			p.P("You are ", b.Age, " years old."),
+			p.Pre(p.Attr("class", "code"), `Age := p.New(25)
+p.Html(`+"`"+`<input type="text">`+"`"+`).Bind(Age) // *Store[int] binding`),
+		),
 
-		<section>
-			<h2>Checkbox Binding — Bool</h2>
-			<label>`, p.Html(`<input type="checkbox">`).Bind(b.DarkMode), ` Dark Mode</label>
-			`, p.Html(`<div>This box uses dark mode styling when checked.</div>`).AttrIf("class", p.Cond(func() bool { return b.DarkMode.Get() }, b.DarkMode), "dark"), `
-			<pre class="code">DarkMode := p.New(false)
-p.Html(`+"`"+`&lt;input type="checkbox">`+"`"+`).Bind(DarkMode) // *Store[bool]
+		// Checkbox Binding — Bool
+		p.Section(
+			p.H2("Checkbox Binding — Bool"),
+			p.Label(p.Input(p.Attr("type", "checkbox")).Bind(b.DarkMode), " Dark Mode"),
+			p.Div("This box uses dark mode styling when checked.").AttrIf("class", p.Cond(func() bool { return b.DarkMode.Get() }, b.DarkMode), "dark"),
+			p.Pre(p.Attr("class", "code"), `DarkMode := p.New(false)
+p.Html(`+"`"+`<input type="checkbox">`+"`"+`).Bind(DarkMode) // *Store[bool]
 
 // AttrIf: conditionally add a class
-p.Html(`+"`"+`&lt;div>...&lt;/div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")</pre>
-		</section>
+p.Html(`+"`"+`<div>...</div>`+"`"+`).AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")`),
+		),
 
-		<section>
-			<h2>Form — PreventDefault</h2>
-			`, p.Html(`<form>
-				<label>Name: `, p.Html(`<input type="text" placeholder="Your name">`).Bind(b.Name), `</label>
-				<label>`, p.Html(`<input type="checkbox">`).Bind(b.Agreed), ` I agree to the terms</label>
-				<button type="submit">Submit</button>
-			</form>`).On("submit", b.Submit).PreventDefault(), `
-			<p class="message">`, b.Message, `</p>
-			<pre class="code">p.Html(`+"`"+`&lt;form>...&lt;/form>`+"`"+`).On("submit", Submit).PreventDefault()
+		// Form — PreventDefault
+		p.Section(
+			p.H2("Form — PreventDefault"),
+			p.Form(
+				p.Label("Name: ", p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Your name")).Bind(b.Name)),
+				p.Label(p.Input(p.Attr("type", "checkbox")).Bind(b.Agreed), " I agree to the terms"),
+				p.Button(p.Attr("type", "submit"), "Submit"),
+			).On("submit", b.Submit).PreventDefault(),
+			p.P(p.Attr("class", "message"), b.Message),
+			p.Pre(p.Attr("class", "code"), `p.Html(`+"`"+`<form>...</form>`+"`"+`).On("submit", Submit).PreventDefault()
 
-// also available: .StopPropagation()</pre>
-		</section>
+// also available: .StopPropagation()`),
+		),
 
-		<section>
-			<h2>StopPropagation</h2>
-			<p>Click the inner button — only inner handler fires, not outer:</p>
-			`, p.Html(`<div class="outer-click">
-				Outer (click me)
-				<div>`, p.Html(`<button>Inner (click me)</button>`).On("click", func() {
-			b.Message.Set("Inner clicked!")
-		}).StopPropagation(), `</div>
-			</div>`).On("click", func() {
-			b.Message.Set("Outer clicked!")
-		}), `
-			<p class="message">`, b.Message, `</p>
-			<pre class="code">// inner button stops event from reaching outer div
-p.Html(`+"`"+`&lt;button>Inner&lt;/button>`+"`"+`).On("click", handler).StopPropagation()</pre>
-		</section>
+		// StopPropagation
+		p.Section(
+			p.H2("StopPropagation"),
+			p.P("Click the inner button — only inner handler fires, not outer:"),
+			p.Div(p.Attr("class", "outer-click"),
+				"Outer (click me)",
+				p.Div(p.Button("Inner (click me)").On("click", func() {
+					b.Message.Set("Inner clicked!")
+				}).StopPropagation()),
+			).On("click", func() {
+				b.Message.Set("Outer clicked!")
+			}),
+			p.P(p.Attr("class", "message"), b.Message),
+			p.Pre(p.Attr("class", "code"), `// inner button stops event from reaching outer div
+p.Html(`+"`"+`<button>Inner</button>`+"`"+`).On("click", handler).StopPropagation()`),
+		),
 
-		<section>
-			<h2>BindAsHTML — Raw HTML Rendering</h2>
-			<label>HTML: `, p.Html(`<input type="text">`).Bind(b.RawHTML), `</label>
-			<p>Rendered: `, p.BindAsHTML(b.RawHTML), `</p>
-			<pre class="code">RawHTML := p.New("&lt;em>Hello&lt;/em> &lt;strong>World&lt;/strong>")
-p.BindAsHTML(RawHTML) // renders as innerHTML (not escaped)</pre>
-		</section>
-
-	</div>`)
+		// BindAsHTML — Raw HTML Rendering
+		p.Section(
+			p.H2("BindAsHTML — Raw HTML Rendering"),
+			p.Label("HTML: ", p.Input(p.Attr("type", "text")).Bind(b.RawHTML)),
+			p.P("Rendered: ", p.BindAsHTML(b.RawHTML)),
+			p.Pre(p.Attr("class", "code"), `RawHTML := p.New("<em>Hello</em> <strong>World</strong>")
+p.BindAsHTML(RawHTML) // renders as innerHTML (not escaped)`),
+		),
+	)
 }
 
 func (b *Basics) Style() string {

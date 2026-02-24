@@ -75,7 +75,30 @@ TINYGO_FLAGS="-target wasm -scheduler=asyncify -gc=leaking"
 if [ "$RELEASE_MODE" = true ]; then
     TINYGO_FLAGS="$TINYGO_FLAGS -panic=trap -no-debug"
 fi
-tinygo build -o "$PROJECT_DIR/dist/main.wasm" $TINYGO_FLAGS "$PROJECT_DIR"
+# tinygo may not support the system Go version — extract its max supported version
+# and use a matching Go if available (installed via golang.org/dl)
+SYSTEM_GO_MINOR=$(go version | grep -oP 'go1\.\K[0-9]+')
+TINYGO_GOROOT=""
+if tinygo build -o /dev/null -target wasm . 2>&1 | grep -q "requires go version"; then
+    MAX_MINOR=$(tinygo build -o /dev/null -target wasm . 2>&1 | grep -oP 'through 1\.\K[0-9]+' | head -1)
+    if [ -n "$MAX_MINOR" ]; then
+        # Find highest patch version of go1.${MAX_MINOR} installed via golang.org/dl
+        COMPAT=$(ls ~/sdk/go1.${MAX_MINOR}*/bin/go 2>/dev/null | sort -V | tail -1)
+        if [ -n "$COMPAT" ]; then
+            TINYGO_GOROOT="$(dirname "$(dirname "$COMPAT")")"
+            echo "  tinygo needs Go ≤1.${MAX_MINOR}, using $TINYGO_GOROOT"
+        else
+            echo "Error: tinygo requires Go ≤1.${MAX_MINOR} but only Go 1.${SYSTEM_GO_MINOR} is installed."
+            echo "Install a compatible version: go install golang.org/dl/go1.${MAX_MINOR}.5@latest && go1.${MAX_MINOR}.5 download"
+            exit 1
+        fi
+    fi
+fi
+if [ -n "$TINYGO_GOROOT" ]; then
+    PATH="$TINYGO_GOROOT/bin:$PATH" GOROOT="$TINYGO_GOROOT" tinygo build -o "$PROJECT_DIR/dist/main.wasm" $TINYGO_FLAGS "$PROJECT_DIR"
+else
+    tinygo build -o "$PROJECT_DIR/dist/main.wasm" $TINYGO_FLAGS "$PROJECT_DIR"
+fi
 
 echo "Copying wasm_exec.js..."
 cp "$PROJECT_DIR/assets/wasm_exec.js" "$PROJECT_DIR/dist/"

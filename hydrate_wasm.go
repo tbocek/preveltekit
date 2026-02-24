@@ -66,6 +66,9 @@ func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
 
 	case *SlotNode:
 		// Slot content was already rendered, nothing to bind
+
+	case *TextNode:
+		// Static text, no bindings needed
 	}
 }
 

@@ -51,59 +51,59 @@ func (c *Complex) ClearLog() {
 }
 
 func (c *Complex) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Complex</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Complex"),
 
-		<section>
-			<h2>Shared Store</h2>
-			<p>Theme is shared between parent and all child components:</p>
-			<p>Current theme: <strong>`, c.Theme, `</strong></p>
-			<div class="buttons">`,
-		p.Html(`<button>Light</button>`).On("click", func() { c.Theme.Set("light"); c.Log.Append("Theme: light") }),
-		p.Html(`<button>Dark</button>`).On("click", func() { c.Theme.Set("dark"); c.Log.Append("Theme: dark") }),
-		p.Html(`<button>Blue</button>`).On("click", func() { c.Theme.Set("blue"); c.Log.Append("Theme: blue") }),
-		`</div>
-		</section>
+		p.Section(
+			p.H2("Shared Store"),
+			p.P("Theme is shared between parent and all child components:"),
+			p.P("Current theme: ", p.Strong(c.Theme)),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("Light").On("click", func() { c.Theme.Set("light"); c.Log.Append("Theme: light") }),
+				p.Button("Dark").On("click", func() { c.Theme.Set("dark"); c.Log.Append("Theme: dark") }),
+				p.Button("Blue").On("click", func() { c.Theme.Set("blue"); c.Log.Append("Theme: blue") }),
+			),
+		),
 
-		<section>
-			<h2>Nested Store[Component] Tabs</h2>
-			<p>Store[Component] inside a child component (not router-level):</p>
-			<div class="tab-bar">`,
-		p.Html(`<button>Dashboard</button>`).On("click", func() { c.SetTab(c.tabDashboard); c.Log.Append("Tab: dashboard") }),
-		p.Html(`<button>Settings</button>`).On("click", func() { c.SetTab(c.tabSettings); c.Log.Append("Tab: settings") }),
-		p.Html(`<button>Activity</button>`).On("click", func() { c.SetTab(c.tabActivity); c.Log.Append("Tab: activity") }),
-		`</div>
-			<div class="tab-content" `, p.Attr("data-theme", c.Theme), `>`,
-		c.ActiveTab, `
-			</div>
-		</section>
+		p.Section(
+			p.H2("Nested Store[Component] Tabs"),
+			p.P("Store[Component] inside a child component (not router-level):"),
+			p.Div(p.Attr("class", "tab-bar"),
+				p.Button("Dashboard").On("click", func() { c.SetTab(c.tabDashboard); c.Log.Append("Tab: dashboard") }),
+				p.Button("Settings").On("click", func() { c.SetTab(c.tabSettings); c.Log.Append("Tab: settings") }),
+				p.Button("Activity").On("click", func() { c.SetTab(c.tabActivity); c.Log.Append("Tab: activity") }),
+			),
+			p.Div(p.Attr("class", "tab-content"), p.Attr("data-theme", c.Theme),
+				c.ActiveTab,
+			),
+		),
 
-		<section>
-			<h2>Event Log (list inside if-block)</h2>
-			<p>Log entries: <strong>`, c.Log.Len(), `</strong></p>
-			<div class="buttons">`,
-		p.Html(`<button>Toggle Log</button>`).On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }),
-		p.Html(`<button>Clear Log</button>`).On("click", c.ClearLog),
-		`</div>`,
-		p.If(p.Cond(func() bool { return c.ShowLog.Get() }, c.ShowLog),
-			p.Html(`<ul class="log">`,
-				p.Each(c.Log, func(entry string, i int) p.Node {
-					return p.Html(`<li class="log-entry"><span class="log-idx">`, p.Itoa(i), `</span> `, entry, `</li>`)
-				}).Else(
-					p.Html(`<li class="empty">No log entries</li>`),
+		p.Section(
+			p.H2("Event Log (list inside if-block)"),
+			p.P("Log entries: ", p.Strong(c.Log.Len())),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("Toggle Log").On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }),
+				p.Button("Clear Log").On("click", c.ClearLog),
+			),
+			p.If(p.Cond(func() bool { return c.ShowLog.Get() }, c.ShowLog),
+				p.Ul(p.Attr("class", "log"),
+					p.Each(c.Log, func(entry string, i int) p.Node {
+						return p.Li(p.Attr("class", "log-entry"), p.Span(p.Attr("class", "log-idx"), p.Itoa(i)), " ", entry)
+					}).Else(
+						p.Li(p.Attr("class", "empty"), "No log entries"),
+					),
 				),
-				`</ul>`),
-		).Else(
-			p.Html(`<p class="hint">Log hidden</p>`),
-		), `
-		</section>
+			).Else(
+				p.P(p.Attr("class", "hint"), "Log hidden"),
+			),
+		),
 
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// shared store: pass same *Store to multiple components
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"), `// shared store: pass same *Store to multiple components
 theme := p.New("light")
-dashboard := &amp;Dashboard{Theme: theme}
-settings  := &amp;Settings{Theme: theme}
+dashboard := &Dashboard{Theme: theme}
+settings  := &Settings{Theme: theme}
 // both read and write the same store
 
 // Store[Component] as local tabs (not router):
@@ -112,18 +112,18 @@ activeTab.WithOptions(dashboard, settings, activity)
 // embed in HTML — swaps component on Set()
 
 // Attr(): dynamic attributes from stores
-p.Html(`+"`"+`&lt;div>`+"`"+`).Attr("data-theme", theme)
+p.Div(p.Attr("data-theme", theme))
 
 // nested reactivity: Each inside If
 p.If(p.Cond(func() bool { return showLog.Get() }, showLog),
-    p.Html(`+"`"+`&lt;ul>`+"`"+`,
+    p.Ul(
         p.Each(log, func(entry string, i int) p.Node {
-            return p.Html(`+"`"+`&lt;li>`+"`"+`, entry, `+"`"+`&lt;/li>`+"`"+`)
+            return p.Li(entry)
         }),
-    `+"`"+`&lt;/ul>`+"`"+`),
-)</pre>
-		</section>
-	</div>`)
+    ),
+)`),
+		),
+	)
 }
 
 func (c *Complex) Style() string {
@@ -150,15 +150,15 @@ type Dashboard struct {
 }
 
 func (d *Dashboard) Render() p.Node {
-	return p.Html(`<div>
-		<h3>Dashboard</h3>
-		<p>Theme: <strong>`, d.Theme, `</strong></p>
-		<p>Stats value: <strong>`, d.Stats, `</strong></p>
-		<div class="buttons">`,
-		p.Html(`<button>+10</button>`).On("click", func() { d.Stats.Update(func(v int) int { return v + 10 }); d.Log.Append("Stats +10") }),
-		p.Html(`<button>Reset</button>`).On("click", func() { d.Stats.Set(0); d.Log.Append("Stats reset") }),
-		`</div>
-	</div>`)
+	return p.Div(
+		p.H3("Dashboard"),
+		p.P("Theme: ", p.Strong(d.Theme)),
+		p.P("Stats value: ", p.Strong(d.Stats)),
+		p.Div(p.Attr("class", "buttons"),
+			p.Button("+10").On("click", func() { d.Stats.Update(func(v int) int { return v + 10 }); d.Log.Append("Stats +10") }),
+			p.Button("Reset").On("click", func() { d.Stats.Set(0); d.Log.Append("Stats reset") }),
+		),
+	)
 }
 
 // Settings — tab component that modifies the shared Theme store
@@ -169,20 +169,20 @@ type Settings struct {
 }
 
 func (s *Settings) Render() p.Node {
-	return p.Html(`<div>
-		<h3>Settings</h3>
-		<p>Font size: <strong>`, s.FontSize, `</strong>px</p>
-		<div class="buttons">`,
-		p.Html(`<button>Small (12)</button>`).On("click", func() { s.FontSize.Set(12); s.Log.Append("Font: 12px") }),
-		p.Html(`<button>Medium (14)</button>`).On("click", func() { s.FontSize.Set(14); s.Log.Append("Font: 14px") }),
-		p.Html(`<button>Large (18)</button>`).On("click", func() { s.FontSize.Set(18); s.Log.Append("Font: 18px") }),
-		`</div>
-		<p>Change theme from child:</p>
-		<div class="buttons">`,
-		p.Html(`<button>Light</button>`).On("click", func() { s.Theme.Set("light"); s.Log.Append("Settings: light") }),
-		p.Html(`<button>Dark</button>`).On("click", func() { s.Theme.Set("dark"); s.Log.Append("Settings: dark") }),
-		`</div>
-	</div>`)
+	return p.Div(
+		p.H3("Settings"),
+		p.P("Font size: ", p.Strong(s.FontSize), "px"),
+		p.Div(p.Attr("class", "buttons"),
+			p.Button("Small (12)").On("click", func() { s.FontSize.Set(12); s.Log.Append("Font: 12px") }),
+			p.Button("Medium (14)").On("click", func() { s.FontSize.Set(14); s.Log.Append("Font: 14px") }),
+			p.Button("Large (18)").On("click", func() { s.FontSize.Set(18); s.Log.Append("Font: 18px") }),
+		),
+		p.P("Change theme from child:"),
+		p.Div(p.Attr("class", "buttons"),
+			p.Button("Light").On("click", func() { s.Theme.Set("light"); s.Log.Append("Settings: light") }),
+			p.Button("Dark").On("click", func() { s.Theme.Set("dark"); s.Log.Append("Settings: dark") }),
+		),
+	)
 }
 
 // Activity — tab component that displays the shared Log as a list
@@ -192,18 +192,19 @@ type Activity struct {
 }
 
 func (a *Activity) Render() p.Node {
-	return p.Html(`<div>
-		<h3>Activity</h3>
-		<p>Theme: <strong>`, a.Theme, `</strong> | Entries: <strong>`, a.Log.Len(), `</strong></p>`,
+	return p.Div(
+		p.H3("Activity"),
+		p.P("Theme: ", p.Strong(a.Theme), " | Entries: ", p.Strong(a.Log.Len())),
 		p.If(p.Cond(func() bool { return a.Log.Len().Get() > 0 }, a.Log.Len()),
-			p.Html(`<ul class="activity-list">`,
+			p.Ul(p.Attr("class", "activity-list"),
 				p.Each(a.Log, func(entry string, i int) p.Node {
-					return p.Html(`<li>`, entry, `</li>`)
+					return p.Li(entry)
 				}),
-				`</ul>`),
+			),
 		).Else(
-			p.Html(`<p class="empty">No activity yet</p>`),
-		), `</div>`)
+			p.P(p.Attr("class", "empty"), "No activity yet"),
+		),
+	)
 }
 
 func (a *Activity) Style() string {

@@ -36,26 +36,26 @@ func (a *App) Routes() []p.Route {
 }
 
 func (a *App) Render() p.Node {
-	return p.Html(`
-	<header class="header">
-		<div class="header-inner">
-			<a href="./" class="brand">PrevelteKit</a>
-			<nav class="nav">
-				<a href="manual">Manual</a>
-				<a href="bitcoin">Bitcoin Demo</a>
-				<a href="https://github.com/tbocek/preveltekit" external>GitHub</a>
-			</nav>
-		</div>
-	</header>
-	<div id="content">`,
-		a.CurrentComponent,
-		`</div>
-	<footer class="footer">
-		<div class="container">
-			<p>SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required</p>
-		</div>
-	</footer>
-	`)
+	return p.Raw(
+		p.Header(p.Attr("class", "header"),
+			p.Div(p.Attr("class", "header-inner"),
+				p.A(p.Attr("href", "./"), p.Attr("class", "brand"), "PrevelteKit"),
+				p.Nav(p.Attr("class", "nav"),
+					p.A(p.Attr("href", "manual"), "Manual"),
+					p.A(p.Attr("href", "bitcoin"), "Bitcoin Demo"),
+					p.A(p.Attr("href", "https://github.com/tbocek/preveltekit"), p.Attr("external", ""), "GitHub"),
+				),
+			),
+		),
+		p.Div(p.Attr("id", "content"),
+			a.CurrentComponent,
+		),
+		p.Footer(p.Attr("class", "footer"),
+			p.Div(p.Attr("class", "container"),
+				p.P(p.Raw("SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required")),
+			),
+		),
+	)
 }
 
 func (a *App) GlobalStyle() string {

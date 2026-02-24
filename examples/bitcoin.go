@@ -100,30 +100,27 @@ func formatPrice(f float64) string {
 }
 
 func (b *Bitcoin) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Bitcoin Price</h1>
-
-		<section class="bitcoin-card">`,
-		p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
-			p.Html(`<p class="loading">Loading...</p>`),
-		).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
-			p.Html(`<p class="error">Error: `, b.Error, `</p>`,
-				p.Html(`<button>Retry</button>`).On("click", b.Retry)),
-		).Else(
-			p.Html(`<div class="price-info">
-					<span class="symbol">`, b.Symbol, `</span>
-					<span class="update-time">Updated: `, b.UpdateTime, ` UTC</span>
-				</div>
-				<p class="price">`, b.Price, `</p>
-				<small class="disclaimer">Prices are volatile and for reference only.</small>`),
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Bitcoin Price"),
+		p.Section(p.Attr("class", "bitcoin-card"),
+			p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
+				p.P(p.Attr("class", "loading"), "Loading..."),
+			).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
+				p.P(p.Attr("class", "error"), "Error: ", b.Error),
+				p.Button("Retry").On("click", b.Retry),
+			).Else(
+				p.Div(p.Attr("class", "price-info"),
+					p.Span(p.Attr("class", "symbol"), b.Symbol),
+					p.Span(p.Attr("class", "update-time"), "Updated: ", b.UpdateTime, " UTC"),
+				),
+				p.P(p.Attr("class", "price"), b.Price),
+				p.Small(p.Attr("class", "disclaimer"), "Prices are volatile and for reference only."),
+			),
 		),
-		p.Html(`</section>
-
-		<p class="hint">Price refreshes automatically every 60 seconds</p>
-
-		<section>
-			<h2>Code — Lifecycle</h2>
-			<pre class="code">// OnMount: called when component becomes active
+		p.P(p.Attr("class", "hint"), "Price refreshes automatically every 60 seconds"),
+		p.Section(
+			p.H2("Code — Lifecycle"),
+			p.Pre(p.Attr("class", "code"), `// OnMount: called when component becomes active
 func (b *Bitcoin) OnMount() {
     b.FetchPrice()
     b.stopRefresh = p.SetInterval(60000, func() {
@@ -139,9 +136,8 @@ func (b *Bitcoin) OnDestroy() {
 }
 
 // IsBuildTime guard: skip side effects during SSR
-if p.IsBuildTime { return }</pre>
-		</section>
-	</div>`),
+if p.IsBuildTime { return }`),
+		),
 	)
 }
 

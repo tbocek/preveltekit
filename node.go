@@ -25,11 +25,22 @@ type Condition interface {
 }
 
 // =============================================================================
-// Raw HTML Node
+// Text Node (auto-escaped text content)
 // =============================================================================
 
-// HtmlNode represents raw HTML with embedded nodes.
-// It allows mixing raw HTML strings with dynamic nodes like Bind, If, Each.
+// TextNode represents plain text content that is HTML-escaped on render.
+// Used by typed element functions (Div, Span, etc.) to safely handle string children.
+type TextNode struct {
+	Text string
+}
+
+func (t *TextNode) nodeType() string { return "text" }
+
+// =============================================================================
+// HTML Node
+// =============================================================================
+
+// HtmlNode represents an HTML element or raw HTML with embedded nodes.
 // Supports chainable AttrIf, On, and Bind methods.
 type HtmlNode struct {
 	Parts      []any        // strings, Nodes, or values to stringify
@@ -56,11 +67,219 @@ type HtmlEvent struct {
 
 func (h *HtmlNode) nodeType() string { return "html" }
 
-// Html creates a raw HTML node from strings and embedded nodes.
-// Example: Html(`<div class="foo">`, p.Bind(store), `</div>`)
-func Html(parts ...any) *HtmlNode {
+// Raw creates a raw HTML node from strings and embedded nodes.
+// Strings are NOT escaped — use this when you need to embed raw HTML.
+// Example: Raw(`<pre class="code">some &lt;html&gt;</pre>`)
+func Raw(parts ...any) *HtmlNode {
 	return &HtmlNode{Parts: parts}
 }
+
+// =============================================================================
+// Typed Element Functions
+// =============================================================================
+
+// isVoidElement returns true for HTML5 void elements (self-closing, no children).
+func isVoidElement(tag string) bool {
+	switch tag {
+	case "area", "base", "br", "col", "embed", "hr", "img", "input",
+		"link", "meta", "source", "track", "wbr":
+		return true
+	}
+	return false
+}
+
+// element is the internal helper for typed element functions.
+// It separates NodeAttr from children, bakes StaticAttr into the opening tag,
+// wraps string children in TextNode for auto-escaping, and keeps DynAttrAttr
+// as Parts (they need render context for ID generation).
+func element(tag string, parts ...any) *HtmlNode {
+	var staticAttrs []string
+	var dynAttrs []any
+	var children []any
+
+	for _, part := range parts {
+		switch v := part.(type) {
+		case *StaticAttr:
+			staticAttrs = append(staticAttrs, v.Name+`="`+escapeAttr(v.Value)+`"`)
+		case NodeAttr:
+			dynAttrs = append(dynAttrs, v)
+		case string:
+			children = append(children, &TextNode{Text: v})
+		default:
+			children = append(children, part)
+		}
+	}
+
+	var result []any
+
+	if len(dynAttrs) > 0 {
+		opening := "<" + tag
+		for _, sa := range staticAttrs {
+			opening += " " + sa
+		}
+		opening += " "
+		result = append(result, opening)
+		for i, da := range dynAttrs {
+			if i > 0 {
+				result = append(result, " ")
+			}
+			result = append(result, da)
+		}
+		result = append(result, ">")
+	} else {
+		opening := "<" + tag
+		for _, sa := range staticAttrs {
+			opening += " " + sa
+		}
+		opening += ">"
+		result = append(result, opening)
+	}
+
+	result = append(result, children...)
+
+	if !isVoidElement(tag) {
+		result = append(result, "</"+tag+">")
+	}
+
+	return &HtmlNode{Parts: result}
+}
+
+// El creates a typed element node for an arbitrary HTML tag.
+// String children are auto-escaped. NodeAttr values become attributes.
+// Example: El("custom-element", Attr("class", "foo"), "content")
+func El(tag string, parts ...any) *HtmlNode {
+	return element(tag, parts...)
+}
+
+// --- Sectioning / Structural ---
+
+func Div(parts ...any) *HtmlNode     { return element("div", parts...) }
+func Main(parts ...any) *HtmlNode    { return element("main", parts...) }
+func Header(parts ...any) *HtmlNode  { return element("header", parts...) }
+func Footer(parts ...any) *HtmlNode  { return element("footer", parts...) }
+func Nav(parts ...any) *HtmlNode     { return element("nav", parts...) }
+func Section(parts ...any) *HtmlNode { return element("section", parts...) }
+func Article(parts ...any) *HtmlNode { return element("article", parts...) }
+func Aside(parts ...any) *HtmlNode   { return element("aside", parts...) }
+
+// --- Headings ---
+
+func H1(parts ...any) *HtmlNode { return element("h1", parts...) }
+func H2(parts ...any) *HtmlNode { return element("h2", parts...) }
+func H3(parts ...any) *HtmlNode { return element("h3", parts...) }
+func H4(parts ...any) *HtmlNode { return element("h4", parts...) }
+func H5(parts ...any) *HtmlNode { return element("h5", parts...) }
+func H6(parts ...any) *HtmlNode { return element("h6", parts...) }
+
+// --- Text ---
+
+func P(parts ...any) *HtmlNode          { return element("p", parts...) }
+func Span(parts ...any) *HtmlNode       { return element("span", parts...) }
+func Strong(parts ...any) *HtmlNode     { return element("strong", parts...) }
+func Em(parts ...any) *HtmlNode         { return element("em", parts...) }
+func B(parts ...any) *HtmlNode          { return element("b", parts...) }
+func I(parts ...any) *HtmlNode          { return element("i", parts...) }
+func U(parts ...any) *HtmlNode          { return element("u", parts...) }
+func S(parts ...any) *HtmlNode          { return element("s", parts...) }
+func Small(parts ...any) *HtmlNode      { return element("small", parts...) }
+func Mark(parts ...any) *HtmlNode       { return element("mark", parts...) }
+func Sub(parts ...any) *HtmlNode        { return element("sub", parts...) }
+func Sup(parts ...any) *HtmlNode        { return element("sup", parts...) }
+func Abbr(parts ...any) *HtmlNode       { return element("abbr", parts...) }
+func Cite(parts ...any) *HtmlNode       { return element("cite", parts...) }
+func Q(parts ...any) *HtmlNode          { return element("q", parts...) }
+func Blockquote(parts ...any) *HtmlNode { return element("blockquote", parts...) }
+func Code(parts ...any) *HtmlNode       { return element("code", parts...) }
+func Pre(parts ...any) *HtmlNode        { return element("pre", parts...) }
+func Kbd(parts ...any) *HtmlNode        { return element("kbd", parts...) }
+func Samp(parts ...any) *HtmlNode       { return element("samp", parts...) }
+func Var(parts ...any) *HtmlNode        { return element("var", parts...) }
+
+// --- Lists ---
+
+func Ul(parts ...any) *HtmlNode { return element("ul", parts...) }
+func Ol(parts ...any) *HtmlNode { return element("ol", parts...) }
+func Li(parts ...any) *HtmlNode { return element("li", parts...) }
+func Dl(parts ...any) *HtmlNode { return element("dl", parts...) }
+func Dt(parts ...any) *HtmlNode { return element("dt", parts...) }
+func Dd(parts ...any) *HtmlNode { return element("dd", parts...) }
+
+// --- Links / Media ---
+
+func A(parts ...any) *HtmlNode          { return element("a", parts...) }
+func Img(parts ...any) *HtmlNode        { return element("img", parts...) }
+func Audio(parts ...any) *HtmlNode      { return element("audio", parts...) }
+func Video(parts ...any) *HtmlNode      { return element("video", parts...) }
+func Source(parts ...any) *HtmlNode     { return element("source", parts...) }
+func Picture(parts ...any) *HtmlNode    { return element("picture", parts...) }
+func Figure(parts ...any) *HtmlNode     { return element("figure", parts...) }
+func Figcaption(parts ...any) *HtmlNode { return element("figcaption", parts...) }
+func Canvas(parts ...any) *HtmlNode     { return element("canvas", parts...) }
+func Svg(parts ...any) *HtmlNode        { return element("svg", parts...) }
+
+// --- Tables ---
+
+func Table(parts ...any) *HtmlNode    { return element("table", parts...) }
+func Thead(parts ...any) *HtmlNode    { return element("thead", parts...) }
+func Tbody(parts ...any) *HtmlNode    { return element("tbody", parts...) }
+func Tfoot(parts ...any) *HtmlNode    { return element("tfoot", parts...) }
+func Tr(parts ...any) *HtmlNode       { return element("tr", parts...) }
+func Th(parts ...any) *HtmlNode       { return element("th", parts...) }
+func Td(parts ...any) *HtmlNode       { return element("td", parts...) }
+func Caption(parts ...any) *HtmlNode  { return element("caption", parts...) }
+func Colgroup(parts ...any) *HtmlNode { return element("colgroup", parts...) }
+func Col(parts ...any) *HtmlNode      { return element("col", parts...) }
+
+// --- Forms ---
+
+func Form(parts ...any) *HtmlNode     { return element("form", parts...) }
+func Input(parts ...any) *HtmlNode    { return element("input", parts...) }
+func Textarea(parts ...any) *HtmlNode { return element("textarea", parts...) }
+func Select(parts ...any) *HtmlNode   { return element("select", parts...) }
+func Option(parts ...any) *HtmlNode   { return element("option", parts...) }
+func Optgroup(parts ...any) *HtmlNode { return element("optgroup", parts...) }
+func Button(parts ...any) *HtmlNode   { return element("button", parts...) }
+func Label(parts ...any) *HtmlNode    { return element("label", parts...) }
+func Fieldset(parts ...any) *HtmlNode { return element("fieldset", parts...) }
+func Legend(parts ...any) *HtmlNode   { return element("legend", parts...) }
+func Datalist(parts ...any) *HtmlNode { return element("datalist", parts...) }
+func Output(parts ...any) *HtmlNode   { return element("output", parts...) }
+func Progress(parts ...any) *HtmlNode { return element("progress", parts...) }
+func Meter(parts ...any) *HtmlNode    { return element("meter", parts...) }
+
+// --- Semantic ---
+
+func Details(parts ...any) *HtmlNode { return element("details", parts...) }
+func Summary(parts ...any) *HtmlNode { return element("summary", parts...) }
+func Dialog(parts ...any) *HtmlNode  { return element("dialog", parts...) }
+func Time(parts ...any) *HtmlNode    { return element("time", parts...) }
+func Data(parts ...any) *HtmlNode    { return element("data", parts...) }
+func Address(parts ...any) *HtmlNode { return element("address", parts...) }
+func Ruby(parts ...any) *HtmlNode    { return element("ruby", parts...) }
+func Rt(parts ...any) *HtmlNode      { return element("rt", parts...) }
+func Rp(parts ...any) *HtmlNode      { return element("rp", parts...) }
+
+// --- Embedded ---
+
+func Iframe(parts ...any) *HtmlNode { return element("iframe", parts...) }
+func Embed(parts ...any) *HtmlNode  { return element("embed", parts...) }
+func Object(parts ...any) *HtmlNode { return element("object", parts...) }
+
+// --- Misc ---
+
+func Br(parts ...any) *HtmlNode       { return element("br", parts...) }
+func Hr(parts ...any) *HtmlNode       { return element("hr", parts...) }
+func Wbr(parts ...any) *HtmlNode      { return element("wbr", parts...) }
+func Area(parts ...any) *HtmlNode     { return element("area", parts...) }
+func Base(parts ...any) *HtmlNode     { return element("base", parts...) }
+func Link(parts ...any) *HtmlNode     { return element("link", parts...) }
+func Meta(parts ...any) *HtmlNode     { return element("meta", parts...) }
+func Script(parts ...any) *HtmlNode   { return element("script", parts...) }
+func Noscript(parts ...any) *HtmlNode { return element("noscript", parts...) }
+func Template(parts ...any) *HtmlNode { return element("template", parts...) }
+func Map(parts ...any) *HtmlNode      { return element("map", parts...) }
+func Del(parts ...any) *HtmlNode      { return element("del", parts...) }
+func Ins(parts ...any) *HtmlNode      { return element("ins", parts...) }
 
 // AttrIf adds a conditional attribute to the first HTML tag.
 // Values can be string literals or *Store[T] for reactive values.

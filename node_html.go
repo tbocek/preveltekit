@@ -432,6 +432,11 @@ func (s *SlotNode) ToHTML(ctx *BuildContext) string {
 	return ""
 }
 
+// ToHTML generates HTML for a text node (HTML-escaped).
+func (t *TextNode) ToHTML(ctx *BuildContext) string {
+	return escapeHTML(t.Text)
+}
+
 // nodeToHTML dispatches to the appropriate ToHTML method.
 func nodeToHTML(n Node, ctx *BuildContext) string {
 	switch node := n.(type) {
@@ -446,6 +451,8 @@ func nodeToHTML(n Node, ctx *BuildContext) string {
 	case *ComponentNode:
 		return node.ToHTML(ctx)
 	case *SlotNode:
+		return node.ToHTML(ctx)
+	case *TextNode:
 		return node.ToHTML(ctx)
 	default:
 		return ""

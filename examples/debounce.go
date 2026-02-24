@@ -75,54 +75,49 @@ func (d *Debounce) Reset() {
 }
 
 func (d *Debounce) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Debounce &amp; Throttle</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Debounce & Throttle"),
 
-		<section>
-			<h2>Debounced Search</h2>
-			<p>Search triggers 300ms after you stop typing.</p>
-
-			`, p.Html(`<input type="text" placeholder="Type to search...">`).Bind(d.SearchInput), `
-			<div class="stats">
-				<span>Status: <strong>`, d.Status, `</strong></span>
-				<span>API calls: <strong>`, d.SearchCount, `</strong></span>
-			</div>`,
-
-		p.If(p.Cond(func() bool { return d.SearchResult.Get() != "" }, d.SearchResult),
-			p.Html(`<div class="result">`, d.SearchResult, `</div>`),
+		p.Section(
+			p.H2("Debounced Search"),
+			p.P("Search triggers 300ms after you stop typing."),
+			p.Input(p.Attr("type", "text"), p.Attr("placeholder", "Type to search...")).Bind(d.SearchInput),
+			p.Div(p.Attr("class", "stats"),
+				p.Span("Status: ", p.Strong(d.Status)),
+				p.Span("API calls: ", p.Strong(d.SearchCount)),
+			),
+			p.If(p.Cond(func() bool { return d.SearchResult.Get() != "" }, d.SearchResult),
+				p.Div(p.Attr("class", "result"), d.SearchResult),
+			),
+			p.P(p.Attr("class", "hint"), "Type quickly - search only fires once you pause."),
 		),
 
-		p.Html(`<p class="hint">Type quickly - search only fires once you pause.</p>
-		</section>
+		p.Section(
+			p.H2("Throttled Clicks"),
+			p.P("Button action throttled to max once per 500ms."),
+			p.Button("Click me rapidly!").On("click", d.OnClick),
+			p.Div(p.Attr("class", "stats"),
+				p.Span("Total clicks: ", p.Strong(d.ClickCount)),
+				p.Span("Throttled actions: ", p.Strong(d.ThrottleCount)),
+			),
+			p.P(p.Attr("class", "hint"), "Click fast - throttled count increases slowly."),
+		),
 
-		<section>
-			<h2>Throttled Clicks</h2>
-			<p>Button action throttled to max once per 500ms.</p>
+		p.Section(
+			p.H2("SetTimeout \u2014 One-Shot Timer"),
+			p.P("Fires once after a delay."),
+			p.Button("Start 2s Timer").On("click", d.StartTimer),
+			p.P("Timer: ", p.Strong(d.TimerStatus)),
+		),
 
-			`, p.Html(`<button>Click me rapidly!</button>`).On("click", d.OnClick), `
+		p.Section(
+			p.Button("Reset All").On("click", d.Reset),
+		),
 
-			<div class="stats">
-				<span>Total clicks: <strong>`, d.ClickCount, `</strong></span>
-				<span>Throttled actions: <strong>`, d.ThrottleCount, `</strong></span>
-			</div>
-
-			<p class="hint">Click fast - throttled count increases slowly.</p>
-		</section>
-
-		<section>
-			<h2>SetTimeout — One-Shot Timer</h2>
-			<p>Fires once after a delay.</p>
-			`, p.Html(`<button>Start 2s Timer</button>`).On("click", d.StartTimer), `
-			<p>Timer: <strong>`, d.TimerStatus, `</strong></p>
-		</section>
-
-		<section>
-			`, p.Html(`<button>Reset All</button>`).On("click", d.Reset), `
-		</section>
-
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// debounce: fires after idle period
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"),
+				`// debounce: fires after idle period
 doSearch, cleanup := p.Debounce(300, func() {
     // fires 300ms after last call
 })
@@ -144,9 +139,8 @@ cancel() // cancel before it fires
 stop := p.SetInterval(60000, func() {
     // fires every 60 seconds
 })
-stop() // stop the interval</pre>
-		</section>
-	</div>`),
+stop() // stop the interval`),
+		),
 	)
 }
 

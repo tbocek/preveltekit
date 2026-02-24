@@ -55,27 +55,27 @@ func (a *App) Routes() []p.Route {
 }
 
 func (a *App) Render() p.Node {
-	return p.Html(`<div class="showcase">
-		<nav class="sidebar">
-			<h2>Reactive</h2>
-			<ul>
-				<li><a href="/basics">Basics</a></li>
-				<li><a href="/derived">Derived</a></li>
-				<li><a href="/complex">Complex</a></li>
-				<li><a href="/components">Components</a></li>
-				<li><a href="/lists">Lists</a></li>
-				<li><a href="/routing">Routing</a></li>
-				<li><a href="/links">Links</a></li>
-				<li><a href="/fetch">Fetch</a></li>
-				<li><a href="/storage">Storage</a></li>
-				<li><a href="/debounce">Debounce</a></li>
-				<li><a href="/bitcoin">Bitcoin</a></li>
-			</ul>
-		</nav>
-		<main id="content" class="content">`,
-		a.CurrentComponent,
-		`</main>
-	</div>`)
+	return p.Div(p.Attr("class", "showcase"),
+		p.Nav(p.Attr("class", "sidebar"),
+			p.H2("Reactive"),
+			p.Ul(
+				p.Li(p.A(p.Attr("href", "/basics"), "Basics")),
+				p.Li(p.A(p.Attr("href", "/derived"), "Derived")),
+				p.Li(p.A(p.Attr("href", "/complex"), "Complex")),
+				p.Li(p.A(p.Attr("href", "/components"), "Components")),
+				p.Li(p.A(p.Attr("href", "/lists"), "Lists")),
+				p.Li(p.A(p.Attr("href", "/routing"), "Routing")),
+				p.Li(p.A(p.Attr("href", "/links"), "Links")),
+				p.Li(p.A(p.Attr("href", "/fetch"), "Fetch")),
+				p.Li(p.A(p.Attr("href", "/storage"), "Storage")),
+				p.Li(p.A(p.Attr("href", "/debounce"), "Debounce")),
+				p.Li(p.A(p.Attr("href", "/bitcoin"), "Bitcoin")),
+			),
+		),
+		p.Main(p.Attr("id", "content"), p.Attr("class", "content"),
+			a.CurrentComponent,
+		),
+	)
 }
 
 func (a *App) GlobalStyle() string {

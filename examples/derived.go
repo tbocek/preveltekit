@@ -77,35 +77,37 @@ func (d *Derived) DecrementAge() {
 }
 
 func (d *Derived) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Derived Stores</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Derived Stores"),
 
-		<section>
-			<h2>Derived1 — Single Source</h2>
-			<p class="hint">A store computed from one source. Type below to see the uppercase transform.</p>
-			<label>Input: `, p.Html(`<input type="text">`).Bind(d.Name), `</label>
-			<p>Uppercase: <strong>`, d.Uppercase, `</strong></p>
-		</section>
+		p.Section(
+			p.H2("Derived1 — Single Source"),
+			p.P(p.Attr("class", "hint"), "A store computed from one source. Type below to see the uppercase transform."),
+			p.Label("Input: ", p.Input(p.Attr("type", "text")).Bind(d.Name)),
+			p.P("Uppercase: ", p.Strong(d.Uppercase)),
+		),
 
-		<section>
-			<h2>Derived2 — Two Sources</h2>
-			<p class="hint">A store computed from two sources. Edit first or last name.</p>
-			<label>First: `, p.Html(`<input type="text">`).Bind(d.First), `</label>
-			<label>Last: `, p.Html(`<input type="text">`).Bind(d.Last), `</label>
-			<p>Full name: <strong>`, d.FullName, `</strong></p>
-		</section>
+		p.Section(
+			p.H2("Derived2 — Two Sources"),
+			p.P(p.Attr("class", "hint"), "A store computed from two sources. Edit first or last name."),
+			p.Label("First: ", p.Input(p.Attr("type", "text")).Bind(d.First)),
+			p.Label("Last: ", p.Input(p.Attr("type", "text")).Bind(d.Last)),
+			p.P("Full name: ", p.Strong(d.FullName)),
+		),
 
-		<section>
-			<h2>Derived3 — Three Sources</h2>
-			<p class="hint">A store computed from three sources. Change any input to update the summary.</p>
-			<p>Age: <strong>`, d.Age, `</strong></p>`,
-		p.Html(`<button>-1</button>`).On("click", d.DecrementAge),
-		p.Html(`<button>+1</button>`).On("click", d.IncrementAge),
-		`<p>Summary: <strong>`, d.Summary, `</strong></p>
-		</section>
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// Derived1: one source store -> computed store
+		p.Section(
+			p.H2("Derived3 — Three Sources"),
+			p.P(p.Attr("class", "hint"), "A store computed from three sources. Change any input to update the summary."),
+			p.P("Age: ", p.Strong(d.Age)),
+			p.Button("-1").On("click", d.DecrementAge),
+			p.Button("+1").On("click", d.IncrementAge),
+			p.P("Summary: ", p.Strong(d.Summary)),
+		),
+
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"),
+				`// Derived1: one source store -> computed store
 uppercase := Derived1(name, strings.ToUpper)
 
 // Derived2: two source stores -> computed store
@@ -123,9 +125,9 @@ func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
     out := p.New(fn(a.Get()))
     a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
     return out
-}</pre>
-		</section>
-	</div>`)
+}`),
+		),
+	)
 }
 
 func (d *Derived) Style() string {

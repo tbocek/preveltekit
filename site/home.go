@@ -9,136 +9,133 @@ func (h *Home) New() p.Component {
 }
 
 func (h *Home) Render() p.Node {
-	return p.Html(`
-	<section class="hero">
-		<div class="container">
-			<h1>PrevelteKit</h1>
-			<p class="tagline">A lightweight, high-performance web application framework written in Go, featuring server-side rendering with WebAssembly hydration.</p>
-			<div class="hero-badges">
-				<span class="badge">Go</span>
-				<span class="badge">SSR</span>
-				<span class="badge">WebAssembly</span>
-			</div>
-			<p class="hero-size">This entire site (3 pages, routing, live Bitcoin API) is <strong>~44 kB</strong> brotli-compressed.</p>
-		</div>
-	</section>
+	return p.Raw(
+		p.Section(p.Attr("class", "hero"),
+			p.Div(p.Attr("class", "container"),
+				p.H1("PrevelteKit"),
+				p.P(p.Attr("class", "tagline"), "A lightweight, high-performance web application framework written in Go, featuring server-side rendering with WebAssembly hydration."),
+				p.Div(p.Attr("class", "hero-badges"),
+					p.Span(p.Attr("class", "badge"), "Go"),
+					p.Span(p.Attr("class", "badge"), "SSR"),
+					p.Span(p.Attr("class", "badge"), "WebAssembly"),
+				),
+				p.P(p.Attr("class", "hero-size"), p.Raw("This entire site (3 pages, routing, live Bitcoin API) is <strong>~44 kB</strong> brotli-compressed.")),
+			),
+		),
 
-	<section class="highlights">
-		<div class="container">
-			<div class="highlight-grid">
-				<div class="highlight-card">
-					<h3>Static-first architecture</h3>
-					<p>Deploy anywhere as pure HTML + WASM. No server runtime needed — works on GitHub Pages, S3, or any CDN.</p>
-				</div>
-				<div class="highlight-card">
-					<h3>Lightning fast builds</h3>
-					<p>Native Go compiler for SSR, TinyGo for WASM. No bundler, no transpiler, no build tool chain.</p>
-				</div>
-				<div class="highlight-card">
-					<h3>No JavaScript ecosystem</h3>
-					<p>Pure Go from component to deployment. No npm, no node_modules, no package.json.</p>
-				</div>
-			</div>
-		</div>
-	</section>
+		p.Section(p.Attr("class", "highlights"),
+			p.Div(p.Attr("class", "container"),
+				p.Div(p.Attr("class", "highlight-grid"),
+					p.Div(p.Attr("class", "highlight-card"),
+						p.H3("Static-first architecture"),
+						p.P("Deploy anywhere as pure HTML + WASM. No server runtime needed — works on GitHub Pages, S3, or any CDN."),
+					),
+					p.Div(p.Attr("class", "highlight-card"),
+						p.H3("Lightning fast builds"),
+						p.P("Native Go compiler for SSR, TinyGo for WASM. No bundler, no transpiler, no build tool chain."),
+					),
+					p.Div(p.Attr("class", "highlight-card"),
+						p.H3("No JavaScript ecosystem"),
+						p.P("Pure Go from component to deployment. No npm, no node_modules, no package.json."),
+					),
+				),
+			),
+		),
 
-	<section class="explore">
-		<div class="container">
-			<h2>Explore</h2>
-			<div class="explore-grid">
-				<div class="explore-card">
-					<h3>Manual</h3>
-					<p>API reference covering stores, components, routing, fetch, and more.</p>
-					<div class="explore-links">
-						<a href="manual">Client-side</a>
-						<a href="manual" external>Server-side</a>
-					</div>
-				</div>
-				<div class="explore-card">
-					<h3>Bitcoin Price Demo</h3>
-					<p>Live Bitcoin price fetched from an API with auto-refresh — a real-world example.</p>
-					<div class="explore-links">
-						<a href="bitcoin">Client-side</a>
-						<a href="bitcoin" external>Server-side</a>
-					</div>
-				</div>
-				<div class="explore-card">
-					<h3>Examples</h3>
-					<p>Interactive showcase with 11 examples: basics, lists, routing, fetch, storage, and more.</p>
-					<div class="explore-links">
-						<a href="https://github.com/tbocek/preveltekit/tree/main/examples" external>View on GitHub</a>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
+		p.Section(p.Attr("class", "explore"),
+			p.Div(p.Attr("class", "container"),
+				p.H2("Explore"),
+				p.Div(p.Attr("class", "explore-grid"),
+					p.Div(p.Attr("class", "explore-card"),
+						p.H3("Manual"),
+						p.P("API reference covering stores, components, routing, fetch, and more."),
+						p.Div(p.Attr("class", "explore-links"),
+							p.A(p.Attr("href", "manual"), "Client-side"),
+							p.A(p.Attr("href", "manual"), p.Attr("external", ""), "Server-side"),
+						),
+					),
+					p.Div(p.Attr("class", "explore-card"),
+						p.H3("Bitcoin Price Demo"),
+						p.P("Live Bitcoin price fetched from an API with auto-refresh — a real-world example."),
+						p.Div(p.Attr("class", "explore-links"),
+							p.A(p.Attr("href", "bitcoin"), "Client-side"),
+							p.A(p.Attr("href", "bitcoin"), p.Attr("external", ""), "Server-side"),
+						),
+					),
+					p.Div(p.Attr("class", "explore-card"),
+						p.H3("Examples"),
+						p.P("Interactive showcase with 11 examples: basics, lists, routing, fetch, storage, and more."),
+						p.Div(p.Attr("class", "explore-links"),
+							p.A(p.Attr("href", "https://github.com/tbocek/preveltekit/tree/main/examples"), p.Attr("external", ""), "View on GitHub"),
+						),
+					),
+				),
+			),
+		),
 
-	<section class="features">
-		<div class="container">
-			<h2>Features</h2>
-			<div class="feature-grid">
-				<div class="feature-card">
-					<div class="feature-icon">&#9889;</div>
-					<h3>Lightning Fast Builds</h3>
-					<p>Go compiles in milliseconds. TinyGo produces compact WASM binaries. No slow bundler step.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">&#9723;</div>
-					<h3>Minimalistic</h3>
-					<p>Small framework with no code generation, no intermediate files, no complex toolchain.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">&#9881;</div>
-					<h3>SSR + WASM Hydration</h3>
-					<p>Server-side rendered HTML for instant page loads. WebAssembly hydrates for interactivity.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">&#9729;</div>
-					<h3>Deploy Anywhere</h3>
-					<p>Output is pure static files. GitHub Pages, S3, Cloudflare, Netlify — any static host works.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">&#9989;</div>
-					<h3>Type-Safe</h3>
-					<p>Full Go type safety with compile-time error checking. Catch bugs before they reach production.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">&#9655;</div>
-					<h3>Zero Config</h3>
-					<p>Works with sensible defaults. Just <code>go run</code> for SSR and <code>tinygo build</code> for WASM.</p>
-				</div>
-			</div>
-		</div>
-	</section>
+		p.Section(p.Attr("class", "features"),
+			p.Div(p.Attr("class", "container"),
+				p.H2("Features"),
+				p.Div(p.Attr("class", "feature-grid"),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9889;")),
+						p.H3("Lightning Fast Builds"),
+						p.P("Go compiles in milliseconds. TinyGo produces compact WASM binaries. No slow bundler step."),
+					),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9723;")),
+						p.H3("Minimalistic"),
+						p.P("Small framework with no code generation, no intermediate files, no complex toolchain."),
+					),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9881;")),
+						p.H3("SSR + WASM Hydration"),
+						p.P("Server-side rendered HTML for instant page loads. WebAssembly hydrates for interactivity."),
+					),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9729;")),
+						p.H3("Deploy Anywhere"),
+						p.P("Output is pure static files. GitHub Pages, S3, Cloudflare, Netlify — any static host works."),
+					),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9989;")),
+						p.H3("Type-Safe"),
+						p.P("Full Go type safety with compile-time error checking. Catch bugs before they reach production."),
+					),
+					p.Div(p.Attr("class", "feature-card"),
+						p.Div(p.Attr("class", "feature-icon"), p.Raw("&#9655;")),
+						p.H3("Zero Config"),
+						p.P(p.Raw("Works with sensible defaults. Just <code>go run</code> for SSR and <code>tinygo build</code> for WASM.")),
+					),
+				),
+			),
+		),
 
-	<section class="quickstart">
-		<div class="container">
-			<h2>Quick Start</h2>
-			<p class="prereq">Requires <a href="https://go.dev/dl/" external>Go</a> and <a href="https://docs.docker.com/get-docker/" external>Docker</a>.</p>
-			<div class="steps">
-				<div class="step">
-					<div class="step-num">1</div>
-					<div class="step-content">
-						<h3>Create a new project</h3>
-						<pre><code>mkdir myapp && cd myapp
-go mod init myapp
-go run github.com/tbocek/preveltekit/v2/cmd/build@latest init</code></pre>
-						<p class="step-hint">Scaffolds <code>main.go</code>, <code>build.sh</code>, <code>Dockerfile</code>, and assets. Or copy from <a href="https://github.com/tbocek/preveltekit/tree/main/cmd/build/assets">cmd/build/assets/</a>.</p>
-					</div>
-				</div>
-				<div class="step">
-					<div class="step-num">2</div>
-					<div class="step-content">
-						<h3>Build and run with Docker</h3>
-						<pre><code>docker build -f Dockerfile.dev -t myapp-dev .
-docker run --init -p 8080:8080 -v $PWD:/app myapp-dev</code></pre>
-						<p class="step-hint">Open <code>http://localhost:8080</code> — live reload on file changes, no other dependencies required.</p>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-	`)
+		p.Section(p.Attr("class", "quickstart"),
+			p.Div(p.Attr("class", "container"),
+				p.H2("Quick Start"),
+				p.P(p.Attr("class", "prereq"), p.Raw(`Requires <a href="https://go.dev/dl/" external>Go</a> and <a href="https://docs.docker.com/get-docker/" external>Docker</a>.`)),
+				p.Div(p.Attr("class", "steps"),
+					p.Div(p.Attr("class", "step"),
+						p.Div(p.Attr("class", "step-num"), "1"),
+						p.Div(p.Attr("class", "step-content"),
+							p.H3("Create a new project"),
+							p.Pre(p.Code("mkdir myapp && cd myapp\ngo mod init myapp\ngo run github.com/tbocek/preveltekit/v2/cmd/build@latest init")),
+							p.P(p.Attr("class", "step-hint"), p.Raw(`Scaffolds <code>main.go</code>, <code>build.sh</code>, <code>Dockerfile</code>, and assets. Or copy from <a href="https://github.com/tbocek/preveltekit/tree/main/cmd/build/assets">cmd/build/assets/</a>.`)),
+						),
+					),
+					p.Div(p.Attr("class", "step"),
+						p.Div(p.Attr("class", "step-num"), "2"),
+						p.Div(p.Attr("class", "step-content"),
+							p.H3("Build and run with Docker"),
+							p.Pre(p.Code("docker build -f Dockerfile.dev -t myapp-dev .\ndocker run --init -p 8080:8080 -v $PWD:/app myapp-dev")),
+							p.P(p.Attr("class", "step-hint"), p.Raw(`Open <code>http://localhost:8080</code> — live reload on file changes, no other dependencies required.`)),
+						),
+					),
+				),
+			),
+		),
+	)
 }
 
 func (h *Home) Style() string {

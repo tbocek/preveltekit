@@ -52,53 +52,53 @@ func (s *Storage) ClearAll() {
 }
 
 func (s *Storage) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Storage</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Storage"),
 
-		<section>
-			<h2>Persisted Theme (Auto-sync)</h2>
-			<p>Theme preference is automatically saved to localStorage.</p>
-			<p>Current theme: <strong>`, s.Theme.Store, `</strong></p>
-			<div class="buttons">`,
-		p.Html(`<button>Light</button>`).On("click", s.SetLight),
-		p.Html(`<button>Dark</button>`).On("click", s.SetDark),
-		`</div>
-			<p class="hint">Refresh the page - theme will persist!</p>
-		</section>
+		p.Section(
+			p.H2("Persisted Theme (Auto-sync)"),
+			p.P("Theme preference is automatically saved to localStorage."),
+			p.P("Current theme: ", p.Strong(s.Theme.Store)),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("Light").On("click", s.SetLight),
+				p.Button("Dark").On("click", s.SetDark),
+			),
+			p.P(p.Attr("class", "hint"), "Refresh the page - theme will persist!"),
+		),
 
-		<section>
-			<h2>Manual Storage (Notes)</h2>
-			<p>Notes are saved manually when you click Save.</p>
-			`, p.Html(`<textarea placeholder="Type your notes here..."></textarea>`).Bind(s.Notes), `
-			<div class="buttons">`,
-		p.Html(`<button>Save Notes</button>`).On("click", s.SaveNotes),
-		p.Html(`<button>Clear Notes</button>`).On("click", s.ClearNotes),
-		`</div>
-		</section>
+		p.Section(
+			p.H2("Manual Storage (Notes)"),
+			p.P("Notes are saved manually when you click Save."),
+			p.Textarea(p.Attr("placeholder", "Type your notes here...")).Bind(s.Notes),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("Save Notes").On("click", s.SaveNotes),
+				p.Button("Clear Notes").On("click", s.ClearNotes),
+			),
+		),
 
-		<section>
-			<h2>Clear All Storage</h2>
-			`, p.Html(`<button class="danger">Clear All Storage</button>`).On("click", s.ClearAll), `
-		</section>
+		p.Section(
+			p.H2("Clear All Storage"),
+			p.Button(p.Attr("class", "danger"), "Clear All Storage").On("click", s.ClearAll),
+		),
 
-		<p class="status">`, s.Status, `</p>
+		p.P(p.Attr("class", "status"), s.Status),
 
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// auto-persisted store (syncs to localStorage on every Set)
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"), `// auto-persisted store (syncs to localStorage on every Set)
 Theme := p.NewLocalStore("theme", "light")
 Theme.Set("dark") // automatically saved
 
 // read the store value (it's a *Store[string] inside)
-Theme.Store // use in Html() like any store
+Theme.Store // use in Render like any store
 
 // manual localStorage API
 p.SetStorage("notes", "hello")
 saved := p.GetStorage("notes")
 p.RemoveStorage("notes")
-p.ClearStorage()</pre>
-		</section>
-	</div>`)
+p.ClearStorage()`),
+		),
+	)
 }
 
 func (s *Storage) Style() string {

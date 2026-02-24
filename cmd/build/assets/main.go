@@ -24,13 +24,13 @@ func (a *App) OnMount() {
 }
 
 func (a *App) Render() p.Node {
-	return p.Html(`<main>`, a.CurrentComponent, `</main>`)
+	return p.Main(a.CurrentComponent)
 }
 
 type Hello struct{}
 
 func (h *Hello) Render() p.Node {
-	return p.Html(`<h1>Hello, World!</h1>`)
+	return p.H1("Hello, World!")
 }
 
 func main() {

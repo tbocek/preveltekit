@@ -82,55 +82,55 @@ func (l *Lists) LoadNumbers() {
 }
 
 func (l *Lists) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Lists</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Lists"),
 
-		<section>
-			<h2>List Operations</h2>
-			<p>Items: <strong>`, l.Items.Len(), `</strong></p>
+		p.Section(
+			p.H2("List Operations"),
+			p.P("Items: ", p.Strong(l.Items.Len())),
 
-			<div class="input-row">`,
-		p.Html(`<input type="text" placeholder="New item name">`).Bind(l.NewItem),
-		`</div>
+			p.Div(p.Attr("class", "input-row"),
+				p.Input(p.Attr("type", "text"), p.Attr("placeholder", "New item name")).Bind(l.NewItem),
+			),
 
-			<div class="button-group">
-				<h3>Add</h3>`,
-		p.Html(`<button>Prepend</button>`).On("click", l.PrependItem),
-		p.Html(`<button>Insert Middle</button>`).On("click", l.InsertMiddle),
-		p.Html(`<button>Append</button>`).On("click", l.AddItem),
-		`</div>
+			p.Div(p.Attr("class", "button-group"),
+				p.H3("Add"),
+				p.Button("Prepend").On("click", l.PrependItem),
+				p.Button("Insert Middle").On("click", l.InsertMiddle),
+				p.Button("Append").On("click", l.AddItem),
+			),
 
-			<div class="button-group">
-				<h3>Remove</h3>`,
-		p.Html(`<button>First</button>`).On("click", l.RemoveFirst),
-		p.Html(`<button>Middle</button>`).On("click", l.RemoveMiddle),
-		p.Html(`<button>Last</button>`).On("click", l.RemoveLast),
-		p.Html(`<button>Clear All</button>`).On("click", l.ClearAll),
-		`</div>
+			p.Div(p.Attr("class", "button-group"),
+				p.H3("Remove"),
+				p.Button("First").On("click", l.RemoveFirst),
+				p.Button("Middle").On("click", l.RemoveMiddle),
+				p.Button("Last").On("click", l.RemoveLast),
+				p.Button("Clear All").On("click", l.ClearAll),
+			),
 
-			<div class="button-group">
-				<h3>Replace All (simulates fetch)</h3>`,
-		p.Html(`<button>Load Fruits</button>`).On("click", l.LoadFruits),
-		p.Html(`<button>Load Numbers</button>`).On("click", l.LoadNumbers),
-		`</div>
+			p.Div(p.Attr("class", "button-group"),
+				p.H3("Replace All (simulates fetch)"),
+				p.Button("Load Fruits").On("click", l.LoadFruits),
+				p.Button("Load Numbers").On("click", l.LoadNumbers),
+			),
 
-			<div class="list-container">
-				<h3>Current Items</h3>`,
-		p.If(p.Cond(func() bool { return l.Items.Len().Get() > 0 }, l.Items.Len()),
-			p.Html(`<ul>`,
-				p.Each(l.Items, func(item string, i int) p.Node {
-					return p.Html(`<li><span class="index">`, p.Itoa(i), `</span> `, item, `</li>`)
-				}),
-				`</ul>`),
-		).Else(
-			p.Html(`<p class="empty">No items in list</p>`),
-		), `
-			</div>
-		</section>
+			p.Div(p.Attr("class", "list-container"),
+				p.H3("Current Items"),
+				p.If(p.Cond(func() bool { return l.Items.Len().Get() > 0 }, l.Items.Len()),
+					p.Ul(
+						p.Each(l.Items, func(item string, i int) p.Node {
+							return p.Li(p.Span(p.Attr("class", "index"), p.Itoa(i)), " ", item)
+						}),
+					),
+				).Else(
+					p.P(p.Attr("class", "empty"), "No items in list"),
+				),
+			),
+		),
 
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// create a reactive list
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"), `// create a reactive list
 Items := p.NewList[string]("Apple", "Banana")
 
 // mutate — triggers re-render
@@ -145,15 +145,15 @@ p.Cond(func() bool { return Items.Len().Get() > 0 }, Items.Len()) // Condition
 
 // render with Each
 p.Each(Items, func(item string, i int) p.Node {
-    return p.Html(`+"`"+`&lt;li>`+"`"+`, item, `+"`"+`&lt;/li>`+"`"+`)
+    return p.Li(item)
 }).Else(
-    p.Html(`+"`"+`&lt;p>No items&lt;/p>`+"`"+`),
+    p.P("No items"),
 )
 
 // subscribe to changes
-Items.OnChange(func(items []string) { ... })</pre>
-		</section>
-	</div>`)
+Items.OnChange(func(items []string) { ... })`),
+		),
+	)
 }
 
 func (l *Lists) Style() string {

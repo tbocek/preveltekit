@@ -161,45 +161,45 @@ func (f *Fetch) DeletePost() {
 }
 
 func (f *Fetch) Render() p.Node {
-	return p.Html(`<div class="demo">
-		<h1>Fetch</h1>
+	return p.Div(p.Attr("class", "demo"),
+		p.H1("Fetch"),
 
-		<section>
-			<h2>GET — Typed Fetch</h2>
-			<p>Fetch data with automatic JSON decoding into Go structs:</p>
+		p.Section(
+			p.H2("GET — Typed Fetch"),
+			p.P("Fetch data with automatic JSON decoding into Go structs:"),
 
-			<div class="buttons">`,
-		p.Html(`<button>GET Todo</button>`).On("click", f.FetchTodo),
-		p.Html(`<button>GET User</button>`).On("click", f.FetchUser),
-		p.Html(`<button>GET Post</button>`).On("click", f.FetchPost),
-		`</div>`,
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("GET Todo").On("click", f.FetchTodo),
+				p.Button("GET User").On("click", f.FetchUser),
+				p.Button("GET Post").On("click", f.FetchPost),
+			),
 
-		p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
-			p.Html(`<pre>`, f.RawData, `</pre>`),
-		).Else(
-			p.Html(`<pre>Click a button to fetch data</pre>`),
+			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
+				p.Pre(f.RawData),
+			).Else(
+				p.Pre("Click a button to fetch data"),
+			),
+
+			p.P(p.Attr("class", "status"), "Status: ", f.Status),
 		),
 
-		p.Html(`<p class="status">Status: `, f.Status, `</p>
-		</section>
-
-		<section>
-			<h2>POST / PUT / PATCH / DELETE</h2>
-			<p>All HTTP methods with typed request and response bodies:</p>
-			<div class="buttons">`,
-			p.Html(`<button>POST Create</button>`).On("click", f.CreatePost),
-			p.Html(`<button>PUT Update</button>`).On("click", f.UpdatePost),
-			p.Html(`<button>PATCH Title</button>`).On("click", f.PatchPost),
-			p.Html(`<button>DELETE Post</button>`).On("click", f.DeletePost),
-			`</div>`,
-			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
-				p.Html(`<pre>`, f.RawData, `</pre>`),
+		p.Section(
+			p.H2("POST / PUT / PATCH / DELETE"),
+			p.P("All HTTP methods with typed request and response bodies:"),
+			p.Div(p.Attr("class", "buttons"),
+				p.Button("POST Create").On("click", f.CreatePost),
+				p.Button("PUT Update").On("click", f.UpdatePost),
+				p.Button("PATCH Title").On("click", f.PatchPost),
+				p.Button("DELETE Post").On("click", f.DeletePost),
 			),
-			`</section>
+			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
+				p.Pre(f.RawData),
+			),
+		),
 
-		<section>
-			<h2>Code</h2>
-			<pre class="code">// define response struct with js tags
+		p.Section(
+			p.H2("Code"),
+			p.Pre(p.Attr("class", "code"), `// define response struct with js tags
 type User struct {
     ID   int    `+"`"+`js:"id"`+"`"+`
     Name string `+"`"+`js:"name"`+"`"+`
@@ -231,15 +231,14 @@ func (f *Fetch) OnMount() {
 // advanced: custom headers, abort controller
 signal, abort := p.NewAbortController()
 go func() {
-    result, err := p.Fetch[T](url, &amp;p.FetchOptions{
+    result, err := p.Fetch[T](url, &p.FetchOptions{
         Method:  "GET",
         Headers: map[string]string{"Authorization": "Bearer token"},
         Signal:  signal,
     })
 }()
-abort() // cancel the request</pre>
-		</section>
-	</div>`),
+abort() // cancel the request`),
+		),
 	)
 }
 

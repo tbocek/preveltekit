@@ -50,6 +50,8 @@ func wasmNodeToHTML(n Node, ctx *WASMRenderContext) string {
 			return ctx.SlotContent
 		}
 		return ""
+	case *TextNode:
+		return escapeHTML(node.Text)
 	default:
 		return ""
 	}
