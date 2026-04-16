@@ -52,9 +52,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Resolve dependencies if needed
-if [ ! -f "$PROJECT_DIR/go.sum" ] || ! grep -q 'github.com/tbocek/preveltekit/v2' "$PROJECT_DIR/go.sum"; then
+if [ ! -f "$PROJECT_DIR/go.sum" ]; then
     echo "Resolving dependencies..."
-    (cd "$PROJECT_DIR" && go get github.com/tbocek/preveltekit/v2@latest)
+    (cd "$PROJECT_DIR" && go mod tidy)
 fi
 
 echo "Cleaning dist folder..."

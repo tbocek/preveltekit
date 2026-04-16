@@ -2,6 +2,6 @@ module site
 
 go 1.25
 
-require github.com/tbocek/preveltekit/v2 v2.1.13
+require github.com/tbocek/preveltekit/v2 v2.1.14
 
 replace github.com/tbocek/preveltekit/v2 => ../
