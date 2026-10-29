@@ -439,6 +439,33 @@ func (i *IfNode) Else(children ...Node) *IfNode {
 	return i
 }
 
+// bodies returns the children of every branch, followed by the else
+// children if there are any.
+func (i *IfNode) bodies() [][]Node {
+	bodies := make([][]Node, 0, len(i.Branches)+1)
+	for _, branch := range i.Branches {
+		bodies = append(bodies, branch.Children)
+	}
+	if len(i.ElseNode) > 0 {
+		bodies = append(bodies, i.ElseNode)
+	}
+	return bodies
+}
+
+// active returns the index into bodies() of the branch to show: the first
+// branch whose condition holds, else the else branch, or -1 for none.
+func (i *IfNode) active() int {
+	for idx, branch := range i.Branches {
+		if branch.Cond.Eval() {
+			return idx
+		}
+	}
+	if len(i.ElseNode) > 0 {
+		return len(i.Branches)
+	}
+	return -1
+}
+
 // =============================================================================
 // Each Node (list rendering)
 // =============================================================================

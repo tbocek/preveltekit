@@ -220,30 +220,16 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *renderContext, cleanup *cleanupBag) {
 func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextIfMarker()
 
-	// Advance counters through ALL branches to stay in sync with SSR.
-	// Save the counter state at the start of each branch so the bind pass
-	// can use the correct counters (matching what SSR produced in the HTML).
-	branchCounters := make([]IDCounter, len(ifNode.Branches))
-	for i, branch := range ifNode.Branches {
-		branchCounters[i] = ctx.IDCounter
-		branchCtx := &renderContext{
-			IDCounter:   ctx.IDCounter,
-			ScopeAttr:   ctx.ScopeAttr,
-			SlotContent: ctx.SlotContent,
-		}
-		childrenToHTML(branch.Children, branchCtx)
+	// Advance the counters through ALL branches like the renderer does, and
+	// save the counter state at the start of each branch: the branch is
+	// rendered and bound with it, so its IDs match the SSR HTML.
+	bodies := ifNode.bodies()
+	counters := make([]IDCounter, len(bodies))
+	for i, nodes := range bodies {
+		counters[i] = ctx.IDCounter
+		branchCtx := ctx.with(ctx.IDCounter)
+		childrenToHTML(nodes, branchCtx)
 		ctx.IDCounter = branchCtx.IDCounter
-	}
-	var elseCounter IDCounter
-	if len(ifNode.ElseNode) > 0 {
-		elseCounter = ctx.IDCounter
-		elseCtx := &renderContext{
-			IDCounter:   ctx.IDCounter,
-			ScopeAttr:   ctx.ScopeAttr,
-			SlotContent: ctx.SlotContent,
-		}
-		childrenToHTML(ifNode.ElseNode, elseCtx)
-		ctx.IDCounter = elseCtx.IDCounter
 	}
 
 	// Skip if already set up
@@ -252,105 +238,58 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 	}
 	setupBlocks[markerID] = true
 
-	currentCleanup := &cleanupBag{}
-	currentBranchIdx := -2
-
-	// Collect condition stores for subscription
-	var condStores []any
-	for _, branch := range ifNode.Branches {
-		if fc, ok := branch.Cond.(*FuncCondition); ok {
-			condStores = append(condStores, fc.Stores...)
-		}
-	}
-
-	scopeAttr := ctx.ScopeAttr
-	slotContent := ctx.SlotContent
-
-	updateIfBlock := func() {
-		activeBranchIdx := -1
-		var activeNodes []Node
-
-		for i, branch := range ifNode.Branches {
-			if branch.Cond.Eval() {
-				activeBranchIdx = i
-				activeNodes = branch.Children
-				break
-			}
-		}
-		if activeBranchIdx == -1 {
-			activeNodes = ifNode.ElseNode
-		}
-
-		if currentBranchIdx == activeBranchIdx && currentBranchIdx != -2 {
+	base := ctx.with(IDCounter{})
+	current := &cleanupBag{}
+	wire := func(idx int) {
+		if idx < 0 {
 			return
 		}
-		currentBranchIdx = activeBranchIdx
-
-		// Render active branch to HTML
-		renderCtx := &renderContext{
-			ScopeAttr:   scopeAttr,
-			SlotContent: slotContent,
+		bindCtx := base.with(counters[idx])
+		for _, child := range bodies[idx] {
+			wasmWalkAndBind(child, bindCtx, current)
 		}
-		html := childrenToHTML(activeNodes, renderCtx)
+	}
+
+	active := ifNode.active()
+	update := func() {
+		idx := ifNode.active()
+		if idx == active {
+			return
+		}
+		active = idx
+
+		var html string
+		if idx >= 0 {
+			html = childrenToHTML(bodies[idx], base.with(counters[idx]))
+		}
 		replaceMarkerContent(markerID, html)
 
-		// Release old bindings, wire new ones
-		currentCleanup.Release()
-		currentCleanup = &cleanupBag{}
-
-		// Re-walk the active branch nodes to wire bindings on new DOM
-		bindCtx := &renderContext{
-			ScopeAttr:   scopeAttr,
-			SlotContent: slotContent,
-		}
-		for _, child := range activeNodes {
-			wasmWalkAndBind(child, bindCtx, currentCleanup)
-		}
+		// Release old bindings, wire the new branch
+		current.Release()
+		current = &cleanupBag{}
+		wire(idx)
 	}
 
-	// Subscribe to condition stores
+	// Subscribe to the condition stores (each once)
 	seen := make(map[string]bool)
-	for _, store := range condStores {
-		if id, ok := store.(HasID); ok {
-			sid := id.ID()
-			if seen[sid] {
-				continue
+	for _, branch := range ifNode.Branches {
+		fc, ok := branch.Cond.(*FuncCondition)
+		if !ok {
+			continue
+		}
+		for _, store := range fc.Stores {
+			if id, ok := store.(HasID); ok {
+				if seen[id.ID()] {
+					continue
+				}
+				seen[id.ID()] = true
 			}
-			seen[sid] = true
-		}
-		subscribeToStore(store, updateIfBlock)
-	}
-
-	// Initial sync: wire bindings for the currently active branch
-	// (the DOM already has the correct HTML from SSR).
-	// Use the saved counter state from the counter-advance pass so
-	// marker IDs match what SSR put in the DOM.
-	activeBranchIdx := -1
-	var activeNodes []Node
-	var activeCounter IDCounter
-	for i, branch := range ifNode.Branches {
-		if branch.Cond.Eval() {
-			activeBranchIdx = i
-			activeNodes = branch.Children
-			activeCounter = branchCounters[i]
-			break
+			subscribeToStore(store, update)
 		}
 	}
-	if activeBranchIdx == -1 {
-		activeNodes = ifNode.ElseNode
-		activeCounter = elseCounter
-	}
-	currentBranchIdx = activeBranchIdx
 
-	// Wire bindings for the initially active branch with correct counters
-	bindCtx := &renderContext{
-		IDCounter:   activeCounter,
-		ScopeAttr:   scopeAttr,
-		SlotContent: slotContent,
-	}
-	for _, child := range activeNodes {
-		wasmWalkAndBind(child, bindCtx, currentCleanup)
-	}
+	// Wire the initially active branch (the DOM already has its SSR HTML)
+	wire(active)
 }
 
 // wasmBindEachNode wires an each-block with reactive list rendering.
@@ -363,40 +302,23 @@ func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBa
 	}
 	setupBlocks[markerID] = true
 
-	scopeAttr := ctx.ScopeAttr
+	base := ctx.with(IDCounter{})
 
-	// renderItems renders the current items (or the else content) to HTML.
-	renderItems := func() string {
-		items := eachNode.items()
-		if len(items) == 0 {
-			return childrenToHTML(eachNode.ElseNode, &renderContext{ScopeAttr: scopeAttr})
-		}
-		var html string
-		for i, item := range items {
-			html += nodeToHTML(eachNode.Body(item, i), &renderContext{ScopeAttr: scopeAttr})
-		}
-		return html
-	}
-
-	// bindItems wires the current items (or the else content) to the DOM.
+	// bindItems wires the current items (or the else content) to the DOM,
+	// with the same counters the renderer used for them.
 	bindItems := func(c *cleanupBag) {
-		items := eachNode.items()
-		if len(items) == 0 {
-			bindCtx := &renderContext{ScopeAttr: scopeAttr}
-			for _, child := range eachNode.ElseNode {
+		eachNode.forEach(markerID, func(nodes []Node, counter IDCounter) {
+			bindCtx := base.with(counter)
+			for _, child := range nodes {
 				wasmWalkAndBind(child, bindCtx, c)
 			}
-			return
-		}
-		for i, item := range items {
-			wasmWalkAndBind(eachNode.Body(item, i), &renderContext{ScopeAttr: scopeAttr}, c)
-		}
+		})
 	}
 
 	// On change: re-render, release the bindings of the previous render, wire the new items
 	current := &cleanupBag{}
 	eachNode.onChange(func() {
-		replaceMarkerContent(markerID, renderItems())
+		replaceMarkerContent(markerID, eachItemsHTML(eachNode, markerID, base))
 		current.Release()
 		current = &cleanupBag{}
 		bindItems(current)
@@ -525,10 +447,19 @@ func wasmBindComponentNode(c *ComponentNode, ctx *renderContext, cleanup *cleanu
 	}
 
 	fullCompPrefix := ctx.NextCompMarker()
+	scopeAttr := ctx.componentScope(c.Name, c.Instance)
 
-	var scopeAttr string
-	if _, ok := c.Instance.(HasStyle); ok {
-		scopeAttr = GetOrCreateScope(c.Name)
+	// Slot content for blocks inside the component that re-render. It is
+	// rendered on first use, with the counters the slot had: rendering it now
+	// would call Render() of nested components again and re-register handlers.
+	slotCtx := ctx.with(ctx.IDCounter)
+	var slotHTML *string
+	slot := func() string {
+		if slotHTML == nil {
+			html := childrenToHTML(c.Children, slotCtx)
+			slotHTML = &html
+		}
+		return *slotHTML
 	}
 
 	// Walk slot children with parent context
@@ -555,11 +486,7 @@ func wasmBindComponentNode(c *ComponentNode, ctx *renderContext, cleanup *cleanu
 	}
 
 	// Walk component's own Render tree with child context
-	childCtx := &renderContext{
-		IDCounter: IDCounter{Prefix: fullCompPrefix},
-		ScopeAttr: scopeAttr,
-	}
-	wasmWalkAndBind(tree, childCtx, cleanup)
+	wasmWalkAndBind(tree, ctx.component(fullCompPrefix, scopeAttr, slot), cleanup)
 }
 
 // replaceMarkerContent replaces all DOM nodes between <!--{markerID}s--> and <!--{markerID}-->

@@ -10,9 +10,9 @@ import "strings"
 // renderContext holds state while rendering a Node tree to HTML.
 type renderContext struct {
 	IDCounter
-	ScopeAttr   string           // CSS scope class of the current component (e.g. "v0"), added to every tag
-	SlotContent string           // HTML rendered in place of Slot()
-	styles      *collectedStyles // SSR: CSS of the rendered components (nil in WASM)
+	ScopeAttr string           // CSS scope class of the current component (e.g. "v0"), added to every tag
+	slot      func() string    // returns the HTML rendered in place of Slot() (nil: none)
+	styles    *collectedStyles // SSR: CSS of the rendered components (nil in WASM)
 }
 
 // collectedStyles holds the CSS of the rendered components by component name.
@@ -36,12 +36,12 @@ var renderedTrees = make(map[string][]cachedOption)
 // with returns a context in the same component (scope, slot, styles) with
 // the given counters.
 func (ctx *renderContext) with(c IDCounter) *renderContext {
-	return &renderContext{IDCounter: c, ScopeAttr: ctx.ScopeAttr, SlotContent: ctx.SlotContent, styles: ctx.styles}
+	return &renderContext{IDCounter: c, ScopeAttr: ctx.ScopeAttr, slot: ctx.slot, styles: ctx.styles}
 }
 
 // component returns the context for rendering a component's own tree.
-func (ctx *renderContext) component(prefix, scopeAttr, slot string) *renderContext {
-	return &renderContext{IDCounter: IDCounter{Prefix: prefix}, ScopeAttr: scopeAttr, SlotContent: slot, styles: ctx.styles}
+func (ctx *renderContext) component(prefix, scopeAttr string, slot func() string) *renderContext {
+	return &renderContext{IDCounter: IDCounter{Prefix: prefix}, ScopeAttr: scopeAttr, slot: slot, styles: ctx.styles}
 }
 
 // componentScope returns the CSS scope class of a component ("" if it has no
@@ -87,7 +87,9 @@ func nodeToHTML(n Node, ctx *renderContext) string {
 	case *ComponentNode:
 		return componentNodeToHTML(node, ctx)
 	case *SlotNode:
-		return ctx.SlotContent
+		if ctx.slot != nil {
+			return ctx.slot()
+		}
 	case *TextNode:
 		return escapeHTML(node.Text)
 	}
@@ -267,7 +269,7 @@ func renderStoreOptions(v *Store[Component], ctx *renderContext) (active string,
 			}
 		}
 		tree := optComp.Render()
-		html := nodeToHTML(tree, ctx.component(ctx.FullID(name), scopeAttr, ""))
+		html := nodeToHTML(tree, ctx.component(ctx.FullID(name), scopeAttr, nil))
 		if optComp == comp {
 			active = html
 		}
@@ -318,15 +320,31 @@ func ifNodeToHTML(i *IfNode, ctx *renderContext) string {
 // eachNodeToHTML renders an each-block.
 func eachNodeToHTML(e *EachNode, ctx *renderContext) string {
 	markerID := ctx.NextEachMarker()
+	return markedHTML(markerID, eachItemsHTML(e, markerID, ctx))
+}
+
+// eachItemsHTML renders the current items (or the else content) of an each-block.
+func eachItemsHTML(e *EachNode, markerID string, ctx *renderContext) string {
+	var sb strings.Builder
+	e.forEach(markerID, func(nodes []Node, c IDCounter) {
+		sb.WriteString(childrenToHTML(nodes, ctx.with(c)))
+	})
+	return sb.String()
+}
+
+// forEach calls fn with the nodes of every current item (or the else content
+// if the list is empty) and the counters to render or bind them with. Each
+// item has its own ID prefix (e.g. "e0_1"), the else content uses the marker
+// ID, so the IDs inside and after the block don't depend on the items.
+func (e *EachNode) forEach(markerID string, fn func(nodes []Node, c IDCounter)) {
 	items := e.items()
 	if len(items) == 0 {
-		return markedHTML(markerID, childrenToHTML(e.ElseNode, ctx))
+		fn(e.ElseNode, IDCounter{Prefix: markerID})
+		return
 	}
-	var sb strings.Builder
 	for i, item := range items {
-		sb.WriteString(nodeToHTML(e.Body(item, i), ctx))
+		fn([]Node{e.Body(item, i)}, IDCounter{Prefix: markerID + "_" + itoa(i)})
 	}
-	return markedHTML(markerID, sb.String())
 }
 
 // componentNodeToHTML renders a nested component with its slot content.
@@ -346,5 +364,5 @@ func componentNodeToHTML(c *ComponentNode, ctx *renderContext) string {
 
 	// Cache the tree so the WASM bind pass doesn't call Render() again
 	c.renderCache = comp.Render()
-	return nodeToHTML(c.renderCache, ctx.component(prefix, scopeAttr, slot))
+	return nodeToHTML(c.renderCache, ctx.component(prefix, scopeAttr, func() string { return slot }))
 }

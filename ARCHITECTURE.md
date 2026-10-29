@@ -412,6 +412,8 @@ p.Each(items, func(item string, i int) p.Node {
 2. Subscribes to `list.OnChange`
 3. On change, calls the body function for each item, renders to HTML via `nodeToHTML`, and calls `replaceMarkerContent` with the concatenated HTML
 
+Each item is rendered with its own ID prefix (`e0_0`, `e0_1`, ...; the else content uses `e0`), so the IDs inside the list and after it do not depend on the number of items.
+
 ---
 
 ## Component Blocks
@@ -773,7 +775,7 @@ The WASM hydration walks the same Render() tree that SSR uses, but instead of ge
 | **Purpose** | Generate HTML string | Advance counters, wire DOM bindings |
 | **Entry** | `nodeToHTML(tree, ctx)` | `wasmWalkAndBind(tree, ctx, cleanup)` |
 
-Both use a `renderContext` (IDCounter, ScopeAttr, SlotContent; in SSR also the collected styles), so they advance markers identically. The SSR-only parts of the renderer (collecting CSS, calling `OnMount` while rendering) are guarded by `IsBuildTime` and compiled out of the WASM binary.
+Both use a `renderContext` (IDCounter, ScopeAttr, slot content; in SSR also the collected styles), so they advance markers identically. The SSR-only parts of the renderer (collecting CSS, calling `OnMount` while rendering) are guarded by `IsBuildTime` and compiled out of the WASM binary.
 
 ### WASM HTML Generation
 

@@ -64,3 +64,20 @@ func TestStoreComponentMarker(t *testing.T) {
 		})
 	}
 }
+
+// Each item has its own ID prefix, so IDs after the list don't depend on
+// the items.
+func TestEachItemIDs(t *testing.T) {
+	suffix := New("!")
+	list := NewList("a", "b")
+	got := nodeToHTML(Div(Each(list, func(s string, i int) Node {
+		return Span(s, Bind(suffix))
+	}), Bind(suffix)), &renderContext{})
+	want := "<div><!--e0s-->" +
+		"<span>a<!--e0_0_t0s-->!<!--e0_0_t0--></span>" +
+		"<span>b<!--e0_1_t0s-->!<!--e0_1_t0--></span>" +
+		"<!--e0--><!--t0s-->!<!--t0--></div>"
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
