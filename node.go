@@ -476,8 +476,8 @@ type EachNode struct {
 	ElseNode []Node                         // Content for empty list
 
 	// Type-erased access to the List[T], set by Each
-	items    func() []any // current items
-	onChange func(func()) // subscribe to list changes
+	items    func() []any                // current items
+	onChange func(func()) (unsub func()) // subscribe to list changes
 }
 
 func (e *EachNode) isNode() {}
@@ -496,9 +496,7 @@ func Each[T comparable](list *List[T], body func(item T, index int) Node) *EachN
 			}
 			return items
 		},
-		onChange: func(fn func()) {
-			list.OnChange(func([]T) { fn() })
-		},
+		onChange: list.subscribeAny,
 	}
 }
 

@@ -67,15 +67,23 @@ func wasmWalkAndBind(n Node, ctx *renderContext, cleanup *cleanupBag) {
 		wasmBindComponentNode(node, ctx, cleanup)
 
 	case *SlotNode:
-		// Initially the slot content is wired by the outer component. After a
-		// re-render it is new DOM: wire it again, with the counters it was
-		// rendered with.
-		if ctx.fresh && ctx.slot != nil && ctx.slot.ctx != nil {
-			bindCtx := ctx.slot.ctx.with(ctx.slot.ctx.IDCounter)
-			bindCtx.fresh = true
-			for _, child := range ctx.slot.nodes {
-				wasmWalkAndBind(child, bindCtx, cleanup)
-			}
+		// The slot content is first wired by the outer component; those
+		// bindings belong to this place and are released with it. After a
+		// re-render the slot content is new DOM: wire it again, with the
+		// counters it was rendered with.
+		s := ctx.slot
+		if s == nil || s.release == nil {
+			return
+		}
+		if !ctx.fresh {
+			cleanup.AddDestroy(s.release)
+			return
+		}
+		s.release()
+		bindCtx := s.ctx.with(s.ctx.IDCounter)
+		bindCtx.fresh = true
+		for _, child := range s.nodes {
+			wasmWalkAndBind(child, bindCtx, cleanup)
 		}
 
 	case *TextNode:
@@ -127,16 +135,15 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *renderContext, cleanup *cleanupBag) {
 func wasmBindTextNode(b *BindNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextTextMarker()
 
-	if s, ok := b.StoreRef.(AnySubscriber); ok {
-		g := b.StoreRef.(AnyGetter)
-		s.OnChangeAny(func() {
+	if g, ok := b.StoreRef.(AnyGetter); ok {
+		subscribeToStore(b.StoreRef, func() {
 			val := anyToString(g.GetAny())
 			if b.IsHTML {
 				replaceMarkerContent(markerID, val)
 			} else {
 				replaceMarkerContent(markerID, escapeHTML(val))
 			}
-		})
+		}, cleanup)
 	}
 }
 
@@ -144,11 +151,11 @@ func wasmBindTextNode(b *BindNode, ctx *renderContext, cleanup *cleanupBag) {
 func wasmBindInput(bindID string, boundStore any, cleanup *cleanupBag) {
 	switch s := boundStore.(type) {
 	case *Store[string]:
-		cleanup.Add(bindInput(bindID, s))
+		bindInput(cleanup, bindID, s)
 	case *Store[int]:
-		cleanup.Add(bindInputInt(bindID, s))
+		bindInputInt(cleanup, bindID, s)
 	case *Store[bool]:
-		cleanup.Add(bindCheckbox(bindID, s))
+		bindCheckbox(cleanup, bindID, s)
 	}
 }
 
@@ -193,11 +200,11 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 	updateAttr()
 
 	for _, cs := range condStores {
-		subscribeToStore(cs, updateAttr)
+		subscribeToStore(cs, updateAttr, cleanup)
 	}
 	// Also subscribe to the values if they are stores (no-op for strings)
-	subscribeToStore(ac.TrueValue, updateAttr)
-	subscribeToStore(ac.FalseValue, updateAttr)
+	subscribeToStore(ac.TrueValue, updateAttr, cleanup)
+	subscribeToStore(ac.FalseValue, updateAttr, cleanup)
 }
 
 // wasmBindDynAttr wires a dynamic attribute binding.
@@ -220,7 +227,7 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *renderContext, cleanup *cleanupBag) {
 
 	for _, part := range da.Parts {
 		if _, ok := part.(string); !ok {
-			subscribeToStore(part, updateAttr)
+			subscribeToStore(part, updateAttr, cleanup)
 		}
 	}
 }
@@ -241,14 +248,12 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 		ctx.IDCounter = branchCtx.IDCounter
 	}
 
-	// Skip if already set up
-	if setupBlocks[markerID] {
+	current := &cleanupBag{}
+	if !setUpBlock(markerID, cleanup, &current) {
 		return
 	}
-	setupBlocks[markerID] = true
 
 	base := ctx.with(IDCounter{})
-	current := &cleanupBag{}
 	wire := func(idx int, rerendered bool) {
 		if idx < 0 {
 			return
@@ -294,7 +299,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 				}
 				seen[id.ID()] = true
 			}
-			subscribeToStore(store, update)
+			subscribeToStore(store, update, cleanup)
 		}
 	}
 
@@ -306,11 +311,10 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextEachMarker()
 
-	// Skip if already set up
-	if setupBlocks[markerID] {
+	current := &cleanupBag{}
+	if !setUpBlock(markerID, cleanup, &current) {
 		return
 	}
-	setupBlocks[markerID] = true
 
 	base := ctx.with(IDCounter{})
 
@@ -327,16 +331,15 @@ func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBa
 	}
 
 	// On change: re-render, release the bindings of the previous render, wire the new items
-	current := &cleanupBag{}
-	eachNode.onChange(func() {
+	cleanup.AddDestroy(eachNode.onChange(func() {
 		replaceMarkerContent(markerID, eachItemsHTML(eachNode, markerID, base))
 		current.Release()
 		current = &cleanupBag{}
 		bindItems(current, true)
-	})
+	}))
 
 	// Wire bindings for initially rendered items (DOM already has SSR content)
-	bindItems(cleanup, false)
+	bindItems(current, false)
 }
 
 // wasmBindStoreComponent wires a Store[Component] binding.
@@ -356,13 +359,11 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 		_, rendered = renderStoreOptions(v, ctx)
 	}
 
-	// Skip if already set up
-	if setupBlocks[markerID] {
+	currentCleanup := &cleanupBag{}
+	if !setUpBlock(markerID, cleanup, &currentCleanup) {
 		return
 	}
-	setupBlocks[markerID] = true
 
-	currentCleanup := &cleanupBag{}
 	currentName := ""
 	firstCall := true
 
@@ -446,7 +447,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 		wasmWalkAndBind(renderTree, bindCtx, currentCleanup)
 	}
 
-	v.OnChange(func(_ Component) { updateBlock() })
+	cleanup.AddDestroy(v.subscribe(func(Component) { updateBlock() }))
 	updateBlock()
 }
 
@@ -462,11 +463,15 @@ func wasmBindComponentNode(c *ComponentNode, ctx *renderContext, cleanup *cleanu
 
 	// Slot content for blocks inside the component that re-render: rendered
 	// and wired again on each re-render, with the counters the slot had here.
-	slot := &slotContent{nodes: c.Children, ctx: ctx.with(ctx.IDCounter)}
+	// The first wiring (below, before Render() like in SSR) goes into its own
+	// bag, released when the place of the Slot() re-renders or goes away.
+	slotBag := &cleanupBag{}
+	cleanup.AddDestroy(slotBag.Release)
+	slot := &slotContent{nodes: c.Children, ctx: ctx.with(ctx.IDCounter), release: slotBag.Release}
 
 	// Walk slot children with parent context
 	for _, child := range c.Children {
-		wasmWalkAndBind(child, ctx, cleanup)
+		wasmWalkAndBind(child, ctx, slotBag)
 	}
 
 	// Use the cached Render() tree if available (from wasmComponentNodeToHTML
@@ -522,11 +527,31 @@ func replaceMarkerContent(markerID string, html string) {
 	}
 }
 
-// subscribeToStore subscribes a callback to store changes.
-func subscribeToStore(store any, callback func()) {
-	if s, ok := store.(AnySubscriber); ok {
-		s.OnChangeAny(callback)
+// subscribeToStore subscribes a callback to store changes until cleanup is
+// released (a no-op for values that are not stores).
+func subscribeToStore(store any, callback func(), cleanup *cleanupBag) {
+	switch s := store.(type) {
+	case subscriber:
+		cleanup.AddDestroy(s.subscribeAny(callback))
+	case AnySubscriber:
+		s.OnChangeAny(callback) // user type without unsubscribe
 	}
+}
+
+// setUpBlock marks the block with markerID as set up until cleanup is
+// released, when its current content is released too. It returns false if
+// the block is already set up. (When a block re-renders, the blocks nested in
+// it are released and set up again for the new DOM.)
+func setUpBlock(markerID string, cleanup *cleanupBag, current **cleanupBag) bool {
+	if setupBlocks[markerID] {
+		return false
+	}
+	setupBlocks[markerID] = true
+	cleanup.AddDestroy(func() {
+		(*current).Release()
+		delete(setupBlocks, markerID)
+	})
+	return true
 }
 
 // SetSSRPath is a no-op in WASM (only used during SSR).

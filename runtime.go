@@ -59,12 +59,6 @@ func (c *cleanupBag) Release() {
 	c.funcs = nil
 }
 
-// bindable is implemented by types that can be bound to DOM elements.
-type bindable[T any] interface {
-	Get() T
-	OnChange(func(T))
-}
-
 // findComment finds a comment node with the given marker text using TreeWalker
 func findComment(marker string) js.Value {
 	walker := document.Call("createTreeWalker",
@@ -83,59 +77,50 @@ func findComment(marker string) js.Value {
 	}
 }
 
-// settable extends bindable with Set capability for two-way binding
-type settable[T any] interface {
-	bindable[T]
-	Set(T)
-}
-
 // bindInput binds a text input to a string store (two-way).
-// Returns the js.Func for cleanup.
-func bindInput(id string, store settable[string]) js.Func {
+func bindInput(c *cleanupBag, id string, store *Store[string]) {
 	el := getEl(id)
 	if !exists(el) {
-		return js.Func{}
+		return
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		store.Set(this.Get("value").String())
 		return nil
 	})
 	el.Call("addEventListener", "input", fn)
-	store.OnChange(func(v string) { el.Set("value", v) })
-	return fn
+	c.Add(fn)
+	c.AddDestroy(store.subscribe(func(v string) { el.Set("value", v) }))
 }
 
 // bindInputInt binds a text input to an int store (two-way).
-// Returns the js.Func for cleanup.
-func bindInputInt(id string, store settable[int]) js.Func {
+func bindInputInt(c *cleanupBag, id string, store *Store[int]) {
 	el := getEl(id)
 	if !exists(el) {
-		return js.Func{}
+		return
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		store.Set(atoiSafe(this.Get("value").String()))
 		return nil
 	})
 	el.Call("addEventListener", "input", fn)
-	store.OnChange(func(v int) { el.Set("value", itoa(v)) })
-	return fn
+	c.Add(fn)
+	c.AddDestroy(store.subscribe(func(v int) { el.Set("value", itoa(v)) }))
 }
 
 // bindCheckbox binds a checkbox to a bool store (two-way).
-// Returns the js.Func for cleanup.
-func bindCheckbox(id string, store settable[bool]) js.Func {
+func bindCheckbox(c *cleanupBag, id string, store *Store[bool]) {
 	el := getEl(id)
 	if !exists(el) {
-		return js.Func{}
+		return
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
 		store.Set(this.Get("checked").Bool())
 		return nil
 	})
 	el.Call("addEventListener", "change", fn)
-	store.OnChange(func(v bool) { el.Set("checked", v) })
+	c.Add(fn)
+	c.AddDestroy(store.subscribe(func(v bool) { el.Set("checked", v) }))
 	el.Set("checked", store.Get())
-	return fn
 }
 
 // bindEvent attaches a handler to the element with the given ID, applying

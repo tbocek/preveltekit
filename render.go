@@ -22,6 +22,7 @@ type slotContent struct {
 	ctx         *renderContext // context the content is rendered and bound with
 	html        string         // pre-rendered HTML, if prerendered
 	prerendered bool
+	release     func() // WASM: releases the bindings of the first wiring
 }
 
 // render returns the slot's HTML: the pre-rendered HTML, or the nodes

@@ -64,6 +64,13 @@ type AnySubscriber interface {
 	OnChangeAny(func())
 }
 
+// subscriber is implemented by Store and List: subscribe without knowing the
+// value type, with a function to unsubscribe again. Hydration uses it to
+// remove the subscriptions of blocks that are re-rendered.
+type subscriber interface {
+	subscribeAny(func()) (unsubscribe func())
+}
+
 // Store is a generic reactive container that calls callbacks on mutation
 type Store[T any] struct {
 	id        string
@@ -236,7 +243,19 @@ func (s *Store[T]) Update(fn func(T) T) {
 
 // OnChange adds a callback that runs whenever the value changes
 func (s *Store[T]) OnChange(cb func(T)) {
+	s.subscribe(cb)
+}
+
+// subscribe adds a callback and returns a function that removes it again.
+func (s *Store[T]) subscribe(cb func(T)) (unsubscribe func()) {
 	s.callbacks = append(s.callbacks, cb)
+	i := len(s.callbacks) - 1
+	return func() { s.callbacks[i] = nil }
+}
+
+// subscribeAny is subscribe without the value (see subscriber).
+func (s *Store[T]) subscribeAny(fn func()) func() {
+	return s.subscribe(func(T) { fn() })
 }
 
 // GetAny returns the current value as any.
@@ -247,7 +266,9 @@ func (s *Store[T]) OnChangeAny(fn func()) { s.OnChange(func(_ T) { fn() }) }
 
 func (s *Store[T]) notify() {
 	for _, cb := range s.callbacks {
-		cb(s.value)
+		if cb != nil {
+			cb(s.value)
+		}
 	}
 }
 
@@ -256,7 +277,7 @@ type List[T comparable] struct {
 	id       string
 	items    []T
 	lenStore *Store[int] // cached length store for reactive conditions
-	onChange []func([]T)
+	onChange []func()
 }
 
 // NewList creates a reactive list with an auto-generated ID.
@@ -327,11 +348,20 @@ func (l *List[T]) Clear() {
 
 // OnChange adds a callback for any change to the list
 func (l *List[T]) OnChange(cb func([]T)) {
-	l.onChange = append(l.onChange, cb)
+	l.subscribeAny(func() { cb(l.items) })
+}
+
+// subscribeAny adds a callback and returns a function that removes it again.
+func (l *List[T]) subscribeAny(fn func()) (unsubscribe func()) {
+	l.onChange = append(l.onChange, fn)
+	i := len(l.onChange) - 1
+	return func() { l.onChange[i] = nil }
 }
 
 func (l *List[T]) notify() {
-	for _, cb := range l.onChange {
-		cb(l.items)
+	for _, fn := range l.onChange {
+		if fn != nil {
+			fn()
+		}
 	}
 }
