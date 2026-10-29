@@ -162,7 +162,7 @@ func (t *Todos) Render() p.Node {
 }
 ```
 
-`p.NewList` creates a reactive slice. `p.Each` renders each item. The list re-renders when items change.
+`p.NewList` creates a reactive slice. `p.Each` renders each item. The list re-renders when items change. Items can be of any comparable type, e.g. structs: `p.NewList(Todo{Title: "Write docs"})`.
 
 ### Components with Props and Slots
 
@@ -306,6 +306,20 @@ func (a *App) Render() p.Node {
 
 Internal `<a>` links are automatically intercepted for SPA navigation. Add the `external` attribute to opt out.
 
+**Route parameters:** a route like `/users/:id` matches `/users/42`. `router.Param("id")` returns a `*Store[string]` with the value, updated before the route's component is shown:
+
+```go
+func (a *App) OnMount() {
+    router := p.NewRouter(a.CurrentPage, a.Routes(), "app")
+    a.user.ID = router.Param("id") // "42" at /users/42
+    router.Start()
+}
+```
+
+Navigating between paths of the same route (`/users/1` → `/users/2`) keeps the component and only updates the store, so bind it or use `OnChange`.
+
+**Paths without a pre-rendered page:** if the server delivers `index.html` for a path without its own file (e.g. Caddy's `try_files ... /index.html`), the router picks the right component and WASM renders it in the browser (with a short flash while the index page is replaced).
+
 ### LocalStorage
 
 ```go
@@ -343,13 +357,20 @@ defer cleanup()
 
 ## Build
 
-Output goes to `dist/` -- serve with any static file server.
+`./build.sh` builds a production version into `dist/` -- serve it with any static file server:
+
+1. Pre-renders every route with `SSRPath` to HTML (native Go)
+2. Analyzes which reflect kinds the app passes to the JSON codec (`cmd/reflectscan`) and compiles the unused ones out of the WASM (`pk_no<kind>` build tags)
+3. Builds `main.wasm` with TinyGo and strips it
+4. Removes the functions from `wasm_exec.js` that the WASM doesn't import and minifies it (`cmd/stripwasmexec`)
+5. Writes gzip and brotli versions of every file
 
 ```
 dist/
-  index.html     # pre-rendered HTML
-  main.wasm      # compiled WASM binary
-  wasm_exec.js   # Go WASM runtime
+  index.html       # pre-rendered HTML (one file per route)
+  main.wasm        # compiled WASM binary
+  wasm_exec.js     # Go WASM runtime
+  *.gz, *.br       # precompressed versions
 ```
 
 ## Architecture
@@ -430,7 +451,7 @@ What changed:
 - **Typed elements** -- `Div()`, `P()`, `Input()` etc. with structured rendering, no HTML string parsing
 - **Simpler mental model** -- one `Render()` method, two execution contexts
 
-The tradeoff is that WASM binaries include HTML string literals, making them slightly larger. In practice (~60kb gzipped) this is acceptable.
+The tradeoff is that WASM binaries include HTML string literals, making them slightly larger. In practice (WASM and JavaScript of this project's site are ~52 kB gzipped, ~45 kB brotli) this is acceptable.
 
 What started as ~500 lines of glue code between Svelte, jsdom, and Rsbuild is now a ~4k LoC self-contained framework with no external dependencies beyond the Go standard library and the WASM runtime.
 

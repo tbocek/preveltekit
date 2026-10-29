@@ -15,6 +15,7 @@ A Go/WASM web framework with SSR pre-rendering. Components are written in pure G
 - [If Blocks](#if-blocks)
 - [Each Blocks](#each-blocks)
 - [Component Blocks](#component-blocks)
+- [Slots](#slots)
 - [Attribute Bindings](#attribute-bindings)
 - [CSS Scoping](#css-scoping)
 - [Routing](#routing)
@@ -416,20 +417,31 @@ func (a *App) Render() p.Node {
 
 When `NewRouter` is called, it registers all possible components via `componentStore.WithOptions(...)`.
 
-**SSR**: Renders ALL option components to advance counters, outputs only the active one between markers:
+**SSR**: Renders ALL option components to advance counters, outputs only the active one between markers, and notes which one it is (`<!--=name-->`):
 ```html
-<main><!--app_r0s--><div class="demo">Basics...</div><!--app_r0--></main>
+<main><!--app_r0s--><!--=basics--><div class="demo">Basics...</div><!--app_r0--></main>
 ```
+
+A store without `WithOptions` is rendered with its current component as the only option; an empty store (`nil`) renders an empty block. Both still get markers, so WASM can fill them later.
 
 **WASM Tree Walk (`wasmBindStoreComponent`):**
 1. Advances `NextRouteMarker()` to get `markerID`
-2. Checks `wasmRenderedTrees` cache for pre-rendered trees from the HTML pass (see [Render Cache](#render-cache))
+2. Checks `renderedTrees` cache for pre-rendered trees from the HTML pass (see [Render Cache](#render-cache))
 3. If cached: reuses the trees directly. If not (top-level Hydrate): does a counter-advance pass over ALL options
-4. **Bind pass**: Walks the active option's tree to wire its bindings
+4. **Bind pass**: if the `<!--=name-->` note matches the current component, walks its tree to wire the existing DOM. If it doesn't (the server delivered `index.html` for a path without its own page, and the router picked another component), renders the current component instead, like on a change.
 5. **Reactive updates**: On `Store[Component]` change:
-   - Renders new component via `nodeToHTML` (caches the tree)
-   - Calls `replaceMarkerContent` to swap DOM
-   - Walks the cached tree to wire new bindings
+   - Renders new component via `nodeToHTML`
+   - Calls `replaceMarkerContent` to swap DOM (`Set(nil)` empties the block)
+   - Releases the old component's bindings (fires its `OnDestroy`) and walks the new tree to wire its bindings
+
+---
+
+## Slots
+
+`p.Comp(&Card{}, children...)` passes `children` as slot content; `p.Slot()` inside the component's `Render()` marks where it goes.
+
+- **SSR** renders the slot content with the outer component's context (counters, scope class) and inserts the HTML at `Slot()`.
+- **WASM** first wires the slot content as part of the outer component. Its bindings belong to the place of the `Slot()`: when a block around it re-renders (e.g. a collapsible's `If` toggles), the slot content is rendered again with the current values and wired again, with the counters it had at first. Buttons, inputs and text bindings in slot content keep working.
 
 ---
 
@@ -464,7 +476,7 @@ p.Div("content").AttrIf("class", func() bool { return score.Get() >= 90 }, "exce
 **WASM:**
 - For `class` attributes: uses `classList.add` / `classList.remove`
 - For other attributes: uses `setAttribute` / `removeAttribute`
-- Subscribes to condition store and optional value stores
+- Re-evaluates when a store the condition reads changes (automatic dependency tracking), or a value store changes
 
 ### AttrIf with Two Values
 
@@ -588,6 +600,13 @@ On HTTP errors (non-2xx), returns `*FetchError` with `Status`, `StatusText`, and
 ### SSR Behavior
 
 All fetch functions return zero values and an error during SSR (`IsBuildTime == true`). Use `IsBuildTime` to guard fetch calls in `OnMount()`.
+
+### Codec
+
+`Decode[T]` and `Encode` convert between JS values and Go values with reflection: struct fields by `js` tag, else `json` tag, else field name (decoding also tries the name with a lowercase first letter).
+
+- A type with its own `FromJS(js.Value)` (`JSDecoder`) or `ToJS() js.Value` (`JSEncoder`) skips reflection. `Decode` is generic, so the check is resolved at compile time and the reflection decoder is not linked in at all.
+- `build.sh` runs `cmd/reflectscan`, which finds every type the app passes to `Decode`/`Encode` (including `Get`, `Post`, `FetchOptions.Body`, ...) and prints a `pk_no<kind>` build tag for each reflect kind that never occurs (map, interface, slice, pointer, int, uint, float, bool, string). The codec cases for those kinds are compiled out (constants in `internal/codecflags`). If a type is only known as `any`, no tags are printed.
 
 ---
 
@@ -769,7 +788,11 @@ When a reactive update requires new HTML (e.g., if-block branch swap, each-block
 
 Both SSR and WASM must render ALL branches of if-blocks and ALL options of Store[Component] to advance counters identically, even for inactive branches. This ensures marker IDs like `basics_i0`, `basics_e0` match between the pre-rendered HTML and the WASM runtime.
 
-For if-blocks, `wasmBindIfNode` saves the IDCounter state at the start of each branch (`branchCounters`) so the active branch can be walked for binding with the correct counter values.
+For if-blocks, `wasmBindIfNode` saves the IDCounter state at the start of each branch (`counters`) so the active branch can be rendered and walked for binding with the correct counter values, also when it is re-rendered later. Each-block items get their own ID prefix (`e0_0`, `e0_1`, ...), so their IDs don't depend on the number of items.
+
+### Re-rendered Blocks
+
+Every binding and block registers its store subscriptions in the cleanup of the surrounding block. When a block re-renders, it releases that cleanup before wiring the new content: the subscriptions of the old content are removed, nested blocks (`If`, `Each`, `Store[Component]`) are released and then set up again for the new DOM. Without this, nested blocks would stop reacting from their second display on.
 
 ---
 
@@ -779,20 +802,20 @@ For if-blocks, `wasmBindIfNode` saves the IDCounter state at the start of each b
 
 ### ComponentNode Cache
 
-`ComponentNode` has a `renderCache` field. When `wasmComponentNodeToHTML` renders a component for HTML generation, it stores the result in `renderCache`. When `wasmBindComponentNode` later walks the same component for binding, it reuses the cached tree instead of calling `Render()` again.
+`ComponentNode` has a `renderCache` field. When `componentNodeToHTML` renders a component for HTML generation, it stores the result in `renderCache`. When `wasmBindComponentNode` later walks the same component for binding, it reuses the cached tree instead of calling `Render()` again.
 
 ### Store[Component] Cache
 
-`wasmRenderedTrees` is a global map keyed by marker ID. When `wasmStoreComponentToHTML` renders all options of a Store[Component] for HTML generation, it caches each option's Render() tree. When `wasmBindStoreComponent` later processes the same Store[Component], it finds the cached trees and skips the redundant counter-advance pass.
+`renderedTrees` is a global map keyed by marker ID. When `storeComponentToHTML` renders all options of a Store[Component] for HTML generation in WASM, it caches each option's Render() tree. When `wasmBindStoreComponent` later processes the same Store[Component], it finds the cached trees and skips the redundant counter-advance pass.
 
 ```go
-type wasmCachedOption struct {
+type cachedOption struct {
     comp      Component
     name      string
     tree      Node
     scopeAttr string
 }
-var wasmRenderedTrees = make(map[string][]wasmCachedOption)
+var renderedTrees = make(map[string][]cachedOption)
 ```
 
 
@@ -802,9 +825,9 @@ Go-to-WASM is usable today but comes with real trade-offs. Here's the current st
 
 ### Binary Size
 
-The Go compiler ships a full runtime (goroutine scheduler, garbage collector, `reflect`, etc.) in every WASM binary. The practical floor for a "hello world" is ~2MB gzipped. Our framework binary is ~208kb *after* gzip + `wasm-opt -Oz`, which is good for a Go WASM app but still large compared to a JavaScript framework (~5-30kb). Every new standard library import (`strconv`, `fmt`, `regexp`) pulls in additional weight because the linker can't tree-shake as aggressively as JS bundlers.
+The standard Go compiler ships a full runtime (goroutine scheduler, garbage collector, `reflect`, etc.) in every WASM binary; the practical floor for a "hello world" is ~2MB uncompressed. The framework therefore builds with **TinyGo**, which produces much smaller binaries: this project's site (3 pages, routing, fetch, syntax highlighting) is ~43 kB brotli (~49 kB gzip) for `main.wasm`, plus ~2 kB for `wasm_exec.js`. That is good for a Go WASM app but still larger than a JavaScript framework (~5-30kb). Every new standard library import (`strconv`, `fmt`, `time`, `regexp`) pulls in additional weight, so the framework avoids them (e.g. its own `Itoa`).
 
-**TinyGo** can produce much smaller binaries (10-100kb) but lacks full `reflect` support and has an incomplete standard library, making it unsuitable for this framework's generic store system.
+The build keeps the binary small by compiling out unused codec support (see [Codec](#codec)), stripping the WASM, and stripping and minifying `wasm_exec.js`.
 
 ### The JS Bridge (`syscall/js`)
 
