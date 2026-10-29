@@ -7,12 +7,12 @@ import "reflect"
 // 1. HTML with markers (for SSR)
 // 2. WASM wiring code (for hydration)
 type Node interface {
-	nodeType() string
+	isNode() // only the framework's node types implement Node
 }
 
 // NodeAttr represents an attribute that can be applied to an element.
 type NodeAttr interface {
-	attrType() string
+	isAttr() // only the framework's attribute types implement NodeAttr
 }
 
 // Condition represents a boolean condition for If nodes.
@@ -31,7 +31,7 @@ type TextNode struct {
 	Text string
 }
 
-func (t *TextNode) nodeType() string { return "text" }
+func (t *TextNode) isNode() {}
 
 // =============================================================================
 // HTML Node
@@ -68,7 +68,7 @@ type HtmlEvent struct {
 	Event string // event name (e.g., "click", "submit")
 }
 
-func (h *HtmlNode) nodeType() string { return "html" }
+func (h *HtmlNode) isNode() {}
 
 // elementID returns the id attribute needed to find the element during
 // hydration: the first event's handler ID, a new class ID for conditional
@@ -102,7 +102,7 @@ type RawHTMLNode struct {
 	HTML string
 }
 
-func (r *RawHTMLNode) nodeType() string { return "rawhtml" }
+func (r *RawHTMLNode) isNode() {}
 
 // RawHTML creates an unescaped HTML text node.
 // Example: RawHTML("&#9889;"), RawHTML("<code>foo</code>")
@@ -120,7 +120,7 @@ type FragmentNode struct {
 	Children []Node
 }
 
-func (f *FragmentNode) nodeType() string { return "fragment" }
+func (f *FragmentNode) isNode() {}
 
 // Fragment creates a node that groups children without a wrapping element.
 // Example: Fragment(Section(...), Section(...), Footer(...))
@@ -384,7 +384,7 @@ type BindNode struct {
 	IsHTML   bool // true for raw HTML binding
 }
 
-func (b *BindNode) nodeType() string { return "bind" }
+func (b *BindNode) isNode() {}
 
 // Bind creates a reactive text binding to a store.
 func Bind[T any](store *Store[T]) *BindNode {
@@ -412,7 +412,7 @@ type IfNode struct {
 	ElseNode []Node
 }
 
-func (i *IfNode) nodeType() string { return "if" }
+func (i *IfNode) isNode() {}
 
 // IfBranch represents a single if/else-if branch.
 type IfBranch struct {
@@ -480,7 +480,7 @@ type EachNode struct {
 	onChange func(func()) // subscribe to list changes
 }
 
-func (e *EachNode) nodeType() string { return "each" }
+func (e *EachNode) isNode() {}
 
 // Each creates a list rendering node.
 // The body function receives each item and its index.
@@ -520,7 +520,7 @@ type ComponentNode struct {
 	renderCache Node   // cached Render() result (used by WASM to avoid double Render)
 }
 
-func (c *ComponentNode) nodeType() string { return "component" }
+func (c *ComponentNode) isNode() {}
 
 // Comp creates a nested component node from a component instance.
 // The component name is derived from the type via reflection.
@@ -545,7 +545,7 @@ func Comp(instance any, content ...any) *ComponentNode {
 // SlotNode represents where child content should be inserted.
 type SlotNode struct{}
 
-func (s *SlotNode) nodeType() string { return "slot" }
+func (s *SlotNode) isNode() {}
 
 // Slot creates a slot placeholder for child content.
 func Slot() *SlotNode {
@@ -587,7 +587,7 @@ type StaticAttr struct {
 	Value string
 }
 
-func (s *StaticAttr) attrType() string { return "static" }
+func (s *StaticAttr) isAttr() {}
 
 // DynAttrAttr represents a dynamic attribute with mixed string/store parts.
 type DynAttrAttr struct {
@@ -595,7 +595,7 @@ type DynAttrAttr struct {
 	Parts []any // mix of string and *Store[T]
 }
 
-func (d *DynAttrAttr) attrType() string { return "dynattr" }
+func (d *DynAttrAttr) isAttr() {}
 
 // value returns the current attribute value: the string parts and the
 // current store values concatenated.
