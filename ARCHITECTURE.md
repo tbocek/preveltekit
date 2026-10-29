@@ -554,6 +554,7 @@ func (a *App) OnMount() {
 | `Navigate(path)` | Programmatic navigation (pushes history state) |
 | `Replace(path)` | Navigate without adding to history |
 | `CurrentPath() *Store[string]` | Reactive store containing the current path |
+| `Param(name) *Store[string]` | Reactive store with a route parameter, e.g. `id` for `/users/:id` ("" if the route has none) |
 | `NotFound(handler func())` | Set handler for unmatched routes |
 | `BeforeNavigate(fn func(from, to string) bool)` | Navigation guard — return false to cancel |
 | `SetupLinks()` | Intercept all `<a>` clicks for SPA navigation (called by Start) |
@@ -565,6 +566,7 @@ func (a *App) OnMount() {
 - Calls `Navigate(path)` which pushes history state and triggers route matching
 - Route matching uses specificity scoring (exact segments > parameters > wildcards)
 - The `popstate` event handler enables back/forward navigation
+- Parameter stores (`Param`) are updated before the route's component is set. Navigating between paths of the same route (`/users/1` → `/users/2`) keeps the component and only updates the stores
 
 ---
 

@@ -164,6 +164,15 @@ p.Div(p.Attr("class", "step"), ...).
 
 // chain multiple AttrIf + On calls on same node`),
 		),
+
+		p.Section(
+			p.H2("Route Parameters"),
+			p.P("The route ", p.Code("/user/:name"), " passes the name from the URL to the page:"),
+			p.P(
+				p.A(p.Attr("href", "/user/alice"), "Alice"), " · ",
+				p.A(p.Attr("href", "/user/bob"), "Bob"),
+			),
+		),
 	)
 }
 

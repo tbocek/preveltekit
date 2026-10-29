@@ -11,7 +11,16 @@ type Router struct {
 	notFound       func()
 	currentPath    *Store[string]
 	beforeNav      func(from, to string) bool // return false to cancel navigation
-	routerJS                                  // browser state (empty in SSR)
+	id             string
+	params         []routeParam      // stores returned by Param
+	currentParams  map[string]string // parameters of the current route
+	routerJS                         // browser state (empty in SSR)
+}
+
+// routeParam is a store returned by Param for a parameter name.
+type routeParam struct {
+	name  string
+	store *Store[string]
 }
 
 // NewRouter creates a new router instance with a component store, routes, and ID.
@@ -28,7 +37,24 @@ func NewRouter(componentStore *Store[Component], routes []Route, id string) *Rou
 		componentStore: componentStore,
 		routes:         routes,
 		currentPath:    newWithID(id+".path", ""),
+		id:             id,
 	}
+}
+
+// Param returns a store with the value of the route parameter name in the
+// current path, e.g. "42" for the route "/users/:id" at "/users/42" ("" if
+// the current route has no such parameter). The router updates it before
+// it shows the route's component. When only the parameter changes, the
+// component stays the same: bind the store or use OnChange to update it.
+func (r *Router) Param(name string) *Store[string] {
+	for _, p := range r.params {
+		if p.name == name {
+			return p.store
+		}
+	}
+	s := newWithID(r.id+".param."+name, r.currentParams[name])
+	r.params = append(r.params, routeParam{name: name, store: s})
+	return s
 }
 
 // NotFound sets the handler for unmatched routes
@@ -62,15 +88,25 @@ func (r *Router) handleRoute(path string) {
 	// Find matching route (most specific first)
 	// Each route's Path is resolved against the base path before matching.
 	var bestMatch *Route
+	var bestParams map[string]string
 	bestSpecificity := -1
 
 	for i := range r.routes {
 		route := &r.routes[i]
 		resolved := resolveRoute(r.basePath, route.Path)
-		_, specificity, ok := matchRoute(resolved, path)
+		params, specificity, ok := matchRoute(resolved, path)
 		if ok && specificity > bestSpecificity {
 			bestMatch = route
+			bestParams = params
 			bestSpecificity = specificity
+		}
+	}
+
+	// Update the parameter stores before the component is shown
+	r.currentParams = bestParams
+	for _, p := range r.params {
+		if v := bestParams[p.name]; p.store.Get() != v {
+			p.store.Set(v)
 		}
 	}
 

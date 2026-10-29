@@ -5,6 +5,7 @@ import p "github.com/tbocek/preveltekit/v2"
 type App struct {
 	CurrentComponent *p.Store[p.Component]
 	routes           []p.Route
+	user             *UserProfile
 }
 
 func (a *App) New() p.Component {
@@ -20,10 +21,12 @@ func (a *App) New() p.Component {
 	storage := (&Storage{}).New()
 	debounce := (&Debounce{}).New()
 	bitcoin := (&Bitcoin{}).New()
+	user := &UserProfile{}
 
 	// Create fresh app with initialized stores
 	app := &App{
 		CurrentComponent: p.New(basics),
+		user:             user,
 		routes: []p.Route{
 			{Path: "/", HTMLFile: "index.html", SSRPath: "/", Component: basics},
 			{Path: "/basics", HTMLFile: "basics.html", SSRPath: "/basics", Component: basics},
@@ -37,6 +40,8 @@ func (a *App) New() p.Component {
 			{Path: "/storage", HTMLFile: "storage.html", SSRPath: "/storage", Component: storage},
 			{Path: "/debounce", HTMLFile: "debounce.html", SSRPath: "/debounce", Component: debounce},
 			{Path: "/bitcoin", HTMLFile: "bitcoin.html", SSRPath: "/bitcoin", Component: bitcoin},
+			// Route parameter; not pre-rendered, reached via links (see Routing)
+			{Path: "/user/:name", HTMLFile: "user.html", Component: user},
 		},
 	}
 	return app
@@ -44,6 +49,7 @@ func (a *App) New() p.Component {
 
 func (a *App) OnMount() {
 	router := p.NewRouter(a.CurrentComponent, a.routes, "a unique id")
+	a.user.Name = router.Param("name")
 	router.NotFound(func() {
 		a.CurrentComponent.Set(nil)
 	})
