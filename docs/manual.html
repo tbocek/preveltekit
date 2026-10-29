@@ -21,6 +21,12 @@ count.<span class="f">Update</span>(<span class="k">func</span>(v <span class="t
 <span class="c">// Subscribe to changes</span>
 count.<span class="f">OnChange</span>(<span class="k">func</span>(v <span class="t">int</span>) {
     <span class="c">// called whenever count changes</span>
+})
+
+<span class="c">// Derived stores: update whenever their sources change</span>
+doubled := count.<span class="f">Map</span>(<span class="k">func</span>(v <span class="t">int</span>) <span class="t">int</span> { <span class="k">return</span> v * <span class="n">2</span> }) <span class="c">// *Store[int]</span>
+label := p.<span class="f">Computed</span>(<span class="k">func</span>() <span class="t">string</span> {                    <span class="c">// any number of sources,</span>
+    <span class="k">return</span> name.<span class="f">Get</span>() + <span class="s">": "</span> + p.<span class="f">Itoa</span>(count.<span class="f">Get</span>())     <span class="c">// tracked automatically</span>
 })</code></pre></section><section class="v1" id="elements-and-binding"><h2 class="v1">Elements &amp; Binding</h2><p class="v1">Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.</p><pre class="v1"><code class="v1"><span class="c">// Typed element functions with reactive store interpolation</span>
 p.<span class="f">P</span>(<span class="s">"Count: "</span>, p.<span class="f">Strong</span>(count))
 
@@ -36,7 +42,7 @@ p.<span class="f">Div</span>(p.<span class="f">Attr</span>(<span class="s">"clas
 
 <span class="c">// Conditional attributes (additive for same attribute name)</span>
 p.<span class="f">Div</span>(<span class="s">"content"</span>).<span class="f">AttrIf</span>(<span class="s">"class"</span>,
-    p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> dark.<span class="f">Get</span>() }, dark), <span class="s">"active"</span>)
+    dark.Get, <span class="s">"active"</span>)
 
 <span class="c">// Raw HTML rendering (not escaped)</span>
 p.<span class="f">BindAsHTML</span>(rawHTML)
@@ -55,20 +61,22 @@ p.<span class="f">Button</span>(<span class="s">"Inner"</span>).<span class="f">
 p.<span class="f">Button</span>(<span class="s">"+5"</span>).<span class="f">On</span>(<span class="s">"click"</span>, <span class="k">func</span>() {
     count.<span class="f">Update</span>(<span class="k">func</span>(v <span class="t">int</span>) <span class="t">int</span> { <span class="k">return</span> v + <span class="n">5</span> })
 })</code></pre></section><section class="v1" id="conditionals"><h2 class="v1">Conditionals</h2><p class="v1">Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.</p><pre class="v1"><code class="v1"><span class="c">// Simple if</span>
-p.<span class="f">If</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> count.<span class="f">Get</span>() &gt; <span class="n">0</span> }, count),
+p.<span class="f">If</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> count.<span class="f">Get</span>() &gt; <span class="n">0</span> },
     p.<span class="f">P</span>(<span class="s">"Positive"</span>),
 )
 
 <span class="c">// If / ElseIf / Else</span>
-p.<span class="f">If</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">90</span> }, score),
+p.<span class="f">If</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">90</span> },
     p.<span class="f">P</span>(<span class="s">"Grade: A"</span>),
-).<span class="f">ElseIf</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">80</span> }, score),
+).<span class="f">ElseIf</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">80</span> },
     p.<span class="f">P</span>(<span class="s">"Grade: B"</span>),
 ).<span class="f">Else</span>(
     p.<span class="f">P</span>(<span class="s">"Grade: F"</span>),
 )
 
-<span class="c">// p.Cond(predicateFn, ...dependencyStores)</span></code></pre></section><section class="v1" id="lists"><h2 class="v1">Lists</h2><p class="v1">Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.</p><pre class="v1"><code class="v1"><span class="c">// Create a reactive list</span>
+<span class="c">// Conditions are plain func() bool: the stores they read with Get</span>
+<span class="c">// are tracked automatically, no need to list them</span>
+p.<span class="f">If</span>(loading.Get, p.<span class="f">P</span>(<span class="s">"Loading..."</span>))  <span class="c">// a *Store[bool]'s Get is a func() bool</span></code></pre></section><section class="v1" id="lists"><h2 class="v1">Lists</h2><p class="v1">Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.</p><pre class="v1"><code class="v1"><span class="c">// Create a reactive list</span>
 items := p.NewList[<span class="t">string</span>](<span class="s">"Apple"</span>, <span class="s">"Banana"</span>, <span class="s">"Cherry"</span>)
 
 <span class="c">// Mutate — triggers re-render</span>
