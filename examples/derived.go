@@ -129,4 +129,3 @@ func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
 		),
 	)
 }
-
