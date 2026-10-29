@@ -90,16 +90,14 @@ func (h *HtmlNode) renderStructured(ctx *BuildContext) string {
 		if len(h.Events) > 0 {
 			elementID = h.Events[0].ID
 		} else {
-			localID := ctx.NextClassID()
-			elementID = ctx.FullID(localID)
+			elementID = ctx.NextClassID()
 		}
 	}
 
 	// Bind ID
 	var bindID string
 	if h.BoundStore != nil {
-		localID := ctx.NextBindID()
-		bindID = ctx.FullID(localID)
+		bindID = ctx.NextBindID()
 	}
 
 	// --- Build opening tag ---
@@ -178,7 +176,7 @@ func (h *HtmlNode) renderStructured(ctx *BuildContext) string {
 			sb.WriteByte(' ')
 			sb.WriteString(ac.Name)
 			sb.WriteString(`="`)
-			sb.WriteString(escapeAttr(val))
+			sb.WriteString(escapeHTML(val))
 			sb.WriteByte('"')
 		}
 	}
@@ -189,7 +187,7 @@ func (h *HtmlNode) renderStructured(ctx *BuildContext) string {
 		case *Store[string]:
 			if h.Tag != "textarea" {
 				sb.WriteString(` value="`)
-				sb.WriteString(escapeAttr(s.Get()))
+				sb.WriteString(escapeHTML(s.Get()))
 				sb.WriteByte('"')
 			}
 		case *Store[int]:
@@ -264,8 +262,7 @@ func renderChild(child any, ctx *BuildContext) string {
 func renderStoreComponent(v *Store[Component], ctx *BuildContext) string {
 	comp := v.Get()
 	if comp != nil && len(v.Options()) > 0 {
-		localMarker := ctx.NextRouteMarker()
-		markerID := ctx.FullID(localMarker)
+		markerID := ctx.NextRouteMarker()
 
 		// Render ALL option components to advance counters in sync with WASM
 		var activeHTML string
@@ -328,10 +325,9 @@ func renderStoreComponent(v *Store[Component], ctx *BuildContext) string {
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	switch a := attr.(type) {
 	case *StaticAttr:
-		return fmt.Sprintf(`%s="%s"`, a.Name, escapeAttr(a.Value))
+		return fmt.Sprintf(`%s="%s"`, a.Name, escapeHTML(a.Value))
 	case *DynAttrAttr:
-		localID := ctx.NextAttrID()
-		fullID := ctx.FullID(localID)
+		fullID := ctx.NextAttrID()
 		var attrValue string
 		for _, part := range a.Parts {
 			switch v := part.(type) {
@@ -341,7 +337,7 @@ func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 				attrValue += anyToString(v.GetAny())
 			}
 		}
-		return fmt.Sprintf(`data-attrbind="%s" %s="%s"`, fullID, a.Name, escapeAttr(attrValue))
+		return fmt.Sprintf(`data-attrbind="%s" %s="%s"`, fullID, a.Name, escapeHTML(attrValue))
 	default:
 		return ""
 	}
@@ -354,8 +350,7 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 		value = anyToString(g.GetAny())
 	}
 
-	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextTextMarker()
 
 	if b.IsHTML {
 		return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, value, markerID)
@@ -365,8 +360,7 @@ func (b *BindNode) ToHTML(ctx *BuildContext) string {
 
 // ToHTML generates HTML for an if node (conditional rendering).
 func (i *IfNode) ToHTML(ctx *BuildContext) string {
-	localMarker := ctx.NextIfMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextIfMarker()
 
 	// Render all branches to advance counters in sync with WASM.
 	var activeHTML string
@@ -407,8 +401,7 @@ func (i *IfNode) ToHTML(ctx *BuildContext) string {
 
 // ToHTML generates HTML for an each node (list iteration).
 func (e *EachNode) ToHTML(ctx *BuildContext) string {
-	localMarker := ctx.NextEachMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextEachMarker()
 
 	var itemsHTML strings.Builder
 
@@ -438,8 +431,7 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 
 // ToHTML generates HTML for a component node (nested component).
 func (c *ComponentNode) ToHTML(ctx *BuildContext) string {
-	compMarker := ctx.NextCompMarker()
-	fullCompPrefix := ctx.FullID(compMarker)
+	fullCompPrefix := ctx.NextCompMarker()
 
 	comp, ok := c.Instance.(Component)
 	if !ok {

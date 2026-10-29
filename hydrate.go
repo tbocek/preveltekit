@@ -4,9 +4,10 @@ package preveltekit
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -37,8 +38,8 @@ func Hydrate(app ComponentRoot) {
 		// Set the SSR path before lifecycle methods
 		SetSSRPath(route.SSRPath)
 
-		// Create fresh app instance
-		var freshApp Component
+		// Create fresh app instance (apps without New() are reused as-is)
+		var freshApp Component = app
 		if hn, ok := app.(HasNew); ok {
 			freshApp = hn.New()
 		}
@@ -78,29 +79,11 @@ func Hydrate(app ComponentRoot) {
 }
 
 func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[string]string) string {
+	// Global styles first (unscoped), then scoped styles, each sorted by component name
 	var allStyles string
-
-	// Global styles first (unscoped)
-	if len(collectedGlobalStyles) > 0 {
-		keys := make([]string, 0, len(collectedGlobalStyles))
-		for k := range collectedGlobalStyles {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			allStyles += collectedGlobalStyles[k] + "\n"
-		}
-	}
-
-	// Scoped styles
-	if len(collectedStyles) > 0 {
-		keys := make([]string, 0, len(collectedStyles))
-		for k := range collectedStyles {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			allStyles += collectedStyles[k] + "\n"
+	for _, styles := range []map[string]string{collectedGlobalStyles, collectedStyles} {
+		for _, k := range slices.Sorted(maps.Keys(styles)) {
+			allStyles += styles[k] + "\n"
 		}
 	}
 

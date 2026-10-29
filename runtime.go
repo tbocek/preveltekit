@@ -20,8 +20,8 @@ func getEl(id string) js.Value {
 	return document.Call("getElementById", id)
 }
 
-// ok returns true if el is a valid element
-func ok(el js.Value) bool {
+// exists returns true if el is a valid element
+func exists(el js.Value) bool {
 	return !el.IsNull() && !el.IsUndefined()
 }
 
@@ -93,7 +93,7 @@ type settable[T any] interface {
 // Returns the js.Func for cleanup.
 func bindInput(id string, store settable[string]) js.Func {
 	el := getEl(id)
-	if !ok(el) {
+	if !exists(el) {
 		return js.Func{}
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -109,7 +109,7 @@ func bindInput(id string, store settable[string]) js.Func {
 // Returns the js.Func for cleanup.
 func bindInputInt(id string, store settable[int]) js.Func {
 	el := getEl(id)
-	if !ok(el) {
+	if !exists(el) {
 		return js.Func{}
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -125,7 +125,7 @@ func bindInputInt(id string, store settable[int]) js.Func {
 // Returns the js.Func for cleanup.
 func bindCheckbox(id string, store settable[bool]) js.Func {
 	el := getEl(id)
-	if !ok(el) {
+	if !exists(el) {
 		return js.Func{}
 	}
 	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -138,69 +138,29 @@ func bindCheckbox(id string, store settable[bool]) js.Func {
 	return fn
 }
 
-// === Batch Binding Types (for smaller WASM) ===
-
-// evt represents an event binding for batch processing
-type evt struct {
-	ID    string
-	Event string
-	Fn    func()
-}
-
-// bindEvents binds multiple events in a loop (smaller WASM than separate calls).
-// Pass a cleanup to collect js.Func references for later release.
-func bindEvents(c *cleanupBag, events []evt) {
-	for _, e := range events {
-		e := e // Capture loop variable for closure
-		el := getEl(e.ID)
-		if !ok(el) {
-			continue
-		}
-		mods := GetHandlerModifiers(e.ID)
-		fn := js.FuncOf(func(this js.Value, args []js.Value) any {
-			if len(args) > 0 {
-				ev := args[0]
-				for _, mod := range mods {
-					switch mod {
-					case "preventDefault":
-						ev.Call("preventDefault")
-					case "stopPropagation":
-						ev.Call("stopPropagation")
-					}
+// bindEvent attaches a handler to the element with the given ID, applying
+// the modifiers registered via PreventDefault/StopPropagation.
+func bindEvent(c *cleanupBag, id, event string, handler func()) {
+	el := getEl(id)
+	if !exists(el) {
+		return
+	}
+	mods := GetHandlerModifiers(id)
+	fn := js.FuncOf(func(this js.Value, args []js.Value) any {
+		if len(args) > 0 {
+			ev := args[0]
+			for _, mod := range mods {
+				switch mod {
+				case "preventDefault":
+					ev.Call("preventDefault")
+				case "stopPropagation":
+					ev.Call("stopPropagation")
 				}
 			}
-			e.Fn()
-			return nil
-		})
-		el.Call("addEventListener", e.Event, fn)
-		c.Add(fn)
-	}
-}
-
-// inp represents an input binding for batch processing
-type inp struct {
-	ID    string
-	Store settable[string]
-}
-
-// bindInputs binds multiple inputs in a loop.
-// Pass a cleanup to collect js.Func references for later release.
-func bindInputs(c *cleanupBag, bindings []inp) {
-	for _, b := range bindings {
-		c.Add(bindInput(b.ID, b.Store))
-	}
-}
-
-// chk represents a checkbox binding for batch processing
-type chk struct {
-	ID    string
-	Store settable[bool]
-}
-
-// bindCheckboxes binds multiple checkboxes in a loop.
-// Pass a cleanup to collect js.Func references for later release.
-func bindCheckboxes(c *cleanupBag, bindings []chk) {
-	for _, b := range bindings {
-		c.Add(bindCheckbox(b.ID, b.Store))
-	}
+		}
+		handler()
+		return nil
+	})
+	el.Call("addEventListener", event, fn)
+	c.Add(fn)
 }

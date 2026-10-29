@@ -4,23 +4,25 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 //go:embed assets/*
 var assets embed.FS
 
-// Files that go into assets/ subdirectory
-var assetFiles = []string{"index.html", "wasm_exec.js"}
-
-// Files that go into project root (with permissions)
-var rootFiles = map[string]os.FileMode{
-	"build.sh":       0755,
-	"dev.sh":         0755,
-	"Dockerfile":     0644,
-	"Dockerfile.dev": 0644,
-	"Caddyfile":      0644,
-	"Caddyfile.dev":  0644,
+// Files to scaffold: embedded assets/<src> is written to dst.
+var files = []struct {
+	src, dst string
+	perm     os.FileMode
+}{
+	{"index.html", "assets/index.html", 0644},
+	{"wasm_exec.js", "assets/wasm_exec.js", 0644},
+	{"build.sh", "build.sh", 0755},
+	{"dev.sh", "dev.sh", 0755},
+	{"Dockerfile", "Dockerfile", 0644},
+	{"Dockerfile.dev", "Dockerfile.dev", 0644},
+	{"Caddyfile", "Caddyfile", 0644},
+	{"Caddyfile.dev", "Caddyfile.dev", 0644},
+	{"main.go", "main.go", 0644},
 }
 
 func main() {
@@ -56,32 +58,12 @@ func cmdInit() {
 		os.Exit(1)
 	}
 
-	// Copy asset files
-	for _, name := range assetFiles {
-		data, _ := assets.ReadFile(filepath.Join("assets", name))
-		dest := filepath.Join("assets", name)
-		if err := os.WriteFile(dest, data, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", dest, err)
+	for _, f := range files {
+		data, _ := assets.ReadFile("assets/" + f.src) // embed paths always use '/'
+		if err := os.WriteFile(f.dst, data, f.perm); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", f.dst, err)
 			os.Exit(1)
 		}
-		fmt.Printf("  Created %s\n", dest)
+		fmt.Printf("  Created %s\n", f.dst)
 	}
-
-	// Copy root files
-	for name, perm := range rootFiles {
-		data, _ := assets.ReadFile(filepath.Join("assets", name))
-		if err := os.WriteFile(name, data, perm); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", name, err)
-			os.Exit(1)
-		}
-		fmt.Printf("  Created %s\n", name)
-	}
-
-	// Write main.go
-	mainGoData, _ := assets.ReadFile("assets/main.go")
-	if err := os.WriteFile("main.go", mainGoData, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to write main.go: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Println("  Created main.go")
 }

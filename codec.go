@@ -50,23 +50,14 @@ func decodeValue(v js.Value, dst reflect.Value) {
 			if field.PkgPath != "" {
 				continue // skip unexported
 			}
-			// Get JS field name from tag
-			jsName := field.Tag.Get("js")
+			// Tag name or field name as-is, then field name with lowercase first letter
+			jsName := fieldTag(field)
 			if jsName == "" {
-				jsName = field.Tag.Get("json")
-			}
-			if jsName == "" || jsName == "-" {
-				// Try field name as-is and lowercase first letter
 				jsName = field.Name
 			}
-
 			jsVal := v.Get(jsName)
 			if jsVal.IsUndefined() {
-				// Try lowercase first letter
-				if len(field.Name) > 0 {
-					lcName := string(field.Name[0]|0x20) + field.Name[1:]
-					jsVal = v.Get(lcName)
-				}
+				jsVal = v.Get(lowerFirst(field.Name))
 			}
 			if !jsVal.IsUndefined() && !jsVal.IsNull() {
 				decodeValue(jsVal, dst.Field(i))
@@ -200,17 +191,10 @@ func encodeValue(v reflect.Value) js.Value {
 			if field.PkgPath != "" {
 				continue // skip unexported
 			}
-			// Get JS field name from tag or use lowercase first letter
-			jsName := field.Tag.Get("js")
+			// Tag name or field name with lowercase first letter
+			jsName := fieldTag(field)
 			if jsName == "" {
-				jsName = field.Tag.Get("json")
-			}
-			if jsName == "" || jsName == "-" {
-				// Use field name with lowercase first letter
-				name := field.Name
-				if len(name) > 0 {
-					jsName = string(name[0]|0x20) + name[1:]
-				}
+				jsName = lowerFirst(field.Name)
 			}
 			obj.Set(jsName, encodeValue(v.Field(i)))
 		}
@@ -290,6 +274,19 @@ func encodeValue(v reflect.Value) js.Value {
 	default:
 		return js.Undefined()
 	}
+}
+
+// fieldTag returns the js (or else json) tag name of a struct field, or ""
+// if it has none or is tagged "-".
+func fieldTag(f reflect.StructField) string {
+	name := f.Tag.Get("js")
+	if name == "" {
+		name = f.Tag.Get("json")
+	}
+	if name == "-" {
+		return ""
+	}
+	return name
 }
 
 // codecDisabled reports a value whose kind was compiled out via a pk_no<kind>

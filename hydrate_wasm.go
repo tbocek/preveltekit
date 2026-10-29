@@ -2,14 +2,9 @@
 
 package preveltekit
 
-// Track which if-blocks have been set up to avoid duplicates
-var setupIfBlocks = make(map[string]bool)
-
-// Track which each-blocks have been set up to avoid duplicates
-var setupEachBlocks = make(map[string]bool)
-
-// Track which component-blocks have been set up to avoid duplicates
-var setupComponentBlocks = make(map[string]bool)
+// setupBlocks tracks which if/each/component blocks (by marker ID) have been
+// set up, to avoid wiring them twice.
+var setupBlocks = make(map[string]bool)
 
 // Hydrate sets up DOM bindings for reactivity.
 // Walks the Render() tree to discover all bindings directly.
@@ -89,22 +84,14 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 		if len(h.Events) > 0 {
 			elementID = h.Events[0].ID
 		} else {
-			localID := ctx.NextClassID()
-			elementID = ctx.FullID(localID)
+			elementID = ctx.NextClassID()
 		}
 	}
 
 	// Wire events
-	if len(h.Events) > 0 {
-		var evts []evt
-		for _, ev := range h.Events {
-			handler := GetHandler(ev.ID)
-			if handler != nil {
-				evts = append(evts, evt{ev.ID, ev.Event, handler})
-			}
-		}
-		if len(evts) > 0 {
-			bindEvents(cleanup, evts)
+	for _, ev := range h.Events {
+		if handler := GetHandler(ev.ID); handler != nil {
+			bindEvent(cleanup, ev.ID, ev.Event, handler)
 		}
 	}
 
@@ -115,8 +102,7 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 
 	// Wire two-way binding
 	if h.BoundStore != nil {
-		localID := ctx.NextBindID()
-		bindID := ctx.FullID(localID)
+		bindID := ctx.NextBindID()
 		wasmBindInput(bindID, h.BoundStore, cleanup)
 	}
 
@@ -139,8 +125,7 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 
 // wasmBindTextNode wires a text binding (BindNode) to the DOM.
 func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextTextMarker()
 
 	if s, ok := b.StoreRef.(AnySubscriber); ok {
 		g := b.StoreRef.(AnyGetter)
@@ -159,24 +144,24 @@ func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 func wasmBindInput(bindID string, boundStore any, cleanup *cleanupBag) {
 	switch s := boundStore.(type) {
 	case *Store[string]:
-		bindInputs(cleanup, []inp{{bindID, s}})
+		cleanup.Add(bindInput(bindID, s))
 	case *Store[int]:
 		cleanup.Add(bindInputInt(bindID, s))
 	case *Store[bool]:
-		bindCheckboxes(cleanup, []chk{{bindID, s}})
+		cleanup.Add(bindCheckbox(bindID, s))
 	}
 }
 
 // wasmBindAttrCond wires a conditional attribute binding.
 func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 	el := getEl(elementID)
-	if !ok(el) {
+	if !exists(el) {
 		return
 	}
 
 	// Extract condition stores for subscription
 	var condStores []any
-	if fc, ok2 := ac.Cond.(*FuncCondition); ok2 {
+	if fc, ok := ac.Cond.(*FuncCondition); ok {
 		condStores = fc.Stores
 	}
 
@@ -216,25 +201,20 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 	for _, cs := range condStores {
 		subscribeToStore(cs, updateAttr)
 	}
-	// Also subscribe to value stores if dynamic
-	if s, ok2 := ac.TrueValue.(*Store[string]); ok2 {
-		subscribeToStore(s, updateAttr)
-	}
-	if s, ok2 := ac.FalseValue.(*Store[string]); ok2 {
-		subscribeToStore(s, updateAttr)
-	}
+	// Also subscribe to the values if they are stores (no-op for strings)
+	subscribeToStore(ac.TrueValue, updateAttr)
+	subscribeToStore(ac.FalseValue, updateAttr)
 }
 
 // wasmBindDynAttr wires a dynamic attribute binding.
 func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	localID := ctx.NextAttrID()
-	fullID := ctx.FullID(localID)
+	fullID := ctx.NextAttrID()
 
 	el := document.Call("querySelector", `[data-attrbind="`+fullID+`"]`)
-	if !ok(el) {
+	if !exists(el) {
 		el = getEl(fullID)
 	}
-	if !ok(el) {
+	if !exists(el) {
 		return
 	}
 
@@ -262,8 +242,7 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBa
 
 // wasmBindIfNode wires an if-block with reactive condition evaluation.
 func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	localMarker := ctx.NextIfMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextIfMarker()
 
 	// Advance counters through ALL branches to stay in sync with SSR.
 	// Save the counter state at the start of each branch so the bind pass
@@ -292,10 +271,10 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 	}
 
 	// Skip if already set up
-	if setupIfBlocks[markerID] {
+	if setupBlocks[markerID] {
 		return
 	}
-	setupIfBlocks[markerID] = true
+	setupBlocks[markerID] = true
 
 	currentCleanup := &cleanupBag{}
 	currentBranchIdx := -2
@@ -303,7 +282,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 	// Collect condition stores for subscription
 	var condStores []any
 	for _, branch := range ifNode.Branches {
-		if fc, ok2 := branch.Cond.(*FuncCondition); ok2 {
+		if fc, ok := branch.Cond.(*FuncCondition); ok {
 			condStores = append(condStores, fc.Stores...)
 		}
 	}
@@ -356,7 +335,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 	// Subscribe to condition stores
 	seen := make(map[string]bool)
 	for _, store := range condStores {
-		if id, ok2 := store.(HasID); ok2 {
+		if id, ok := store.(HasID); ok {
 			sid := id.ID()
 			if seen[sid] {
 				continue
@@ -400,14 +379,13 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 
 // wasmBindEachNode wires an each-block with reactive list rendering.
 func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	localMarker := ctx.NextEachMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextEachMarker()
 
 	// Skip if already set up
-	if setupEachBlocks[markerID] {
+	if setupBlocks[markerID] {
 		return
 	}
-	setupEachBlocks[markerID] = true
+	setupBlocks[markerID] = true
 
 	scopeAttr := ctx.ScopeAttr
 
@@ -522,8 +500,7 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *clean
 
 // wasmBindStoreComponent wires a Store[Component] binding.
 func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup *cleanupBag) {
-	localMarker := ctx.NextRouteMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextRouteMarker()
 
 	// Check if the HTML render pass already cached trees for this marker.
 	// If so, reuse them to avoid calling Render() again (which re-registers handlers).
@@ -538,8 +515,8 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		// No cached trees — do counter-advance ourselves
 		seen := make(map[string]bool)
 		for _, opt := range v.Options() {
-			optComp, ok2 := opt.(Component)
-			if !ok2 || optComp == nil {
+			optComp, ok := opt.(Component)
+			if !ok || optComp == nil {
 				continue
 			}
 			name := componentName(optComp)
@@ -552,7 +529,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 				IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 			}
 			var scopeAttr string
-			if _, ok3 := optComp.(HasStyle); ok3 {
+			if _, ok := optComp.(HasStyle); ok {
 				scopeAttr = GetOrCreateScope(name)
 				branchCtx.ScopeAttr = scopeAttr
 			}
@@ -569,10 +546,10 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 	}
 
 	// Skip if already set up
-	if setupComponentBlocks[markerID] {
+	if setupBlocks[markerID] {
 		return
 	}
-	setupComponentBlocks[markerID] = true
+	setupBlocks[markerID] = true
 
 	currentCleanup := &cleanupBag{}
 	currentName := ""
@@ -613,10 +590,10 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 				IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 				ScopeAttr: scopeAttr,
 			}
-			if om, ok2 := comp.(HasOnMount); ok2 {
+			if om, ok := comp.(HasOnMount); ok {
 				om.OnMount()
 			}
-			if od, ok2 := comp.(HasOnDestroy); ok2 {
+			if od, ok := comp.(HasOnDestroy); ok {
 				currentCleanup.AddDestroy(od.OnDestroy)
 			}
 			wasmWalkAndBind(tree, bindCtx, currentCleanup)
@@ -626,7 +603,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		currentName = name
 
 		// Call OnMount on the new active component
-		if om, ok2 := comp.(HasOnMount); ok2 {
+		if om, ok := comp.(HasOnMount); ok {
 			om.OnMount()
 		}
 
@@ -635,7 +612,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		renderCtx := &WASMRenderContext{
 			IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 		}
-		if _, ok2 := comp.(HasStyle); ok2 {
+		if _, ok := comp.(HasStyle); ok {
 			renderCtx.ScopeAttr = GetOrCreateScope(name)
 		}
 		html := wasmNodeToHTML(renderTree, renderCtx)
@@ -649,10 +626,10 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		bindCtx := &WASMRenderContext{
 			IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 		}
-		if _, ok2 := comp.(HasStyle); ok2 {
+		if _, ok := comp.(HasStyle); ok {
 			bindCtx.ScopeAttr = GetOrCreateScope(name)
 		}
-		if od, ok2 := comp.(HasOnDestroy); ok2 {
+		if od, ok := comp.(HasOnDestroy); ok {
 			currentCleanup.AddDestroy(od.OnDestroy)
 		}
 		wasmWalkAndBind(renderTree, bindCtx, currentCleanup)
@@ -664,16 +641,15 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 
 // wasmBindComponentNode wires a nested ComponentNode.
 func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	comp, ok2 := c.Instance.(Component)
-	if !ok2 {
+	comp, ok := c.Instance.(Component)
+	if !ok {
 		return
 	}
 
-	compMarker := ctx.NextCompMarker()
-	fullCompPrefix := ctx.FullID(compMarker)
+	fullCompPrefix := ctx.NextCompMarker()
 
 	var scopeAttr string
-	if _, ok3 := c.Instance.(HasStyle); ok3 {
+	if _, ok := c.Instance.(HasStyle); ok {
 		scopeAttr = GetOrCreateScope(c.Name)
 	}
 
@@ -691,12 +667,12 @@ func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *cl
 	}
 
 	// Call OnMount when the component is wired
-	if om, ok3 := comp.(HasOnMount); ok3 {
+	if om, ok := comp.(HasOnMount); ok {
 		om.OnMount()
 	}
 
 	// Register OnDestroy if the component implements it
-	if od, ok3 := comp.(HasOnDestroy); ok3 {
+	if od, ok := comp.(HasOnDestroy); ok {
 		cleanup.AddDestroy(od.OnDestroy)
 	}
 

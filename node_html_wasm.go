@@ -93,16 +93,14 @@ func wasmRenderStructured(h *HtmlNode, ctx *WASMRenderContext) string {
 		if len(h.Events) > 0 {
 			elementID = h.Events[0].ID
 		} else {
-			localID := ctx.NextClassID()
-			elementID = ctx.FullID(localID)
+			elementID = ctx.NextClassID()
 		}
 	}
 
 	// Bind ID
 	var bindID string
 	if h.BoundStore != nil {
-		localID := ctx.NextBindID()
-		bindID = ctx.FullID(localID)
+		bindID = ctx.NextBindID()
 	}
 
 	// --- Build opening tag ---
@@ -173,7 +171,7 @@ func wasmRenderStructured(h *HtmlNode, ctx *WASMRenderContext) string {
 			val = evalAttrValue(ac.FalseValue)
 		}
 		if val != "" {
-			s += " " + ac.Name + `="` + escapeAttr(val) + `"`
+			s += " " + ac.Name + `="` + escapeHTML(val) + `"`
 		}
 	}
 
@@ -182,7 +180,7 @@ func wasmRenderStructured(h *HtmlNode, ctx *WASMRenderContext) string {
 		switch st := h.BoundStore.(type) {
 		case *Store[string]:
 			if h.Tag != "textarea" {
-				s += ` value="` + escapeAttr(st.Get()) + `"`
+				s += ` value="` + escapeHTML(st.Get()) + `"`
 			}
 		case *Store[int]:
 			s += ` value="` + itoa(st.Get()) + `"`
@@ -248,8 +246,7 @@ func wasmStoreComponentToHTML(v *Store[Component], ctx *WASMRenderContext) strin
 		return ""
 	}
 
-	localMarker := ctx.NextRouteMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextRouteMarker()
 
 	// Advance counters for all options to stay in sync with SSR.
 	// Cache the Render() trees so wasmBindStoreComponent can reuse them.
@@ -257,8 +254,8 @@ func wasmStoreComponentToHTML(v *Store[Component], ctx *WASMRenderContext) strin
 	seen := make(map[string]bool)
 	var activeHTML string
 	for _, opt := range v.Options() {
-		optComp, ok2 := opt.(Component)
-		if !ok2 || optComp == nil {
+		optComp, ok := opt.(Component)
+		if !ok || optComp == nil {
 			continue
 		}
 		name := componentName(optComp)
@@ -271,7 +268,7 @@ func wasmStoreComponentToHTML(v *Store[Component], ctx *WASMRenderContext) strin
 			IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
 		}
 		var scopeAttr string
-		if _, ok3 := optComp.(HasStyle); ok3 {
+		if _, ok := optComp.(HasStyle); ok {
 			scopeAttr = GetOrCreateScope(name)
 			branchCtx.ScopeAttr = scopeAttr
 		}
@@ -300,8 +297,7 @@ func wasmBindNodeToHTML(b *BindNode, ctx *WASMRenderContext) string {
 		value = anyToString(g.GetAny())
 	}
 
-	localMarker := ctx.NextTextMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextTextMarker()
 
 	if !b.IsHTML {
 		value = escapeHTML(value)
@@ -311,8 +307,7 @@ func wasmBindNodeToHTML(b *BindNode, ctx *WASMRenderContext) string {
 
 // wasmIfNodeToHTML renders an IfNode, evaluating conditions at runtime.
 func wasmIfNodeToHTML(i *IfNode, ctx *WASMRenderContext) string {
-	localMarker := ctx.NextIfMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextIfMarker()
 
 	// Advance counters through ALL branches to stay in sync with SSR.
 	// SSR renders all branches sequentially, advancing counters through each.
@@ -351,8 +346,7 @@ func wasmIfNodeToHTML(i *IfNode, ctx *WASMRenderContext) string {
 
 // wasmEachNodeToHTML renders an EachNode.
 func wasmEachNodeToHTML(e *EachNode, ctx *WASMRenderContext) string {
-	localMarker := ctx.NextEachMarker()
-	markerID := ctx.FullID(localMarker)
+	markerID := ctx.NextEachMarker()
 
 	var itemsHTML string
 	switch list := e.ListRef.(type) {
@@ -381,16 +375,15 @@ func wasmEachNodeToHTML(e *EachNode, ctx *WASMRenderContext) string {
 
 // wasmComponentNodeToHTML renders a nested ComponentNode.
 func wasmComponentNodeToHTML(c *ComponentNode, ctx *WASMRenderContext) string {
-	comp, ok2 := c.Instance.(Component)
-	if !ok2 {
+	comp, ok := c.Instance.(Component)
+	if !ok {
 		return ""
 	}
 
-	compMarker := ctx.NextCompMarker()
-	fullCompPrefix := ctx.FullID(compMarker)
+	fullCompPrefix := ctx.NextCompMarker()
 
 	var scopeAttr string
-	if _, ok3 := c.Instance.(HasStyle); ok3 {
+	if _, ok := c.Instance.(HasStyle); ok {
 		scopeAttr = GetOrCreateScope(c.Name)
 	}
 
@@ -414,10 +407,9 @@ func wasmComponentNodeToHTML(c *ComponentNode, ctx *WASMRenderContext) string {
 func wasmAttrToHTML(attr NodeAttr, ctx *WASMRenderContext) string {
 	switch a := attr.(type) {
 	case *StaticAttr:
-		return a.Name + `="` + escapeAttr(a.Value) + `"`
+		return a.Name + `="` + escapeHTML(a.Value) + `"`
 	case *DynAttrAttr:
-		localID := ctx.NextAttrID()
-		fullID := ctx.FullID(localID)
+		fullID := ctx.NextAttrID()
 		var attrValue string
 		for _, part := range a.Parts {
 			switch v := part.(type) {
@@ -427,7 +419,7 @@ func wasmAttrToHTML(attr NodeAttr, ctx *WASMRenderContext) string {
 				attrValue += anyToString(v.GetAny())
 			}
 		}
-		return `data-attrbind="` + fullID + `" ` + a.Name + `="` + escapeAttr(attrValue) + `"`
+		return `data-attrbind="` + fullID + `" ` + a.Name + `="` + escapeHTML(attrValue) + `"`
 	}
 	return ""
 }

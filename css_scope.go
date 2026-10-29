@@ -33,33 +33,15 @@ func scopeCSS(css, scopeClass string) string {
 			if j < len(css) && css[j] == '{' {
 				if strings.HasPrefix(atRule, "@keyframes") || strings.HasPrefix(atRule, "@font-face") {
 					// Skip scoping — copy the entire block as-is
-					depth := 1
-					k := j + 1
-					for k < len(css) && depth > 0 {
-						if css[k] == '{' {
-							depth++
-						} else if css[k] == '}' {
-							depth--
-						}
-						k++
-					}
+					k := blockEnd(css, j+1)
 					buf = append(buf, css[i:k]...)
 					i = k
 					continue
 				}
 				// @media or similar — write the @-rule header, recurse into body
 				buf = append(buf, css[i:j+1]...) // "@media (...) {"
-				depth := 1
-				k := j + 1
-				bodyStart := k
-				for k < len(css) && depth > 0 {
-					if css[k] == '{' {
-						depth++
-					} else if css[k] == '}' {
-						depth--
-					}
-					k++
-				}
+				bodyStart := j + 1
+				k := blockEnd(css, bodyStart)
 				// body is css[bodyStart:k-1], closing } is at k-1
 				body := css[bodyStart : k-1]
 				buf = append(buf, scopeCSS(body, scopeClass)...)
@@ -78,16 +60,7 @@ func scopeCSS(css, scopeClass string) string {
 		i += braceIdx + 1
 
 		// Find the closing }
-		depth := 1
-		k := i
-		for k < len(css) && depth > 0 {
-			if css[k] == '{' {
-				depth++
-			} else if css[k] == '}' {
-				depth--
-			}
-			k++
-		}
+		k := blockEnd(css, i)
 		body := css[i : k-1]
 		i = k
 
@@ -104,6 +77,22 @@ func scopeCSS(css, scopeClass string) string {
 		buf = append(buf, '}')
 	}
 	return string(buf)
+}
+
+// blockEnd returns the index just past the '}' that closes the block whose
+// content starts at start (i.e. right after its '{').
+func blockEnd(css string, start int) int {
+	depth := 1
+	k := start
+	for k < len(css) && depth > 0 {
+		if css[k] == '{' {
+			depth++
+		} else if css[k] == '}' {
+			depth--
+		}
+		k++
+	}
+	return k
 }
 
 // scopeSelector adds .vN to each simple selector in a compound selector.
@@ -160,12 +149,9 @@ func scopeSelector(sel, scope string) string {
 		}
 
 		// Find where to insert scope: before pseudo-class/pseudo-element
-		insertPos := len(segment)
-		for j := 0; j < len(segment); j++ {
-			if segment[j] == ':' {
-				insertPos = j
-				break
-			}
+		insertPos := strings.IndexByte(segment, ':')
+		if insertPos < 0 {
+			insertPos = len(segment)
 		}
 		buf = append(buf, segment[:insertPos]...)
 		buf = append(buf, scope...)

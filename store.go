@@ -304,36 +304,34 @@ func (l *List[T]) At(i int) T {
 // Set replaces the entire list
 func (l *List[T]) Set(items []T) {
 	l.items = items
-	for _, cb := range l.onChange {
-		cb(l.items)
-	}
+	l.notify()
 }
 
 // Append adds items to the end
 func (l *List[T]) Append(items ...T) {
 	l.items = append(l.items, items...)
-	for _, cb := range l.onChange {
-		cb(l.items)
-	}
+	l.notify()
 }
 
 // RemoveAt removes item at index
 func (l *List[T]) RemoveAt(i int) {
 	l.items = append(l.items[:i], l.items[i+1:]...)
-	for _, cb := range l.onChange {
-		cb(l.items)
-	}
+	l.notify()
 }
 
 // Clear removes all items
 func (l *List[T]) Clear() {
 	l.items = l.items[:0]
-	for _, cb := range l.onChange {
-		cb(l.items)
-	}
+	l.notify()
 }
 
 // OnChange adds a callback for any change to the list
 func (l *List[T]) OnChange(cb func([]T)) {
 	l.onChange = append(l.onChange, cb)
+}
+
+func (l *List[T]) notify() {
+	for _, cb := range l.onChange {
+		cb(l.items)
+	}
 }

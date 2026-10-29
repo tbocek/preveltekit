@@ -1,9 +1,6 @@
 package preveltekit
 
-import (
-	"reflect"
-	"strings"
-)
+import "reflect"
 
 // Node represents a node in the declarative UI tree.
 // Nodes are constructed at build-time and walked to generate:
@@ -132,7 +129,7 @@ func element(tag string, parts ...any) *HtmlNode {
 	for _, part := range parts {
 		switch v := part.(type) {
 		case *StaticAttr:
-			h.Attrs = append(h.Attrs, v.Name+`="`+escapeAttr(v.Value)+`"`)
+			h.Attrs = append(h.Attrs, v.Name+`="`+escapeHTML(v.Value)+`"`)
 		case *DynAttrAttr:
 			h.DynAttrs = append(h.DynAttrs, v)
 		case string:
@@ -469,15 +466,8 @@ func (c *ComponentNode) nodeType() string { return "component" }
 // The component name is derived from the type via reflection.
 // Example: Comp(&Badge{Label: p.New("New")})
 func Comp(instance any, content ...any) *ComponentNode {
-	// Derive name from type
-	t := reflect.TypeOf(instance)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	name := t.Name()
-
 	c := &ComponentNode{
-		Name:     name,
+		Name:     typeName(instance),
 		Instance: instance,
 	}
 	for _, item := range content {
@@ -502,22 +492,29 @@ func Slot() *SlotNode {
 	return &SlotNode{}
 }
 
-// componentName returns the lowercase type name of a component.
+// typeName returns the name of v's type, dereferencing pointers.
+func typeName(v any) string {
+	t := reflect.TypeOf(v)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+
+// componentName returns the type name of a component with a lowercase first letter.
 func componentName(c Component) string {
 	if c == nil {
 		return ""
 	}
-	t := reflect.TypeOf(c)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
+	return lowerFirst(typeName(c))
+}
+
+// lowerFirst returns s with an ASCII uppercase first letter lowercased.
+func lowerFirst(s string) string {
+	if s == "" || s[0] < 'A' || s[0] > 'Z' {
+		return s
 	}
-	name := t.Name()
-	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
-		b := []byte(name)
-		b[0] = b[0] + 32
-		return string(b)
-	}
-	return name
+	return string(s[0]+'a'-'A') + s[1:]
 }
 
 // =============================================================================
@@ -544,25 +541,15 @@ func (d *DynAttrAttr) attrType() string { return "dynattr" }
 // With only string parts, it's static (no reactive binding).
 // With any store parts, it becomes a dynamic attribute that updates reactively.
 func Attr(name string, parts ...any) NodeAttr {
-	// Check if all parts are strings — if so, use StaticAttr
-	allStatic := true
+	var value string
 	for _, p := range parts {
-		if _, ok := p.(string); !ok {
-			allStatic = false
-			break
+		s, ok := p.(string)
+		if !ok {
+			return &DynAttrAttr{Name: name, Parts: parts}
 		}
+		value += s
 	}
-	if allStatic {
-		var value string
-		for _, p := range parts {
-			value += p.(string)
-		}
-		return &StaticAttr{Name: name, Value: value}
-	}
-	return &DynAttrAttr{
-		Name:  name,
-		Parts: parts,
-	}
+	return &StaticAttr{Name: name, Value: value}
 }
 
 // =============================================================================
@@ -652,7 +639,7 @@ func ftoa(f float64) string {
 	return result
 }
 
-// escapeHTML escapes HTML special characters.
+// escapeHTML escapes HTML special characters, in text and attribute values.
 func escapeHTML(s string) string {
 	var result []byte
 	for i := 0; i < len(s); i++ {
@@ -685,11 +672,4 @@ func evalAttrValue(v any) string {
 		return anyToString(val.GetAny())
 	}
 	return ""
-}
-
-// escapeAttr escapes attribute values (quotes and ampersands).
-func escapeAttr(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, `"`, "&quot;")
-	return s
 }
