@@ -20,19 +20,17 @@ type JSEncoder interface {
 // Decode converts a js.Value to a Go value.
 // If dst implements JSDecoder, uses that.
 // For structs, decodes from JS object using field tags.
-func Decode(v js.Value, dst any) error {
-	if v.IsUndefined() || v.IsNull() {
+// Generic so the JSDecoder check is resolved at compile time: if T implements
+// JSDecoder, the reflection-based decoder is not linked in.
+func Decode[T any](v js.Value, dst *T) error {
+	if v.IsUndefined() || v.IsNull() || dst == nil {
 		return nil
 	}
-	if dec, ok := dst.(JSDecoder); ok {
+	if dec, ok := any(dst).(JSDecoder); ok {
 		dec.FromJS(v)
 		return nil
 	}
-	rv := reflect.ValueOf(dst)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return nil
-	}
-	decodeValue(v, rv.Elem())
+	decodeValue(v, reflect.ValueOf(dst).Elem())
 	return nil
 }
 

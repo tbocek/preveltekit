@@ -5,7 +5,7 @@ package preveltekit
 import "errors"
 
 // Decode stub for non-WASM builds.
-func Decode(v any, dst any) error {
+func Decode[T any](v any, dst *T) error {
 	return errors.New("Decode only works in wasm")
 }
 
