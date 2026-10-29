@@ -3,235 +3,244 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,-apple-system,sans-serif;color:#333;line-height:1.6}a{color:inherit;text-decoration:none}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.container{max-width:960px;margin:0 auto;padding:0 20px}.header{background:#1a1a2e;color:#fff;padding:16px 0;position:sticky;top:0;z-index:10}.header-inner{max-width:960px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between}.brand{font-size:1.3em;font-weight:700;color:#fff}.nav{display:flex;gap:24px}.nav a{color:#ccc;font-size:14px;transition:color .2s}.nav a:hover{color:#fff}.page{padding:40px 0}.page h1{font-size:2.2em;color:#1a1a2e;margin-bottom:8px}.page-intro{color:#666;margin-bottom:32px;font-size:1.05em}pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}pre code{background:transparent;padding:0;font-size:inherit}code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}.footer{padding:32px 0;background:#1a1a2e;color:#999;text-align:center;font-size:.9em}@media(max-width:768px){.nav{gap:12px}.nav a{font-size:13px}}.btc-card.v2{background:#fff;padding:24px;border-radius:8px;border:1px solid #e5e7eb;text-align:center;max-width:500px;margin-bottom:32px}.price-header.v2{display:flex;justify-content:space-between;margin-bottom:16px;color:#666}.symbol.v2{font-weight:600;color:#f7931a;font-size:1.1em}.update-time.v2{font-size:14px}.price.v2{font-size:2.5em;font-weight:700;margin:16px 0;color:#1a1a2e}.disclaimer.v2{display:block;color:#999;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;font-size:.8em}.loading.v2{color:#666;font-size:1.1em;padding:32px 0}.error.v2{color:#e53e3e;margin-bottom:16px}.retry-btn.v2{padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer}.retry-btn.v2:hover{background:#0f3460}.btc-code.v2{max-width:700px}.btc-code.v2 h2.v2{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}.btc-code.v2>p.v2{color:#666;margin-bottom:16px;font-size:.95em}.hero.v0{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;padding:80px 0;text-align:center}.hero.v0 h1.v0{font-size:3em;margin-bottom:16px;font-weight:800}.tagline.v0{font-size:1.2em;color:#b8c5d6;max-width:600px;margin:0 auto 24px}.hero-badges.v0{display:flex;gap:12px;justify-content:center}.badge.v0{background:rgba(255,255,255,.12);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.2)}.hero-size.v0{margin-top:24px;font-size:.95em;color:#8899b0}.highlights.v0{padding:60px 0;background:#f8f9fa}.highlight-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.highlight-card.v0{padding:24px;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}.highlight-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.highlight-card.v0 p.v0{font-size:.95em;color:#666}.explore.v0{padding:60px 0}.explore.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:40px;color:#1a1a2e}.explore-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.explore-card.v0{padding:24px;border:1px solid #e5e7eb;border-radius:8px}.explore-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.explore-card.v0 p.v0{font-size:.95em;color:#666;margin-bottom:16px}.explore-links.v0{display:flex;gap:12px}.explore-links.v0 a.v0{display:inline-block;padding:8px 16px;border-radius:4px;font-size:13px;font-weight:500;background:#1a1a2e;color:#fff;transition:background .2s}.explore-links.v0 a.v0:hover{background:#0f3460}.explore-links.v0 a[external].v0{background:#f8f9fa;color:#1a1a2e;border:1px solid #ddd}.explore-links.v0 a[external].v0:hover{background:#e5e7eb}.features.v0{padding:60px 0;background:#f8f9fa}.features.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:40px;color:#1a1a2e}.feature-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.feature-card.v0{padding:24px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;background:#fff}.feature-icon.v0{font-size:2em;margin-bottom:12px}.feature-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.feature-card.v0 p.v0{font-size:.95em;color:#666}.quickstart.v0{padding:60px 0}.quickstart.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:12px;color:#1a1a2e}.prereq.v0{text-align:center;color:#666;margin-bottom:32px;font-size:.95em}.prereq.v0 a.v0{color:#4a7fff;text-decoration:underline}.steps.v0{max-width:700px;margin:0 auto}.step.v0{display:flex;gap:20px;margin-bottom:32px}.step-num.v0{width:36px;height:36px;background:#1a1a2e;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}.step-content.v0{flex:1}.step-content.v0 h3.v0{font-size:1.1em;margin-bottom:12px;color:#1a1a2e}.step-hint.v0{font-size:.9em;color:#666;margin-top:8px}.step-hint.v0 a.v0{color:#4a7fff;text-decoration:underline}.step-hint.v0 code.v0{background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:.85em}@media(max-width:768px){.highlight-grid.v0,.feature-grid.v0,.explore-grid.v0{grid-template-columns:1fr}.hero.v0 h1.v0{font-size:2em}.tagline.v0{font-size:1em}}.toc.v1{margin-bottom:40px;padding:20px;background:#f8f9fa;border-radius:8px}.toc.v1 h2.v1{font-size:1em;margin-bottom:12px;color:#1a1a2e}.toc.v1 ul.v1{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}.toc.v1 li.v1 a.v1{display:inline-block;padding:6px 14px;background:#1a1a2e;color:#fff;border-radius:4px;font-size:13px;transition:background .2s}.toc.v1 li.v1 a.v1:hover{background:#0f3460}.manual.v1 section.v1{margin-bottom:32px;padding:24px;border:1px solid #e5e7eb;border-radius:8px;background:#fff}.manual.v1 section.v1 h2.v1{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}.manual.v1 section.v1>p.v1{color:#666;margin-bottom:16px;font-size:.95em}@media(max-width:768px){.toc.v1 ul.v1{flex-direction:column}}</style>
+        <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,-apple-system,sans-serif;color:#333;line-height:1.6}a{color:inherit;text-decoration:none}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.container{max-width:960px;margin:0 auto;padding:0 20px}.header{background:#1a1a2e;color:#fff;padding:16px 0;position:sticky;top:0;z-index:10}.header-inner{max-width:960px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between}.brand{font-size:1.3em;font-weight:700;color:#fff}.nav{display:flex;gap:24px}.nav a{color:#ccc;font-size:14px;transition:color .2s}.nav a:hover{color:#fff}.page{padding:40px 0}.page h1{font-size:2.2em;color:#1a1a2e;margin-bottom:8px}.page-intro{color:#666;margin-bottom:32px;font-size:1.05em}pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}pre code{background:transparent;padding:0;font-size:inherit}pre .k{color:#c792ea}pre .t{color:#ffcb6b}pre .f{color:#82aaff}pre .s{color:#c3e88d}pre .n{color:#f78c6c}pre .c{color:#7f848e;font-style:italic}code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}.footer{padding:32px 0;background:#1a1a2e;color:#999;text-align:center;font-size:.9em}@media(max-width:768px){.nav{gap:12px}.nav a{font-size:13px}}.btc-card.v2{background:#fff;padding:24px;border-radius:8px;border:1px solid #e5e7eb;text-align:center;max-width:500px;margin-bottom:32px}.price-header.v2{display:flex;justify-content:space-between;margin-bottom:16px;color:#666}.symbol.v2{font-weight:600;color:#f7931a;font-size:1.1em}.price.v2{font-size:2.5em;font-weight:700;margin:16px 0;color:#1a1a2e}.disclaimer.v2{display:block;color:#999;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;font-size:.8em}.loading.v2{color:#666;font-size:1.1em;padding:32px 0}.error.v2{color:#e53e3e;margin-bottom:16px}.retry-btn.v2{padding:8px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:4px;cursor:pointer}.retry-btn.v2:hover{background:#0f3460}.btc-code.v2{max-width:700px}.btc-code.v2 h2.v2{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}.btc-code.v2>p.v2{color:#666;margin-bottom:16px;font-size:.95em}.hero.v0{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;padding:80px 0;text-align:center}.hero.v0 h1.v0{font-size:3em;margin-bottom:16px;font-weight:800}.tagline.v0{font-size:1.2em;color:#b8c5d6;max-width:600px;margin:0 auto 24px}.hero-badges.v0{display:flex;gap:12px;justify-content:center}.badge.v0{background:rgba(255,255,255,.12);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.2)}.hero-size.v0{margin-top:24px;font-size:.95em;color:#8899b0}.highlights.v0{padding:60px 0;background:#f8f9fa}.highlight-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.highlight-card.v0{padding:24px;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}.highlight-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.highlight-card.v0 p.v0{font-size:.95em;color:#666}.explore.v0{padding:60px 0}.explore.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:40px;color:#1a1a2e}.explore-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.explore-card.v0{padding:24px;border:1px solid #e5e7eb;border-radius:8px}.explore-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.explore-card.v0 p.v0{font-size:.95em;color:#666;margin-bottom:16px}.explore-links.v0{display:flex;gap:12px}.explore-links.v0 a.v0{display:inline-block;padding:8px 16px;border-radius:4px;font-size:13px;font-weight:500;background:#1a1a2e;color:#fff;transition:background .2s}.explore-links.v0 a.v0:hover{background:#0f3460}.explore-links.v0 a[external].v0{background:#f8f9fa;color:#1a1a2e;border:1px solid #ddd}.explore-links.v0 a[external].v0:hover{background:#e5e7eb}.features.v0{padding:60px 0;background:#f8f9fa}.features.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:40px;color:#1a1a2e}.feature-grid.v0{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.feature-card.v0{padding:24px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;background:#fff}.feature-icon.v0{font-size:2em;margin-bottom:12px}.feature-card.v0 h3.v0{font-size:1.1em;margin-bottom:8px;color:#1a1a2e}.feature-card.v0 p.v0{font-size:.95em;color:#666}.quickstart.v0{padding:60px 0}.quickstart.v0 h2.v0{text-align:center;font-size:2em;margin-bottom:12px;color:#1a1a2e}.prereq.v0{text-align:center;color:#666;margin-bottom:32px;font-size:.95em}.prereq.v0 a.v0{color:#4a7fff;text-decoration:underline}.steps.v0{max-width:700px;margin:0 auto}.step.v0{display:flex;gap:20px;margin-bottom:32px}.step-num.v0{width:36px;height:36px;background:#1a1a2e;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}.step-content.v0{flex:1}.step-content.v0 h3.v0{font-size:1.1em;margin-bottom:12px;color:#1a1a2e}.step-hint.v0{font-size:.9em;color:#666;margin-top:8px}.step-hint.v0 a.v0{color:#4a7fff;text-decoration:underline}.step-hint.v0 code.v0{background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:.85em}@media(max-width:768px){.highlight-grid.v0,.feature-grid.v0,.explore-grid.v0{grid-template-columns:1fr}.hero.v0 h1.v0{font-size:2em}.tagline.v0{font-size:1em}}.toc.v1{margin-bottom:40px;padding:20px;background:#f8f9fa;border-radius:8px}.toc.v1 h2.v1{font-size:1em;margin-bottom:12px;color:#1a1a2e}.toc.v1 ul.v1{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}.toc.v1 li.v1 a.v1{display:inline-block;padding:6px 14px;background:#1a1a2e;color:#fff;border-radius:4px;font-size:13px;transition:background .2s}.toc.v1 li.v1 a.v1:hover{background:#0f3460}.manual.v1 section.v1{margin-bottom:32px;padding:24px;border:1px solid #e5e7eb;border-radius:8px;background:#fff}.manual.v1 section.v1 h2.v1{font-size:1.3em;color:#1a1a2e;margin-bottom:8px}.manual.v1 section.v1>p.v1{color:#666;margin-bottom:16px;font-size:.95em}@media(max-width:768px){.toc.v1 ul.v1{flex-direction:column}}</style>
     </head>
     <body>
-        <header class="header"><div class="header-inner"><a class="brand" href="./">PrevelteKit</a><nav class="nav"><a href="manual">Manual</a><a href="bitcoin">Bitcoin Demo</a><a href="https://github.com/tbocek/preveltekit" external="">GitHub</a></nav></div></header><div id="content"><!--r0s--><div class="manual page v1"><div class="container v1"><h1 class="v1">Manual</h1><p class="page-intro v1">API reference for PrevelteKit. Each section shows the API and a code example.</p><nav class="toc v1"><h2 class="v1">Contents</h2><ul class="v1"><li class="v1"><a class="v1" href="#stores" external="">Stores</a></li><li class="v1"><a class="v1" href="#elements-and-binding" external="">Elements &amp; Binding</a></li><li class="v1"><a class="v1" href="#events" external="">Events</a></li><li class="v1"><a class="v1" href="#conditionals" external="">Conditionals</a></li><li class="v1"><a class="v1" href="#lists" external="">Lists</a></li><li class="v1"><a class="v1" href="#components" external="">Components</a></li><li class="v1"><a class="v1" href="#routing" external="">Routing</a></li><li class="v1"><a class="v1" href="#fetch" external="">Fetch</a></li><li class="v1"><a class="v1" href="#storage" external="">Storage</a></li><li class="v1"><a class="v1" href="#timers" external="">Timers</a></li><li class="v1"><a class="v1" href="#lifecycle" external="">Lifecycle</a></li></ul></nav><section class="v1" id="stores"><h2 class="v1">Stores</h2><p class="v1">Reactive state containers. When a store value changes, all bound DOM elements update automatically.</p><pre class="v1"><code class="v1">// Create a store with an initial value
-count := p.New(0)              // *Store[int]
-name := p.New(&quot;hello&quot;)         // *Store[string]
-dark := p.New(false)           // *Store[bool]
+        <header class="header"><div class="header-inner"><a class="brand" href="./">PrevelteKit</a><nav class="nav"><a href="manual">Manual</a><a href="bitcoin">Bitcoin Demo</a><a href="https://github.com/tbocek/preveltekit" external="">GitHub</a></nav></div></header><div id="content"><!--r0s--><!--=manual--><div class="manual page v1"><div class="container v1"><h1 class="v1">Manual</h1><p class="page-intro v1">API reference for PrevelteKit. Each section shows the API and a code example.</p><nav class="toc v1"><h2 class="v1">Contents</h2><ul class="v1"><li class="v1"><a class="v1" href="#stores" external="">Stores</a></li><li class="v1"><a class="v1" href="#elements-and-binding" external="">Elements &amp; Binding</a></li><li class="v1"><a class="v1" href="#events" external="">Events</a></li><li class="v1"><a class="v1" href="#conditionals" external="">Conditionals</a></li><li class="v1"><a class="v1" href="#lists" external="">Lists</a></li><li class="v1"><a class="v1" href="#components" external="">Components</a></li><li class="v1"><a class="v1" href="#routing" external="">Routing</a></li><li class="v1"><a class="v1" href="#fetch" external="">Fetch</a></li><li class="v1"><a class="v1" href="#storage" external="">Storage</a></li><li class="v1"><a class="v1" href="#timers" external="">Timers</a></li><li class="v1"><a class="v1" href="#lifecycle" external="">Lifecycle</a></li></ul></nav><section class="v1" id="stores"><h2 class="v1">Stores</h2><p class="v1">Reactive state containers. When a store value changes, all bound DOM elements update automatically.</p><pre class="v1"><code class="v1"><span class="c">// Create a store with an initial value</span>
+count := p.<span class="f">New</span>(<span class="n">0</span>)              <span class="c">// *Store[int]</span>
+name := p.<span class="f">New</span>(<span class="s">"hello"</span>)         <span class="c">// *Store[string]</span>
+dark := p.<span class="f">New</span>(<span class="t">false</span>)           <span class="c">// *Store[bool]</span>
 
-// Read and write
-count.Get()                    // returns current value
-count.Set(5)                   // set new value
-count.Update(func(v int) int { // transform current value
-    return v + 1
+<span class="c">// Read and write</span>
+count.<span class="f">Get</span>()                    <span class="c">// returns current value</span>
+count.<span class="f">Set</span>(<span class="n">5</span>)                   <span class="c">// set new value</span>
+count.<span class="f">Update</span>(<span class="k">func</span>(v <span class="t">int</span>) <span class="t">int</span> { <span class="c">// transform current value</span>
+    <span class="k">return</span> v + <span class="n">1</span>
 })
 
-// Subscribe to changes
-count.OnChange(func(v int) {
-    // called whenever count changes
-})</code></pre></section><section class="v1" id="elements-and-binding"><h2 class="v1">Elements &amp; Binding</h2><p class="v1">Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.</p><pre class="v1"><code class="v1">// Typed element functions with reactive store interpolation
-p.P(&quot;Count: &quot;, p.Strong(count))
+<span class="c">// Subscribe to changes</span>
+count.<span class="f">OnChange</span>(<span class="k">func</span>(v <span class="t">int</span>) {
+    <span class="c">// called whenever count changes</span>
+})</code></pre></section><section class="v1" id="elements-and-binding"><h2 class="v1">Elements &amp; Binding</h2><p class="v1">Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.</p><pre class="v1"><code class="v1"><span class="c">// Typed element functions with reactive store interpolation</span>
+p.<span class="f">P</span>(<span class="s">"Count: "</span>, p.<span class="f">Strong</span>(count))
 
-// Two-way binding for inputs
-p.Input(p.Attr(&quot;type&quot;, &quot;text&quot;)).Bind(name)       // *Store[string]
-p.Input(p.Attr(&quot;type&quot;, &quot;text&quot;)).Bind(age)        // *Store[int]
-p.Input(p.Attr(&quot;type&quot;, &quot;checkbox&quot;)).Bind(dark)    // *Store[bool]
-p.Textarea().Bind(notes)                         // *Store[string]
+<span class="c">// Two-way binding for inputs</span>
+p.<span class="f">Input</span>(p.<span class="f">Attr</span>(<span class="s">"type"</span>, <span class="s">"text"</span>)).<span class="f">Bind</span>(name)       <span class="c">// *Store[string]</span>
+p.<span class="f">Input</span>(p.<span class="f">Attr</span>(<span class="s">"type"</span>, <span class="s">"text"</span>)).<span class="f">Bind</span>(age)        <span class="c">// *Store[int]</span>
+p.<span class="f">Input</span>(p.<span class="f">Attr</span>(<span class="s">"type"</span>, <span class="s">"checkbox"</span>)).<span class="f">Bind</span>(dark)    <span class="c">// *Store[bool]</span>
+p.<span class="f">Textarea</span>().<span class="f">Bind</span>(notes)                         <span class="c">// *Store[string]</span>
 
-// Dynamic attributes
-p.Div(&quot;content&quot;).Attr(&quot;data-theme&quot;, theme)
+<span class="c">// Dynamic attributes (strings and stores can be mixed)</span>
+p.<span class="f">Div</span>(p.<span class="f">Attr</span>(<span class="s">"data-theme"</span>, theme), <span class="s">"content"</span>)
+p.<span class="f">Div</span>(p.<span class="f">Attr</span>(<span class="s">"class"</span>, <span class="s">"card "</span>, theme), <span class="s">"content"</span>)
 
-// Conditional attributes (additive for same attribute name)
-p.Div(&quot;content&quot;).AttrIf(&quot;class&quot;,
-    p.Cond(func() bool { return dark.Get() }, dark), &quot;active&quot;)
+<span class="c">// Conditional attributes (additive for same attribute name)</span>
+p.<span class="f">Div</span>(<span class="s">"content"</span>).<span class="f">AttrIf</span>(<span class="s">"class"</span>,
+    p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> dark.<span class="f">Get</span>() }, dark), <span class="s">"active"</span>)
 
-// Raw HTML rendering (not escaped)
-p.BindAsHTML(rawHTML)
+<span class="c">// Raw HTML rendering (not escaped)</span>
+p.<span class="f">BindAsHTML</span>(rawHTML)
 
-// Static raw HTML (entities, inline markup)
-p.RawHTML(&quot;&amp;copy; 2024&quot;)</code></pre></section><section class="v1" id="events"><h2 class="v1">Events</h2><p class="v1">Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.</p><pre class="v1"><code class="v1">// Click handler
-p.Button(&quot;Click&quot;).On(&quot;click&quot;, handler)
+<span class="c">// Static raw HTML (entities, inline markup)</span>
+p.<span class="f">RawHTML</span>(<span class="s">"&amp;copy; 2024"</span>)</code></pre></section><section class="v1" id="events"><h2 class="v1">Events</h2><p class="v1">Attach event handlers with <code>.On()</code>. Chain modifiers for common patterns.</p><pre class="v1"><code class="v1"><span class="c">// Click handler</span>
+p.<span class="f">Button</span>(<span class="s">"Click"</span>).<span class="f">On</span>(<span class="s">"click"</span>, handler)
 
-// Form submit with preventDefault
-p.Form(...).On(&quot;submit&quot;, handler).PreventDefault()
+<span class="c">// Form submit with preventDefault</span>
+p.<span class="f">Form</span>(...).<span class="f">On</span>(<span class="s">"submit"</span>, handler).<span class="f">PreventDefault</span>()
 
-// Stop event bubbling
-p.Button(&quot;Inner&quot;).On(&quot;click&quot;, handler).StopPropagation()
+<span class="c">// Stop event bubbling</span>
+p.<span class="f">Button</span>(<span class="s">"Inner"</span>).<span class="f">On</span>(<span class="s">"click"</span>, handler).<span class="f">StopPropagation</span>()
 
-// Inline handler
-p.Button(&quot;+5&quot;).On(&quot;click&quot;, func() {
-    count.Update(func(v int) int { return v + 5 })
-})</code></pre></section><section class="v1" id="conditionals"><h2 class="v1">Conditionals</h2><p class="v1">Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.</p><pre class="v1"><code class="v1">// Simple if
-p.If(p.Cond(func() bool { return count.Get() &gt; 0 }, count),
-    p.P(&quot;Positive&quot;),
+<span class="c">// Inline handler</span>
+p.<span class="f">Button</span>(<span class="s">"+5"</span>).<span class="f">On</span>(<span class="s">"click"</span>, <span class="k">func</span>() {
+    count.<span class="f">Update</span>(<span class="k">func</span>(v <span class="t">int</span>) <span class="t">int</span> { <span class="k">return</span> v + <span class="n">5</span> })
+})</code></pre></section><section class="v1" id="conditionals"><h2 class="v1">Conditionals</h2><p class="v1">Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.</p><pre class="v1"><code class="v1"><span class="c">// Simple if</span>
+p.<span class="f">If</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> count.<span class="f">Get</span>() &gt; <span class="n">0</span> }, count),
+    p.<span class="f">P</span>(<span class="s">"Positive"</span>),
 )
 
-// If / ElseIf / Else
-p.If(p.Cond(func() bool { return score.Get() &gt;= 90 }, score),
-    p.P(&quot;Grade: A&quot;),
-).ElseIf(p.Cond(func() bool { return score.Get() &gt;= 80 }, score),
-    p.P(&quot;Grade: B&quot;),
-).Else(
-    p.P(&quot;Grade: F&quot;),
+<span class="c">// If / ElseIf / Else</span>
+p.<span class="f">If</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">90</span> }, score),
+    p.<span class="f">P</span>(<span class="s">"Grade: A"</span>),
+).<span class="f">ElseIf</span>(p.<span class="f">Cond</span>(<span class="k">func</span>() <span class="t">bool</span> { <span class="k">return</span> score.<span class="f">Get</span>() &gt;= <span class="n">80</span> }, score),
+    p.<span class="f">P</span>(<span class="s">"Grade: B"</span>),
+).<span class="f">Else</span>(
+    p.<span class="f">P</span>(<span class="s">"Grade: F"</span>),
 )
 
-// p.Cond(predicateFn, ...dependencyStores)</code></pre></section><section class="v1" id="lists"><h2 class="v1">Lists</h2><p class="v1">Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.</p><pre class="v1"><code class="v1">// Create a reactive list
-items := p.NewList[string](&quot;Apple&quot;, &quot;Banana&quot;, &quot;Cherry&quot;)
+<span class="c">// p.Cond(predicateFn, ...dependencyStores)</span></code></pre></section><section class="v1" id="lists"><h2 class="v1">Lists</h2><p class="v1">Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.</p><pre class="v1"><code class="v1"><span class="c">// Create a reactive list</span>
+items := p.NewList[<span class="t">string</span>](<span class="s">"Apple"</span>, <span class="s">"Banana"</span>, <span class="s">"Cherry"</span>)
 
-// Mutate — triggers re-render
-items.Append(&quot;Date&quot;)
-items.RemoveAt(0)
-items.Set([]string{&quot;Mango&quot;, &quot;Papaya&quot;})
-items.Clear()
+<span class="c">// Mutate — triggers re-render</span>
+items.<span class="f">Append</span>(<span class="s">"Date"</span>)
+items.<span class="f">RemoveAt</span>(<span class="n">0</span>)
+items.<span class="f">Set</span>([]<span class="t">string</span>{<span class="s">"Mango"</span>, <span class="s">"Papaya"</span>})
+items.<span class="f">Clear</span>()
 
-// Reactive length
-items.Len()  // *Store[int] — updates automatically
+<span class="c">// Reactive length</span>
+items.<span class="f">Len</span>()  <span class="c">// *Store[int] — updates automatically</span>
 
-// Render each item
-p.Each(items, func(item string, i int) p.Node {
-    return p.Li(p.Itoa(i), &quot;: &quot;, item)
-}).Else(
-    p.P(&quot;No items&quot;),
-)</code></pre></section><section class="v1" id="components"><h2 class="v1">Components</h2><p class="v1">Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.</p><pre class="v1"><code class="v1">// Define a component
-type Badge struct {
-    Label *p.Store[string]
-}
-
-func (b *Badge) Render() p.Node {
-    return p.Span(p.Attr(&quot;class&quot;, &quot;badge&quot;), b.Label)
-}
-
-// Scoped CSS
-func (b *Badge) Style() string {
-    return `.badge{background:#007bff;color:#fff}`
-}
-
-// Use a component (props are struct fields)
-p.Comp(&amp;Badge{Label: p.New(&quot;New&quot;)})
-
-// Component with slot (child content)
-p.Comp(&amp;Card{Title: p.New(&quot;Hello&quot;)},
-    p.P(&quot;Slot content here&quot;),
+<span class="c">// Render each item</span>
+p.<span class="f">Each</span>(items, <span class="k">func</span>(item <span class="t">string</span>, i <span class="t">int</span>) p.Node {
+    <span class="k">return</span> p.<span class="f">Li</span>(p.<span class="f">Itoa</span>(i), <span class="s">": "</span>, item)
+}).<span class="f">Else</span>(
+    p.<span class="f">P</span>(<span class="s">"No items"</span>),
 )
 
-// Inside the component, render slot content:
-p.Slot()
-
-// Callback props for component events
-type Button struct {
-    Label   *p.Store[string]
-    OnClick func()
+<span class="c">// Items can be of any comparable type, e.g. structs</span>
+todos := p.<span class="f">NewList</span>(Todo{Title: <span class="s">"Write docs"</span>})
+p.<span class="f">Each</span>(todos, <span class="k">func</span>(t Todo, i <span class="t">int</span>) p.Node {
+    <span class="k">return</span> p.<span class="f">Li</span>(t.Title)
+})</code></pre></section><section class="v1" id="components"><h2 class="v1">Components</h2><p class="v1">Components are Go structs implementing <code>Render() p.Node</code>. Use <code>p.Comp()</code> to embed them.</p><pre class="v1"><code class="v1"><span class="c">// Define a component</span>
+<span class="k">type</span> Badge <span class="k">struct</span> {
+    Label *p.Store[<span class="t">string</span>]
 }
 
-// Shared stores: pass the same *Store to multiple components
-theme := p.New(&quot;light&quot;)
-p.Comp(&amp;Header{Theme: theme})
-p.Comp(&amp;Sidebar{Theme: theme})
-// both components read/write the same store</code></pre></section><section class="v1" id="routing"><h2 class="v1">Routing</h2><p class="v1">Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.</p><pre class="v1"><code class="v1">// Define routes
+<span class="k">func</span> (b *Badge) <span class="f">Render</span>() p.Node {
+    <span class="k">return</span> p.<span class="f">Span</span>(p.<span class="f">Attr</span>(<span class="s">"class"</span>, <span class="s">"badge"</span>), b.Label)
+}
+
+<span class="c">// Scoped CSS</span>
+<span class="k">func</span> (b *Badge) <span class="f">Style</span>() <span class="t">string</span> {
+    <span class="k">return</span> <span class="s">`.badge{background:#007bff;color:#fff}`</span>
+}
+
+<span class="c">// Use a component (props are struct fields)</span>
+p.<span class="f">Comp</span>(&amp;Badge{Label: p.<span class="f">New</span>(<span class="s">"New"</span>)})
+
+<span class="c">// Component with slot (child content)</span>
+p.<span class="f">Comp</span>(&amp;Card{Title: p.<span class="f">New</span>(<span class="s">"Hello"</span>)},
+    p.<span class="f">P</span>(<span class="s">"Slot content here"</span>),
+)
+
+<span class="c">// Inside the component, render slot content:</span>
+p.<span class="f">Slot</span>()
+
+<span class="c">// Callback props for component events</span>
+<span class="k">type</span> Button <span class="k">struct</span> {
+    Label   *p.Store[<span class="t">string</span>]
+    OnClick <span class="k">func</span>()
+}
+
+<span class="c">// Shared stores: pass the same *Store to multiple components</span>
+theme := p.<span class="f">New</span>(<span class="s">"light"</span>)
+p.<span class="f">Comp</span>(&amp;Header{Theme: theme})
+p.<span class="f">Comp</span>(&amp;Sidebar{Theme: theme})
+<span class="c">// both components read/write the same store</span></code></pre></section><section class="v1" id="routing"><h2 class="v1">Routing</h2><p class="v1">Client-side routing with <code>p.NewRouter()</code>. Each route maps to a component and an SSR HTML file.</p><pre class="v1"><code class="v1"><span class="c">// Define routes</span>
 routes := []p.Route{
-    {Path: &quot;/&quot;, HTMLFile: &quot;index.html&quot;, SSRPath: &quot;/&quot;, Component: home},
-    {Path: &quot;/about&quot;, HTMLFile: &quot;about.html&quot;, SSRPath: &quot;/about&quot;, Component: about},
+    {Path: <span class="s">"/"</span>, HTMLFile: <span class="s">"index.html"</span>, SSRPath: <span class="s">"/"</span>, Component: home},
+    {Path: <span class="s">"/about"</span>, HTMLFile: <span class="s">"about.html"</span>, SSRPath: <span class="s">"/about"</span>, Component: about},
+    {Path: <span class="s">"/users/:id"</span>, HTMLFile: <span class="s">"user.html"</span>, Component: user},
 }
 
-// Start the router (in OnMount)
-router := p.NewRouter(currentComponent, routes, &quot;unique-id&quot;)
-router.NotFound(func() { currentComponent.Set(nil) })
-router.Start()
+<span class="c">// Start the router (in OnMount)</span>
+router := p.<span class="f">NewRouter</span>(currentComponent, routes, <span class="s">"unique-id"</span>)
+router.<span class="f">NotFound</span>(<span class="k">func</span>() { currentComponent.<span class="f">Set</span>(<span class="t">nil</span>) })
+user.ID = router.<span class="f">Param</span>(<span class="s">"id"</span>)  <span class="c">// *Store[string]: "42" at /users/42</span>
+router.<span class="f">Start</span>()
 
-// Store[Component] holds the active route component
+<span class="c">// Store[Component] holds the active route component</span>
 currentComponent *p.Store[p.Component]
 
-// Links: client-side (default) vs server-side
-// &lt;a href=&quot;/about&quot;&gt;About&lt;/a&gt;           (SPA navigation)
-// &lt;a href=&quot;/about&quot; external&gt;About&lt;/a&gt;  (full page reload)
+<span class="c">// Links: client-side (default) vs server-side</span>
+<span class="c">// &lt;a href="/about"&gt;About&lt;/a&gt;           (SPA navigation)</span>
+<span class="c">// &lt;a href="/about" external&gt;About&lt;/a&gt;  (full page reload)</span>
 
-// Store[Component] for local tabs (non-router):
+<span class="c">// Store[Component] for local tabs (non-router):</span>
 activeTab := p.New[p.Component](tab1)
-activeTab.WithOptions(tab1, tab2, tab3)
-activeTab.Set(tab2)  // switches displayed component</code></pre></section><section class="v1" id="fetch"><h2 class="v1">Fetch</h2><p class="v1">Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.</p><pre class="v1"><code class="v1">// Define response type with js tags
-type User struct {
-    ID   int    `js:&quot;id&quot;`
-    Name string `js:&quot;name&quot;`
+activeTab.<span class="f">WithOptions</span>(tab1, tab2, tab3)
+activeTab.<span class="f">Set</span>(tab2)  <span class="c">// switches displayed component</span></code></pre></section><section class="v1" id="fetch"><h2 class="v1">Fetch</h2><p class="v1">Type-safe HTTP requests with automatic JSON encoding/decoding via <code>js</code> struct tags.</p><pre class="v1"><code class="v1"><span class="c">// Define response type with js tags</span>
+<span class="k">type</span> User <span class="k">struct</span> {
+    ID   <span class="t">int</span>    <span class="s">`js:"id"`</span>
+    Name <span class="t">string</span> <span class="s">`js:"name"`</span>
 }
 
-// GET
-go func() {
-    user, err := p.Get[User](&quot;https://api.example.com/user/1&quot;)
+<span class="c">// GET</span>
+<span class="k">go</span> <span class="k">func</span>() {
+    user, err := p.Get[User](<span class="s">"https://api.example.com/user/1"</span>)
 }()
 
-// POST (send body, decode response)
-go func() {
+<span class="c">// POST (send body, decode response)</span>
+<span class="k">go</span> <span class="k">func</span>() {
     created, err := p.Post[User](url, newUser)
 }()
 
-// PUT, PATCH, DELETE
+<span class="c">// PUT, PATCH, DELETE</span>
 result, err := p.Put[T](url, body)
 result, err := p.Patch[T](url, body)
 result, err := p.Delete[T](url)
 
-// Advanced: custom headers and abort
-signal, abort := p.NewAbortController()
-go func() {
+<span class="c">// Advanced: custom headers and abort</span>
+signal, abort := p.<span class="f">NewAbortController</span>()
+<span class="k">go</span> <span class="k">func</span>() {
     result, err := p.Fetch[T](url, &amp;p.FetchOptions{
-        Method:  &quot;GET&quot;,
-        Headers: map[string]string{&quot;Authorization&quot;: &quot;Bearer token&quot;},
+        Method:  <span class="s">"GET"</span>,
+        Headers: <span class="k">map</span>[<span class="t">string</span>]<span class="t">string</span>{<span class="s">"Authorization"</span>: <span class="s">"Bearer token"</span>},
         Signal:  signal,
     })
 }()
-abort()  // cancel the request</code></pre></section><section class="v1" id="storage"><h2 class="v1">Storage</h2><p class="v1">Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.</p><pre class="v1"><code class="v1">// Auto-persisted store (syncs on every Set)
-theme := p.NewLocalStore(&quot;theme&quot;, &quot;light&quot;)
-theme.Set(&quot;dark&quot;)  // automatically saved to localStorage
-theme.Store        // *Store[string] — use in any element like any store
+<span class="f">abort</span>()  <span class="c">// cancel the request</span></code></pre></section><section class="v1" id="storage"><h2 class="v1">Storage</h2><p class="v1">Persist state to localStorage. <code>LocalStore</code> auto-syncs on every <code>Set()</code>.</p><pre class="v1"><code class="v1"><span class="c">// Auto-persisted store (syncs on every Set)</span>
+theme := p.<span class="f">NewLocalStore</span>(<span class="s">"theme"</span>, <span class="s">"light"</span>)
+theme.<span class="f">Set</span>(<span class="s">"dark"</span>)  <span class="c">// automatically saved to localStorage</span>
+theme.Store        <span class="c">// *Store[string] — use in any element like any store</span>
 
-// Manual localStorage API
-p.SetStorage(&quot;notes&quot;, &quot;hello&quot;)
-saved := p.GetStorage(&quot;notes&quot;)
-p.RemoveStorage(&quot;notes&quot;)
-p.ClearStorage()</code></pre></section><section class="v1" id="timers"><h2 class="v1">Timers</h2><p class="v1">Debounce, throttle, setTimeout, and setInterval — all return cleanup functions.</p><pre class="v1"><code class="v1">// Debounce: fires after idle period
-doSearch, cleanup := p.Debounce(300, func() {
-    // fires 300ms after last call
+<span class="c">// Manual localStorage API</span>
+p.<span class="f">SetStorage</span>(<span class="s">"notes"</span>, <span class="s">"hello"</span>)
+saved := p.<span class="f">GetStorage</span>(<span class="s">"notes"</span>)
+p.<span class="f">RemoveStorage</span>(<span class="s">"notes"</span>)
+p.<span class="f">ClearStorage</span>()</code></pre></section><section class="v1" id="timers"><h2 class="v1">Timers</h2><p class="v1">Debounce, throttle, setTimeout, and setInterval — all return cleanup functions.</p><pre class="v1"><code class="v1"><span class="c">// Debounce: fires after idle period</span>
+doSearch, cleanup := p.<span class="f">Debounce</span>(<span class="n">300</span>, <span class="k">func</span>() {
+    <span class="c">// fires 300ms after last call</span>
 })
-doSearch()   // call repeatedly — only last one fires
-cleanup()    // cancel pending
+<span class="f">doSearch</span>()   <span class="c">// call repeatedly — only last one fires</span>
+<span class="f">cleanup</span>()    <span class="c">// cancel pending</span>
 
-// Throttle: max once per interval
-onClick := p.Throttle(500, func() {
-    // max once per 500ms
+<span class="c">// Throttle: max once per interval</span>
+onClick := p.<span class="f">Throttle</span>(<span class="n">500</span>, <span class="k">func</span>() {
+    <span class="c">// max once per 500ms</span>
 })
 
-// SetTimeout: fires once after delay
-cancel := p.SetTimeout(2000, func() {
-    // fires after 2 seconds
+<span class="c">// SetTimeout: fires once after delay</span>
+cancel := p.<span class="f">SetTimeout</span>(<span class="n">2000</span>, <span class="k">func</span>() {
+    <span class="c">// fires after 2 seconds</span>
 })
-cancel()  // cancel before it fires
+<span class="f">cancel</span>()  <span class="c">// cancel before it fires</span>
 
-// SetInterval: fires repeatedly
-stop := p.SetInterval(60000, func() {
-    // fires every 60 seconds
+<span class="c">// SetInterval: fires repeatedly</span>
+stop := p.<span class="f">SetInterval</span>(<span class="n">60000</span>, <span class="k">func</span>() {
+    <span class="c">// fires every 60 seconds</span>
 })
-stop()  // stop the interval</code></pre></section><section class="v1" id="lifecycle"><h2 class="v1">Lifecycle</h2><p class="v1">Components can implement lifecycle hooks for setup and teardown.</p><pre class="v1"><code class="v1">// OnMount: called when component becomes active
-func (c *MyComp) OnMount() {
-    if p.IsBuildTime {
-        return  // skip side effects during SSR
+<span class="f">stop</span>()  <span class="c">// stop the interval</span></code></pre></section><section class="v1" id="lifecycle"><h2 class="v1">Lifecycle</h2><p class="v1">Components can implement lifecycle hooks for setup and teardown.</p><pre class="v1"><code class="v1"><span class="c">// OnMount: called when component becomes active</span>
+<span class="k">func</span> (c *MyComp) <span class="f">OnMount</span>() {
+    <span class="k">if</span> p.IsBuildTime {
+        <span class="k">return</span>  <span class="c">// skip side effects during SSR</span>
     }
-    // fetch data, start timers, etc.
+    <span class="c">// fetch data, start timers, etc.</span>
 }
 
-// OnDestroy: called when component is removed (e.g. route change)
-func (c *MyComp) OnDestroy() {
-    if c.stopTimer != nil {
-        c.stopTimer()
-    }
-}
-
-// New: constructor — create stores, initialize state
-func (c *MyComp) New() p.Component {
-    return &amp;MyComp{
-        Count: p.New(0),
-        Name:  p.New(&quot;&quot;),
+<span class="c">// OnDestroy: called when component is removed (e.g. route change)</span>
+<span class="k">func</span> (c *MyComp) <span class="f">OnDestroy</span>() {
+    <span class="k">if</span> c.stopTimer != <span class="t">nil</span> {
+        c.<span class="f">stopTimer</span>()
     }
 }
 
-// GlobalStyle: CSS applied to entire page (on App component)
-func (a *App) GlobalStyle() string { return `body{margin:0}` }
+<span class="c">// New: constructor — create stores, initialize state</span>
+<span class="k">func</span> (c *MyComp) <span class="f">New</span>() p.Component {
+    <span class="k">return</span> &amp;MyComp{
+        Count: p.<span class="f">New</span>(<span class="n">0</span>),
+        Name:  p.<span class="f">New</span>(<span class="s">""</span>),
+    }
+}
 
-// Style: scoped CSS (auto-prefixed to this component)
-func (c *MyComp) Style() string { return `.btn{color:red}` }
+<span class="c">// GlobalStyle: CSS applied to entire page (on App component)</span>
+<span class="k">func</span> (a *App) <span class="f">GlobalStyle</span>() <span class="t">string</span> { <span class="k">return</span> <span class="s">`body{margin:0}`</span> }
 
-// p.IsBuildTime: true during SSR, false in WASM
-// Use to guard browser-only code (fetch, timers, DOM access)</code></pre></section></div></div><!--r0--></div><footer class="footer"><div class="container"><p>SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required</p></div></footer>
+<span class="c">// Style: scoped CSS (auto-prefixed to this component)</span>
+<span class="k">func</span> (c *MyComp) <span class="f">Style</span>() <span class="t">string</span> { <span class="k">return</span> <span class="s">`.btn{color:red}`</span> }
+
+<span class="c">// p.IsBuildTime: true during SSR, false in WASM</span>
+<span class="c">// Use to guard browser-only code (fetch, timers, DOM access)</span></code></pre></section></div></div><!--r0--></div><footer class="footer"><div class="container"><p>SSR + WASM hydration &bull; Pure Go &bull; Static deployment &bull; No JavaScript required</p></div></footer>
         <script src="wasm_exec.js"></script>
         <script>
             const go = new Go();
@@ -239,9 +248,6 @@ func (c *MyComp) Style() string { return `.btn{color:red}` }
                 fetch("main.wasm"),
                 go.importObject,
             ).then((result) => go.run(result.instance));
-        </script>
-        <script>
-            new EventSource("/livereload").onmessage = () => location.reload();
         </script>
     </body>
 </html>
