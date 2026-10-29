@@ -30,21 +30,3 @@ func RemoveStorage(key string) {
 func ClearStorage() {
 	localStorage.Call("clear")
 }
-
-// NewLocalStore creates a LocalStore that automatically syncs with localStorage.
-// The store is initialized with the localStorage value if it exists,
-// otherwise uses the provided default value. All changes are automatically persisted.
-// The key is also used as the store's ID for hydration.
-func NewLocalStore(key string, defaultValue string) *LocalStore {
-	stored := GetStorage(key)
-	if stored == "" {
-		stored = defaultValue
-	}
-
-	store := newWithID(key, stored)
-	store.OnChange(func(v string) {
-		SetStorage(key, v)
-	})
-
-	return &LocalStore{Store: store}
-}

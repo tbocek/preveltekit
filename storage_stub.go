@@ -24,13 +24,3 @@ func RemoveStorage(key string) {
 func ClearStorage() {
 	memStorage = make(map[string]string)
 }
-
-// NewLocalStore stub - returns a LocalStore during pre-render.
-// The key is also used as the store's ID for hydration.
-func NewLocalStore(key string, defaultValue string) *LocalStore {
-	stored := GetStorage(key)
-	if stored == "" {
-		stored = defaultValue
-	}
-	return &LocalStore{Store: newWithID(key, stored)}
-}

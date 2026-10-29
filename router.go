@@ -7,52 +7,11 @@ import (
 	"syscall/js"
 )
 
-// Router handles client-side routing
-type Router struct {
-	componentStore *Store[Component]
-	routes         []Route
-	id             string
-	basePath       string // detected at Start(), used to resolve relative route paths
-	notFound       func()
-	currentPath    *Store[string]
-	beforeNav      func(from, to string) bool // return false to cancel navigation
-	linksSetup     bool                       // tracks if click listener is already registered
-	clickFn        js.Func                    // retained to prevent GC
-	popstateFn     js.Func                    // retained to prevent GC
-}
-
-// NewRouter creates a new router instance with a component store, routes, and ID.
-// Automatically registers all route components as options on the component store
-// so SSR can pre-render all branches.
-func NewRouter(componentStore *Store[Component], routes []Route, id string) *Router {
-	// Register all route components as store options for pre-baked rendering
-	for _, route := range routes {
-		if route.Component != nil {
-			componentStore.WithOptions(route.Component)
-		}
-	}
-	return &Router{
-		componentStore: componentStore,
-		routes:         routes,
-		id:             id,
-		currentPath:    newWithID(id+".path", ""),
-	}
-}
-
-// NotFound sets the handler for unmatched routes
-func (r *Router) NotFound(handler func()) {
-	r.notFound = handler
-}
-
-// BeforeNavigate sets a callback that runs before each navigation
-// Return false to cancel the navigation
-func (r *Router) BeforeNavigate(fn func(from, to string) bool) {
-	r.beforeNav = fn
-}
-
-// CurrentPath returns a store containing the current path
-func (r *Router) CurrentPath() *Store[string] {
-	return r.currentPath
+// routerJS holds the browser state of a Router.
+type routerJS struct {
+	linksSetup bool    // tracks if click listener is already registered
+	clickFn    js.Func // retained to prevent GC
+	popstateFn js.Func // retained to prevent GC
 }
 
 // detectBasePath determines the base path by matching the current pathname
@@ -209,39 +168,6 @@ func (r *Router) Replace(path string) {
 	// Use replaceState then navigate to avoid adding to history
 	js.Global().Get("history").Call("replaceState", nil, "", path)
 	js.Global().Get("location").Call("replace", path)
-}
-
-func (r *Router) handleRoute(path string) {
-	// Normalize path
-	if path == "" {
-		path = "/"
-	}
-	if path != "/" && strings.HasSuffix(path, "/") {
-		path = path[:len(path)-1]
-	}
-
-	r.currentPath.Set(path)
-
-	// Find matching route (most specific first)
-	// Each route's Path is resolved against the base path before matching.
-	var bestMatch *Route
-	bestSpecificity := -1
-
-	for i := range r.routes {
-		route := &r.routes[i]
-		resolved := resolveRoute(r.basePath, route.Path)
-		_, specificity, ok := matchRoute(resolved, path)
-		if ok && specificity > bestSpecificity {
-			bestMatch = route
-			bestSpecificity = specificity
-		}
-	}
-
-	if bestMatch != nil && bestMatch.Component != nil {
-		r.componentStore.Set(bestMatch.Component)
-	} else if r.notFound != nil {
-		r.notFound()
-	}
 }
 
 // resolvePath resolves a relative or absolute href to an absolute path

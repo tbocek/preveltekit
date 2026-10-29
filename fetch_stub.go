@@ -6,17 +6,6 @@ import "errors"
 
 var errWasmOnly = errors.New("fetch only works in wasm")
 
-// FetchError provides detailed HTTP error information
-type FetchError struct {
-	Status     int
-	StatusText string
-	URL        string
-}
-
-func (e *FetchError) Error() string {
-	return errWasmOnly.Error()
-}
-
 // FetchOptions configures a fetch request (stub for SSR)
 type FetchOptions struct {
 	Method  string
@@ -39,32 +28,12 @@ func Fetch[T any](url string, opts *FetchOptions) (T, error) {
 	return zero, errWasmOnly
 }
 
-// Get stub for non-WASM builds.
-func Get[T any](url string) (T, error) {
+func request[T any](method, url string) (T, error) {
 	var zero T
 	return zero, errWasmOnly
 }
 
-// Post stub for non-WASM builds.
-func Post[T any](url string, body any) (T, error) {
-	var zero T
-	return zero, errWasmOnly
-}
-
-// Put stub for non-WASM builds.
-func Put[T any](url string, body any) (T, error) {
-	var zero T
-	return zero, errWasmOnly
-}
-
-// Patch stub for non-WASM builds.
-func Patch[T any](url string, body any) (T, error) {
-	var zero T
-	return zero, errWasmOnly
-}
-
-// Delete stub for non-WASM builds.
-func Delete[T any](url string) (T, error) {
+func requestBody[T any](method, url string, body any) (T, error) {
 	var zero T
 	return zero, errWasmOnly
 }
