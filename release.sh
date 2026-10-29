@@ -119,7 +119,7 @@ fi
 
 # Build site and copy to docs/
 echo "Building site..."
-(cd site && bash build.sh --release)
+(cd site && bash build.sh)
 echo "Copying site/dist to docs/..."
 rm -rf docs
 cp -r site/dist docs

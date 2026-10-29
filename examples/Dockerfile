@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY . .
 
-RUN ./build.sh --release .
+RUN ./build.sh .
 
 FROM caddy:latest
 

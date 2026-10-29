@@ -5,6 +5,8 @@ package preveltekit
 import (
 	"reflect"
 	"syscall/js"
+
+	"github.com/tbocek/preveltekit/v2/internal/codecflags"
 )
 
 // JSDecoder is implemented by types that can decode from JS
@@ -72,20 +74,32 @@ func decodeValue(v js.Value, dst reflect.Value) {
 		}
 
 	case reflect.Ptr:
+		if !codecflags.Ptr {
+			codecDisabled("ptr")
+			return
+		}
 		if dst.IsNil() {
 			dst.Set(reflect.New(dst.Type().Elem()))
 		}
 		decodeValue(v, dst.Elem())
 
 	case reflect.Slice:
+		if !codecflags.Slice {
+			codecDisabled("slice")
+			return
+		}
 		length := v.Length()
 		slice := reflect.MakeSlice(dst.Type(), length, length)
-		for i := 0; i < length; i++ {
+		for i := range length {
 			decodeValue(v.Index(i), slice.Index(i))
 		}
 		dst.Set(slice)
 
 	case reflect.Map:
+		if !codecflags.Map {
+			codecDisabled("map")
+			return
+		}
 		if dst.IsNil() {
 			dst.Set(reflect.MakeMap(dst.Type()))
 		}
@@ -99,21 +113,45 @@ func decodeValue(v js.Value, dst reflect.Value) {
 		}
 
 	case reflect.String:
+		if !codecflags.String {
+			codecDisabled("string")
+			return
+		}
 		dst.SetString(v.String())
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if !codecflags.Int {
+			codecDisabled("int")
+			return
+		}
 		dst.SetInt(int64(v.Int()))
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if !codecflags.Uint {
+			codecDisabled("uint")
+			return
+		}
 		dst.SetUint(uint64(v.Int()))
 
 	case reflect.Float32, reflect.Float64:
+		if !codecflags.Float {
+			codecDisabled("float")
+			return
+		}
 		dst.SetFloat(v.Float())
 
 	case reflect.Bool:
+		if !codecflags.Bool {
+			codecDisabled("bool")
+			return
+		}
 		dst.SetBool(v.Bool())
 
 	case reflect.Interface:
+		if !codecflags.Iface {
+			codecDisabled("iface")
+			return
+		}
 		// For interface{}, store the raw value as best we can
 		switch v.Type() {
 		case js.TypeString:
@@ -143,6 +181,10 @@ func Encode(src any) js.Value {
 func encodeValue(v reflect.Value) js.Value {
 	// Handle pointers
 	if v.Kind() == reflect.Ptr {
+		if !codecflags.Ptr {
+			codecDisabled("ptr")
+			return js.Undefined()
+		}
 		if v.IsNil() {
 			return js.Null()
 		}
@@ -175,6 +217,10 @@ func encodeValue(v reflect.Value) js.Value {
 		return obj
 
 	case reflect.Slice, reflect.Array:
+		if !codecflags.Slice {
+			codecDisabled("slice")
+			return js.Undefined()
+		}
 		arr := js.Global().Get("Array").New(v.Len())
 		for i := 0; i < v.Len(); i++ {
 			arr.SetIndex(i, encodeValue(v.Index(i)))
@@ -182,6 +228,10 @@ func encodeValue(v reflect.Value) js.Value {
 		return arr
 
 	case reflect.Map:
+		if !codecflags.Map {
+			codecDisabled("map")
+			return js.Undefined()
+		}
 		obj := js.Global().Get("Object").New()
 		iter := v.MapRange()
 		for iter.Next() {
@@ -193,21 +243,45 @@ func encodeValue(v reflect.Value) js.Value {
 		return obj
 
 	case reflect.String:
+		if !codecflags.String {
+			codecDisabled("string")
+			return js.Undefined()
+		}
 		return js.ValueOf(v.String())
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if !codecflags.Int {
+			codecDisabled("int")
+			return js.Undefined()
+		}
 		return js.ValueOf(v.Int())
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if !codecflags.Uint {
+			codecDisabled("uint")
+			return js.Undefined()
+		}
 		return js.ValueOf(v.Uint())
 
 	case reflect.Float32, reflect.Float64:
+		if !codecflags.Float {
+			codecDisabled("float")
+			return js.Undefined()
+		}
 		return js.ValueOf(v.Float())
 
 	case reflect.Bool:
+		if !codecflags.Bool {
+			codecDisabled("bool")
+			return js.Undefined()
+		}
 		return js.ValueOf(v.Bool())
 
 	case reflect.Interface:
+		if !codecflags.Iface {
+			codecDisabled("iface")
+			return js.Undefined()
+		}
 		if v.IsNil() {
 			return js.Null()
 		}
@@ -216,4 +290,10 @@ func encodeValue(v reflect.Value) js.Value {
 	default:
 		return js.Undefined()
 	}
+}
+
+// codecDisabled reports a value whose kind was compiled out via a pk_no<kind>
+// build tag (see internal/codecflags).
+func codecDisabled(kind string) {
+	js.Global().Get("console").Call("error", "preveltekit: "+kind+" support disabled by build tag pk_no"+kind)
 }

@@ -25,7 +25,7 @@ go run github.com/tbocek/preveltekit/v2/cmd/build@latest init
 
 Open http://localhost:8080. Edit `main.go` and the browser reloads automatically.
 
-For a production build: `./build.sh --release` outputs static files to `dist/`.
+For a production build: `./build.sh` outputs static files to `dist/`.
 
 ### Docker Quick Start
 
