@@ -26,7 +26,7 @@ func Hydrate(app ComponentRoot) {
 	}
 
 	// Walk the Render() tree to discover and wire all bindings
-	ctx := &WASMRenderContext{
+	ctx := &renderContext{
 		ScopeAttr: appScope,
 	}
 	cleanup := &cleanupBag{}
@@ -38,7 +38,7 @@ func Hydrate(app ComponentRoot) {
 
 // wasmWalkAndBind walks a Node tree, discovering bindings and wiring them to the DOM.
 // The ctx IDCounter must advance in the same order as SSR's nodeToHTML.
-func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmWalkAndBind(n Node, ctx *renderContext, cleanup *cleanupBag) {
 	if n == nil {
 		return
 	}
@@ -75,18 +75,9 @@ func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
 }
 
 // wasmBindHtmlNode walks an HtmlNode, wiring events, binds, AttrConds, and recursing into parts.
-func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
-	// Determine element ID (must match SSR's logic)
-	var elementID string
-	hasChainedAttrs := len(h.AttrConds) > 0 || len(h.Events) > 0
-
-	if hasChainedAttrs {
-		if len(h.Events) > 0 {
-			elementID = h.Events[0].ID
-		} else {
-			elementID = ctx.NextClassID()
-		}
-	}
+func wasmBindHtmlNode(h *HtmlNode, ctx *renderContext, cleanup *cleanupBag) {
+	// Element ID (must match the renderer's)
+	elementID := h.elementID(&ctx.IDCounter)
 
 	// Wire events
 	for _, ev := range h.Events {
@@ -124,7 +115,7 @@ func wasmBindHtmlNode(h *HtmlNode, ctx *WASMRenderContext, cleanup *cleanupBag) 
 }
 
 // wasmBindTextNode wires a text binding (BindNode) to the DOM.
-func wasmBindTextNode(b *BindNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindTextNode(b *BindNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextTextMarker()
 
 	if s, ok := b.StoreRef.(AnySubscriber); ok {
@@ -182,13 +173,7 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 				classList.Call("remove", falseVal)
 			}
 		} else {
-			var value string
-			if active {
-				value = evalAttrValue(ac.TrueValue)
-			} else {
-				value = evalAttrValue(ac.FalseValue)
-			}
-			if value != "" {
+			if value := ac.value(); value != "" {
 				el.Call("setAttribute", ac.Name, value)
 			} else {
 				el.Call("removeAttribute", ac.Name)
@@ -207,7 +192,7 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 }
 
 // wasmBindDynAttr wires a dynamic attribute binding.
-func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindDynAttr(da *DynAttrAttr, ctx *renderContext, cleanup *cleanupBag) {
 	fullID := ctx.NextAttrID()
 
 	el := document.Call("querySelector", `[data-attrbind="`+fullID+`"]`)
@@ -219,16 +204,7 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBa
 	}
 
 	updateAttr := func() {
-		var value string
-		for _, part := range da.Parts {
-			switch v := part.(type) {
-			case string:
-				value += v
-			case AnyGetter:
-				value += anyToString(v.GetAny())
-			}
-		}
-		el.Call("setAttribute", da.Name, value)
+		el.Call("setAttribute", da.Name, da.value())
 	}
 
 	updateAttr()
@@ -241,7 +217,7 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *WASMRenderContext, cleanup *cleanupBa
 }
 
 // wasmBindIfNode wires an if-block with reactive condition evaluation.
-func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextIfMarker()
 
 	// Advance counters through ALL branches to stay in sync with SSR.
@@ -250,23 +226,23 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 	branchCounters := make([]IDCounter, len(ifNode.Branches))
 	for i, branch := range ifNode.Branches {
 		branchCounters[i] = ctx.IDCounter
-		branchCtx := &WASMRenderContext{
+		branchCtx := &renderContext{
 			IDCounter:   ctx.IDCounter,
 			ScopeAttr:   ctx.ScopeAttr,
 			SlotContent: ctx.SlotContent,
 		}
-		wasmChildrenToHTML(branch.Children, branchCtx)
+		childrenToHTML(branch.Children, branchCtx)
 		ctx.IDCounter = branchCtx.IDCounter
 	}
 	var elseCounter IDCounter
 	if len(ifNode.ElseNode) > 0 {
 		elseCounter = ctx.IDCounter
-		elseCtx := &WASMRenderContext{
+		elseCtx := &renderContext{
 			IDCounter:   ctx.IDCounter,
 			ScopeAttr:   ctx.ScopeAttr,
 			SlotContent: ctx.SlotContent,
 		}
-		wasmChildrenToHTML(ifNode.ElseNode, elseCtx)
+		childrenToHTML(ifNode.ElseNode, elseCtx)
 		ctx.IDCounter = elseCtx.IDCounter
 	}
 
@@ -311,11 +287,11 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 		currentBranchIdx = activeBranchIdx
 
 		// Render active branch to HTML
-		renderCtx := &WASMRenderContext{
+		renderCtx := &renderContext{
 			ScopeAttr:   scopeAttr,
 			SlotContent: slotContent,
 		}
-		html := wasmChildrenToHTML(activeNodes, renderCtx)
+		html := childrenToHTML(activeNodes, renderCtx)
 		replaceMarkerContent(markerID, html)
 
 		// Release old bindings, wire new ones
@@ -323,7 +299,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 		currentCleanup = &cleanupBag{}
 
 		// Re-walk the active branch nodes to wire bindings on new DOM
-		bindCtx := &WASMRenderContext{
+		bindCtx := &renderContext{
 			ScopeAttr:   scopeAttr,
 			SlotContent: slotContent,
 		}
@@ -367,7 +343,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 	currentBranchIdx = activeBranchIdx
 
 	// Wire bindings for the initially active branch with correct counters
-	bindCtx := &WASMRenderContext{
+	bindCtx := &renderContext{
 		IDCounter:   activeCounter,
 		ScopeAttr:   scopeAttr,
 		SlotContent: slotContent,
@@ -378,7 +354,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *WASMRenderContext, cleanup *cleanupBag)
 }
 
 // wasmBindEachNode wires an each-block with reactive list rendering.
-func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextEachMarker()
 
 	// Skip if already set up
@@ -393,11 +369,11 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *clean
 	renderItems := func() string {
 		items := eachNode.items()
 		if len(items) == 0 {
-			return wasmChildrenToHTML(eachNode.ElseNode, &WASMRenderContext{ScopeAttr: scopeAttr})
+			return childrenToHTML(eachNode.ElseNode, &renderContext{ScopeAttr: scopeAttr})
 		}
 		var html string
 		for i, item := range items {
-			html += wasmNodeToHTML(eachNode.Body(item, i), &WASMRenderContext{ScopeAttr: scopeAttr})
+			html += nodeToHTML(eachNode.Body(item, i), &renderContext{ScopeAttr: scopeAttr})
 		}
 		return html
 	}
@@ -406,14 +382,14 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *clean
 	bindItems := func(c *cleanupBag) {
 		items := eachNode.items()
 		if len(items) == 0 {
-			bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
+			bindCtx := &renderContext{ScopeAttr: scopeAttr}
 			for _, child := range eachNode.ElseNode {
 				wasmWalkAndBind(child, bindCtx, c)
 			}
 			return
 		}
 		for i, item := range items {
-			wasmWalkAndBind(eachNode.Body(item, i), &WASMRenderContext{ScopeAttr: scopeAttr}, c)
+			wasmWalkAndBind(eachNode.Body(item, i), &renderContext{ScopeAttr: scopeAttr}, c)
 		}
 	}
 
@@ -431,50 +407,20 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *clean
 }
 
 // wasmBindStoreComponent wires a Store[Component] binding.
-func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextRouteMarker()
 
-	// Check if the HTML render pass already cached trees for this marker.
-	// If so, reuse them to avoid calling Render() again (which re-registers handlers).
-	// If not (e.g. top-level Hydrate where there's no prior HTML pass), do the
-	// counter-advance ourselves.
-	var rendered []wasmCachedOption
+	// Reuse the trees cached by the HTML render pass for this marker, so
+	// Render() isn't called again (which would re-register handlers).
+	var rendered []cachedOption
 
-	if cached, ok := wasmRenderedTrees[markerID]; ok {
+	if cached, ok := renderedTrees[markerID]; ok {
 		rendered = cached
-		delete(wasmRenderedTrees, markerID)
+		delete(renderedTrees, markerID)
 	} else {
-		// No cached trees — do counter-advance ourselves
-		seen := make(map[string]bool)
-		for _, opt := range v.Options() {
-			optComp, ok := opt.(Component)
-			if !ok || optComp == nil {
-				continue
-			}
-			name := componentName(optComp)
-			if seen[name] {
-				continue
-			}
-			seen[name] = true
-
-			branchCtx := &WASMRenderContext{
-				IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
-			}
-			var scopeAttr string
-			if _, ok := optComp.(HasStyle); ok {
-				scopeAttr = GetOrCreateScope(name)
-				branchCtx.ScopeAttr = scopeAttr
-			}
-			tree := optComp.Render()
-			wasmNodeToHTML(tree, branchCtx)
-
-			rendered = append(rendered, wasmCachedOption{
-				comp:      optComp,
-				name:      name,
-				tree:      tree,
-				scopeAttr: scopeAttr,
-			})
-		}
+		// No cached trees (e.g. top-level Hydrate without a prior HTML pass):
+		// render the options ourselves to advance the counters
+		_, rendered = renderStoreOptions(v, ctx)
 	}
 
 	// Skip if already set up
@@ -518,8 +464,8 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 				return
 			}
 
-			bindCtx := &WASMRenderContext{
-				IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
+			bindCtx := &renderContext{
+				IDCounter: IDCounter{Prefix: ctx.FullID(name)},
 				ScopeAttr: scopeAttr,
 			}
 			if om, ok := comp.(HasOnMount); ok {
@@ -541,13 +487,13 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 
 		// Render new component to HTML (subsequent changes, not initial)
 		renderTree := comp.Render()
-		renderCtx := &WASMRenderContext{
-			IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
+		renderCtx := &renderContext{
+			IDCounter: IDCounter{Prefix: ctx.FullID(name)},
 		}
 		if _, ok := comp.(HasStyle); ok {
 			renderCtx.ScopeAttr = GetOrCreateScope(name)
 		}
-		html := wasmNodeToHTML(renderTree, renderCtx)
+		html := nodeToHTML(renderTree, renderCtx)
 		replaceMarkerContent(markerID, html)
 
 		// Release old bindings (fires OnDestroy), wire new ones
@@ -555,8 +501,8 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 		currentCleanup = &cleanupBag{}
 
 		// Walk the same tree we just rendered (don't call Render() again)
-		bindCtx := &WASMRenderContext{
-			IDCounter: IDCounter{Prefix: wasmChildPrefix(ctx, name)},
+		bindCtx := &renderContext{
+			IDCounter: IDCounter{Prefix: ctx.FullID(name)},
 		}
 		if _, ok := comp.(HasStyle); ok {
 			bindCtx.ScopeAttr = GetOrCreateScope(name)
@@ -572,7 +518,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *WASMRenderContext, cleanup
 }
 
 // wasmBindComponentNode wires a nested ComponentNode.
-func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *cleanupBag) {
+func wasmBindComponentNode(c *ComponentNode, ctx *renderContext, cleanup *cleanupBag) {
 	comp, ok := c.Instance.(Component)
 	if !ok {
 		return
@@ -609,7 +555,7 @@ func wasmBindComponentNode(c *ComponentNode, ctx *WASMRenderContext, cleanup *cl
 	}
 
 	// Walk component's own Render tree with child context
-	childCtx := &WASMRenderContext{
+	childCtx := &renderContext{
 		IDCounter: IDCounter{Prefix: fullCompPrefix},
 		ScopeAttr: scopeAttr,
 	}

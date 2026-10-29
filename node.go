@@ -70,6 +70,27 @@ type HtmlEvent struct {
 
 func (h *HtmlNode) nodeType() string { return "html" }
 
+// elementID returns the id attribute needed to find the element during
+// hydration: the first event's handler ID, a new class ID for conditional
+// attributes, or "" if the element needs none.
+func (h *HtmlNode) elementID(c *IDCounter) string {
+	if len(h.Events) > 0 {
+		return h.Events[0].ID
+	}
+	if len(h.AttrConds) > 0 {
+		return c.NextClassID()
+	}
+	return ""
+}
+
+// value returns the attribute value for the current condition.
+func (ac *AttrCond) value() string {
+	if ac.Cond.Eval() {
+		return evalAttrValue(ac.TrueValue)
+	}
+	return evalAttrValue(ac.FalseValue)
+}
+
 // =============================================================================
 // RawHTML Node (unescaped inline HTML text)
 // =============================================================================
@@ -548,6 +569,21 @@ type DynAttrAttr struct {
 }
 
 func (d *DynAttrAttr) attrType() string { return "dynattr" }
+
+// value returns the current attribute value: the string parts and the
+// current store values concatenated.
+func (d *DynAttrAttr) value() string {
+	var value string
+	for _, part := range d.Parts {
+		switch v := part.(type) {
+		case string:
+			value += v
+		case AnyGetter:
+			value += anyToString(v.GetAny())
+		}
+	}
+	return value
+}
 
 // Attr creates an attribute. Parts can be strings and stores.
 // With only string parts, it's static (no reactive binding).

@@ -49,27 +49,14 @@ func Hydrate(app ComponentRoot) {
 			om.OnMount()
 		}
 
-		// Render the full tree
-		ctx := NewBuildContext()
-
-		// Collect app global styles (unscoped)
-		if hgs, ok := freshApp.(HasGlobalStyle); ok {
-			if gs := hgs.GlobalStyle(); gs != "" {
-				ctx.CollectedGlobalStyles["app"] = gs
-			}
-		}
-
-		// Set app-level scope before rendering so all app HTML gets the class
-		if hs, ok := freshApp.(HasStyle); ok {
-			scopeAttr := GetOrCreateScope("app")
-			ctx.ScopeAttr = scopeAttr
-			ctx.CollectedStyles["app"] = scopeCSS(hs.Style(), scopeAttr)
-		}
-
+		// Render the full tree; the app's own styles are collected first and
+		// its scope is set before rendering so all app HTML gets the class
+		ctx := &renderContext{styles: &collectedStyles{scoped: map[string]string{}, global: map[string]string{}}}
+		ctx.ScopeAttr = ctx.componentScope("app", freshApp)
 		html := nodeToHTML(freshApp.Render(), ctx)
 
 		// Build full HTML document
-		fullHTML := buildHTMLDocument(minifyHTML(html), ctx.CollectedGlobalStyles, ctx.CollectedStyles)
+		fullHTML := buildHTMLDocument(minifyHTML(html), ctx.styles.global, ctx.styles.scoped)
 
 		// Write HTML file
 		htmlPath := filepath.Join("dist", route.HTMLFile)
@@ -103,4 +90,71 @@ func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[s
 	result = strings.Replace(result, "<!--styles-->", styles, 1)
 	result = strings.Replace(result, "<!--body-->", body, 1)
 	return result
+}
+
+// minifyHTML collapses whitespace between tags.
+func minifyHTML(s string) string {
+	// Collapse whitespace between tags
+	var result strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '>' {
+			result.WriteByte('>')
+			i++
+			// Skip whitespace until next <
+			start := i
+			for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+				i++
+			}
+			if i < len(s) && s[i] == '<' {
+				// Whitespace between tags — skip it
+			} else {
+				// Whitespace before non-tag content — keep it
+				result.WriteString(s[start:i])
+			}
+		} else {
+			result.WriteByte(s[i])
+			i++
+		}
+	}
+	return strings.TrimSpace(result.String())
+}
+
+// minifyCSS removes comments, collapses whitespace, and trims unnecessary characters.
+func minifyCSS(s string) string {
+	// Remove comments
+	for {
+		start := strings.Index(s, "/*")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(s[start+2:], "*/")
+		if end < 0 {
+			break
+		}
+		s = s[:start] + s[start+2+end+2:]
+	}
+	// Collapse whitespace
+	var b strings.Builder
+	inSpace := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			inSpace = true
+			continue
+		}
+		if inSpace {
+			if c != '{' && c != '}' && c != ':' && c != ';' && c != ',' && c != '>' && c != '+' && c != '~' {
+				if b.Len() > 0 {
+					prev := b.String()[b.Len()-1]
+					if prev != '{' && prev != '}' && prev != ':' && prev != ';' && prev != ',' && prev != '>' && prev != '+' && prev != '~' {
+						b.WriteByte(' ')
+					}
+				}
+			}
+			inSpace = false
+		}
+		b.WriteByte(c)
+	}
+	return strings.TrimSpace(b.String())
 }

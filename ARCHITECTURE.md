@@ -378,7 +378,7 @@ SSR renders ALL branches to advance counters, but only outputs the active branch
 3. **Bind pass**: Restores the saved counter state for the active branch and calls `wasmWalkAndBind` on it to wire up its nested bindings.
 4. **Reactive updates**: Subscribes to condition stores. On change:
    - Evaluates conditions to find new active branch
-   - Generates new HTML via `wasmNodeToHTML`
+   - Generates new HTML via `nodeToHTML`
    - Calls `replaceMarkerContent(markerID, newHTML)` to swap DOM content
    - Walks the new branch tree to wire its bindings
 
@@ -410,7 +410,7 @@ p.Each(items, func(item string, i int) p.Node {
 **WASM Tree Walk:**
 1. Advances `NextEachMarker()` to get `markerID`
 2. Subscribes to `list.OnChange`
-3. On change, calls the body function for each item, renders to HTML via `wasmNodeToHTML`, and calls `replaceMarkerContent` with the concatenated HTML
+3. On change, calls the body function for each item, renders to HTML via `nodeToHTML`, and calls `replaceMarkerContent` with the concatenated HTML
 
 ---
 
@@ -443,7 +443,7 @@ When `NewRouter` is called, it registers all possible components via `componentS
 3. If cached: reuses the trees directly. If not (top-level Hydrate): does a counter-advance pass over ALL options
 4. **Bind pass**: Walks the active option's tree to wire its bindings
 5. **Reactive updates**: On `Store[Component]` change:
-   - Renders new component via `wasmNodeToHTML` (caches the tree)
+   - Renders new component via `nodeToHTML` (caches the tree)
    - Calls `replaceMarkerContent` to swap DOM
    - Walks the cached tree to wire new bindings
 
@@ -765,19 +765,19 @@ This approach:
 
 The WASM hydration walks the same Render() tree that SSR uses, but instead of generating HTML, it wires DOM bindings.
 
-### Two Contexts
+### One Renderer, Two Passes
 
-| | SSR (`BuildContext`) | WASM (`WASMRenderContext`) |
+| | Render (`render.go`) | Bind (`hydrate_wasm.go`) |
 |---|---|---|
-| **Contains** | IDCounter, SlotContent, CollectedStyles, ScopeAttr | IDCounter, ScopeAttr |
-| **Purpose** | Generate HTML string | Advance counters, discover bindings |
+| **Runs in** | SSR and WASM | WASM |
+| **Purpose** | Generate HTML string | Advance counters, wire DOM bindings |
 | **Entry** | `nodeToHTML(tree, ctx)` | `wasmWalkAndBind(tree, ctx, cleanup)` |
 
-Both contexts embed `IDCounter` so they advance markers identically.
+Both use a `renderContext` (IDCounter, ScopeAttr, SlotContent; in SSR also the collected styles), so they advance markers identically. The SSR-only parts of the renderer (collecting CSS, calling `OnMount` while rendering) are guarded by `IsBuildTime` and compiled out of the WASM binary.
 
 ### WASM HTML Generation
 
-When a reactive update requires new HTML (e.g., if-block branch swap, each-block re-render, component switch), WASM generates HTML using `wasmNodeToHTML()`. This mirrors SSR's `nodeToHTML()` but runs in the browser. The generated HTML is inserted via `replaceMarkerContent`, then the tree is walked again with `wasmWalkAndBind` to wire bindings for the new content.
+When a reactive update requires new HTML (e.g., if-block branch swap, each-block re-render, component switch), WASM generates it with the same `nodeToHTML()` that SSR uses. The generated HTML is inserted via `replaceMarkerContent`, then the tree is walked again with `wasmWalkAndBind` to wire bindings for the new content.
 
 ### Counter Synchronization for Branches
 
