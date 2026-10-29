@@ -330,7 +330,7 @@ func ifNodeToHTML(i *IfNode, ctx *renderContext) string {
 		branchCtx := ctx.with(ctx.IDCounter)
 		branchHTML := childrenToHTML(branch.Children, branchCtx)
 		ctx.IDCounter = branchCtx.IDCounter
-		if !activeFound && branch.Cond.Eval() {
+		if !activeFound && branch.Cond() {
 			activeHTML = branchHTML
 			activeFound = true
 		}

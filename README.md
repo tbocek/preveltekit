@@ -116,16 +116,16 @@ func (g *Greeter) Render() p.Node {
 ```go
 score := p.New(75)
 
-p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
+p.If(func() bool { return score.Get() >= 90 },
     p.P("Grade: A"),
-).ElseIf(p.Cond(func() bool { return score.Get() >= 70 }, score),
+).ElseIf(func() bool { return score.Get() >= 70 },
     p.P("Grade: C"),
 ).Else(
     p.P("Grade: F"),
 )
 ```
 
-`p.Cond(fn, ...stores)` pairs a boolean function with the stores it depends on so the framework knows when to re-evaluate.
+Conditions are plain `func() bool` functions. The framework records which stores a condition reads (with `Get()`) and re-evaluates it when one of them changes, so no list of dependencies is needed. For a `*Store[bool]`, its `Get` method is itself a condition: `p.If(loading.Get, ...)`.
 
 ### Lists
 
@@ -229,7 +229,7 @@ No class name collisions across components.
 darkMode := p.New(false)
 
 p.Div("content").AttrIf("class",
-    p.Cond(func() bool { return darkMode.Get() }, darkMode),
+    darkMode.Get,
     "dark",
 )
 ```
@@ -241,14 +241,11 @@ When `darkMode` is true, the `dark` class is added. When false, it's removed.
 Compute values from other stores:
 
 ```go
-func Derived1[A, R any](a *p.Store[A], fn func(A) R) *p.Store[R] {
-    out := p.New(fn(a.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
-    return out
-}
-
 name := p.New("hello")
-upper := Derived1(name, strings.ToUpper) // auto-updates when name changes
+upper := name.Map(strings.ToUpper) // auto-updates when name changes
+
+// any number of sources: the stores read with Get are tracked automatically
+fullName := p.Computed(func() string { return first.Get() + " " + last.Get() })
 ```
 
 ### Fetching Data

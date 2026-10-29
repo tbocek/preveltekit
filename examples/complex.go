@@ -85,7 +85,7 @@ func (c *Complex) Render() p.Node {
 				p.Button("Toggle Log").On("click", func() { c.ShowLog.Set(!c.ShowLog.Get()) }),
 				p.Button("Clear Log").On("click", c.ClearLog),
 			),
-			p.If(p.Cond(func() bool { return c.ShowLog.Get() }, c.ShowLog),
+			p.If(c.ShowLog.Get,
 				p.Ul(p.Attr("class", "log"),
 					p.Each(c.Log, func(entry string, i int) p.Node {
 						return p.Li(p.Attr("class", "log-entry"), p.Span(p.Attr("class", "log-idx"), p.Itoa(i)), " ", entry)
@@ -115,7 +115,7 @@ activeTab.WithOptions(dashboard, settings, activity)
 p.Div(p.Attr("data-theme", theme))
 
 // nested reactivity: Each inside If
-p.If(p.Cond(func() bool { return showLog.Get() }, showLog),
+p.If(showLog.Get,
     p.Ul(
         p.Each(log, func(entry string, i int) p.Node {
             return p.Li(entry)
@@ -194,7 +194,7 @@ func (a *Activity) Render() p.Node {
 	return p.Div(
 		p.H3("Activity"),
 		p.P("Theme: ", p.Strong(a.Theme), " | Entries: ", p.Strong(a.Log.Len())),
-		p.If(p.Cond(func() bool { return a.Log.Len().Get() > 0 }, a.Log.Len()),
+		p.If(func() bool { return a.Log.Len().Get() > 0 },
 			p.Ul(p.Attr("class", "activity-list"),
 				p.Each(a.Log, func(entry string, i int) p.Node {
 					return p.Li(entry)

@@ -6,23 +6,6 @@ import (
 	p "github.com/tbocek/preveltekit/v2"
 )
 
-// Derived2 creates a store computed from two source stores.
-func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
-	out := p.New(fn(a.Get(), b.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
-	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
-	return out
-}
-
-// Derived3 creates a store computed from three source stores.
-func Derived3[A, B, C, R any](a *p.Store[A], b *p.Store[B], c *p.Store[C], fn func(A, B, C) R) *p.Store[R] {
-	out := p.New(fn(a.Get(), b.Get(), c.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	c.OnChange(func(_ C) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-	return out
-}
-
 type Derived struct {
 	Name      *p.Store[string]
 	Uppercase *p.Store[string]
@@ -41,13 +24,13 @@ func (d *Derived) New() p.Component {
 
 	first := p.New("John")
 	last := p.New("Doe")
-	fullName := Derived2(first, last, func(f, l string) string {
-		return f + " " + l
+	fullName := p.Computed(func() string {
+		return first.Get() + " " + last.Get()
 	})
 
 	age := p.New(30)
-	summary := Derived3(first, last, age, func(f, l string, a int) string {
-		return f + " " + l + ", age " + p.Itoa(a)
+	summary := p.Computed(func() string {
+		return first.Get() + " " + last.Get() + ", age " + p.Itoa(age.Get())
 	})
 
 	return &Derived{
@@ -81,15 +64,15 @@ func (d *Derived) Render() p.Node {
 		),
 
 		p.Section(
-			p.H2("Derived2 — Two Sources"),
-			p.P(p.Attr("class", "hint"), "A store computed from two sources. Edit first or last name."),
+			p.H2("Computed — Two Sources"),
+			p.P(p.Attr("class", "hint"), "A store computed from two sources with Computed. Edit first or last name."),
 			p.Label("First: ", p.Input(p.Attr("type", "text")).Bind(d.First)),
 			p.Label("Last: ", p.Input(p.Attr("type", "text")).Bind(d.Last)),
 			p.P("Full name: ", p.Strong(d.FullName)),
 		),
 
 		p.Section(
-			p.H2("Derived3 — Three Sources"),
+			p.H2("Computed — Three Sources"),
 			p.P(p.Attr("class", "hint"), "A store computed from three sources. Change any input to update the summary."),
 			p.P("Age: ", p.Strong(d.Age)),
 			p.Button("-1").On("click", d.DecrementAge),
@@ -103,23 +86,15 @@ func (d *Derived) Render() p.Node {
 				`// Map: one source store -> computed store (method on Store)
 uppercase := name.Map(strings.ToUpper)
 
-// Derived2: two source stores -> computed store
-fullName := Derived2(first, last, func(f, l string) string {
-    return f + " " + l
+// Computed: any number of sources. The stores read with Get are
+// tracked automatically; the store updates when one of them changes.
+fullName := p.Computed(func() string {
+    return first.Get() + " " + last.Get()
 })
 
-// Derived3: three source stores -> computed store
-summary := Derived3(first, last, age, func(f, l string, a int) string {
-    return f + " " + l + ", age " + p.Itoa(a)
-})
-
-// implementation pattern for several sources (using OnChange):
-func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
-    out := p.New(fn(a.Get(), b.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
-    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
-    return out
-}`),
+summary := p.Computed(func() string {
+    return first.Get() + " " + last.Get() + ", age " + p.Itoa(age.Get())
+})`),
 		),
 	)
 }

@@ -86,7 +86,7 @@ func (d *Debounce) Render() p.Node {
 				p.Span("Status: ", p.Strong(d.Status)),
 				p.Span("API calls: ", p.Strong(d.SearchCount)),
 			),
-			p.If(p.Cond(func() bool { return d.SearchResult.Get() != "" }, d.SearchResult),
+			p.If(func() bool { return d.SearchResult.Get() != "" },
 				p.Div(p.Attr("class", "result"), d.SearchResult),
 			),
 			p.P(p.Attr("class", "hint"), "Type quickly - search only fires once you pause."),

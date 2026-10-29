@@ -116,7 +116,7 @@ func (l *Lists) Render() p.Node {
 
 			p.Div(p.Attr("class", "list-container"),
 				p.H3("Current Items"),
-				p.If(p.Cond(func() bool { return l.Items.Len().Get() > 0 }, l.Items.Len()),
+				p.If(func() bool { return l.Items.Len().Get() > 0 },
 					p.Ul(
 						p.Each(l.Items, func(item string, i int) p.Node {
 							return p.Li(p.Span(p.Attr("class", "index"), p.Itoa(i)), " ", item)
@@ -141,7 +141,7 @@ Items.Clear()
 
 // reactive length store (for conditions)
 Items.Len()       // *Store[int]
-p.Cond(func() bool { return Items.Len().Get() > 0 }, Items.Len()) // Condition
+func() bool { return Items.Len().Get() > 0 } // Condition
 
 // render with Each
 p.Each(Items, func(item string, i int) p.Node {

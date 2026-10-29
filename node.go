@@ -18,12 +18,6 @@ type NodeAttr interface {
 	isAttr() // only the framework's attribute types implement NodeAttr
 }
 
-// Condition represents a boolean condition for If nodes.
-type Condition interface {
-	// Eval returns the current boolean value
-	Eval() bool
-}
-
 // =============================================================================
 // Text Node (auto-escaped text content)
 // =============================================================================
@@ -58,10 +52,10 @@ type HtmlNode struct {
 // AttrCond represents a conditional attribute binding.
 // Used by HtmlNode.AttrIf() to conditionally set attribute values.
 type AttrCond struct {
-	Name       string    // attribute name (e.g., "class", "href", "disabled")
-	Cond       Condition // condition to evaluate
-	TrueValue  any       // value when true: string or *Store[T]
-	FalseValue any       // value when false: string or *Store[T] (optional)
+	Name       string      // attribute name (e.g., "class", "href", "disabled")
+	Cond       func() bool // condition; re-evaluated when a store it reads changes
+	TrueValue  any         // value when true: string or *Store[T]
+	FalseValue any         // value when false: string or *Store[T] (optional)
 }
 
 // HtmlEvent represents an event binding for HtmlNode.
@@ -88,7 +82,7 @@ func (h *HtmlNode) elementID(c *IDCounter) string {
 
 // value returns the attribute value for the current condition.
 func (ac *AttrCond) value() string {
-	if ac.Cond.Eval() {
+	if ac.Cond() {
 		return evalAttrValue(ac.TrueValue)
 	}
 	return evalAttrValue(ac.FalseValue)
@@ -302,16 +296,17 @@ func Map(parts ...any) *HtmlNode      { return element("map", parts...) }
 func Del(parts ...any) *HtmlNode      { return element("del", parts...) }
 func Ins(parts ...any) *HtmlNode      { return element("ins", parts...) }
 
-// AttrIf adds a conditional attribute to the first HTML tag.
+// AttrIf adds a conditional attribute to the first HTML tag. cond is
+// re-evaluated whenever a store it reads (with Get) changes.
 // Values can be string literals or *Store[T] for reactive values.
 // Multiple AttrIf calls for the same attribute name merge additively.
 //
 // Examples:
 //
-//	Button("Save").AttrIf("class", cond, "active")             // adds "active" when true
-//	Button("Save").AttrIf("class", cond, "active", "inactive") // "active" when true, "inactive" when false
-//	A("Link").AttrIf("href", cond, urlStore, "/fallback")      // reactive value with fallback
-func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode {
+//	Button("Save").AttrIf("class", dirty.Get, "active")             // adds "active" when true
+//	Button("Save").AttrIf("class", dirty.Get, "active", "inactive") // "active" when true, "inactive" when false
+//	A("Link").AttrIf("href", loggedIn.Get, urlStore, "/fallback")   // reactive value with fallback
+func (h *HtmlNode) AttrIf(name string, cond func() bool, values ...any) *HtmlNode {
 	ac := &AttrCond{Name: name, Cond: cond}
 	if len(values) >= 1 {
 		ac.TrueValue = values[0]
@@ -419,19 +414,23 @@ func (i *IfNode) isNode() {}
 
 // IfBranch represents a single if/else-if branch.
 type IfBranch struct {
-	Cond     Condition
+	Cond     func() bool
 	Children []Node
 }
 
-// If creates a conditional rendering node.
-func If(cond Condition, children ...Node) *IfNode {
+// If creates a conditional rendering node. cond is re-evaluated whenever a
+// store it reads (with Get) changes:
+//
+//	p.If(func() bool { return count.Get() > 0 }, p.P("positive"))
+//	p.If(loading.Get, p.P("Loading..."))  // a *Store[bool]'s Get is a func() bool
+func If(cond func() bool, children ...Node) *IfNode {
 	return &IfNode{
 		Branches: []IfBranch{{Cond: cond, Children: children}},
 	}
 }
 
 // ElseIf adds an else-if branch to the conditional.
-func (i *IfNode) ElseIf(cond Condition, children ...Node) *IfNode {
+func (i *IfNode) ElseIf(cond func() bool, children ...Node) *IfNode {
 	i.Branches = append(i.Branches, IfBranch{Cond: cond, Children: children})
 	return i
 }
@@ -602,21 +601,8 @@ func Attr(name string, parts ...any) NodeAttr {
 }
 
 // =============================================================================
-// Condition Helpers
+// Value Helpers
 // =============================================================================
-
-// FuncCondition wraps a function and its dependent stores for use in If/AttrIf.
-type FuncCondition struct {
-	fn     func() bool
-	Stores []any
-}
-
-func (c *FuncCondition) Eval() bool { return c.fn() }
-
-// Cond creates a condition from a function and its dependent stores.
-func Cond(fn func() bool, stores ...any) *FuncCondition {
-	return &FuncCondition{fn: fn, Stores: stores}
-}
 
 // anyToString converts any value to string without fmt.
 func anyToString(v any) string {

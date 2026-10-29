@@ -75,9 +75,9 @@ func (b *BitcoinDemo) Render() p.Node {
 			p.P(p.Attr("class", "page-intro"), "Live price fetched from the Coinbase API with auto-refresh every 60 seconds."),
 
 			p.Div(p.Attr("class", "btc-card"),
-				p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
+				p.If(b.Loading.Get,
 					p.P(p.Attr("class", "loading"), "Loading..."),
-				).ElseIf(p.Cond(func() bool { return b.Error.Get() != "" }, b.Error),
+				).ElseIf(func() bool { return b.Error.Get() != "" },
 					p.P(p.Attr("class", "error"), b.Error),
 					p.Button(p.Attr("class", "retry-btn"), "Retry").On("click", b.Retry),
 				).Else(

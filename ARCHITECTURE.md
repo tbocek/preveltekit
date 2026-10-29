@@ -90,40 +90,22 @@ dark := p.New(false)         // auto-ID: "s2"
 
 Internally, `newWithID(id, val)` creates a store with an explicit ID instead of an auto-generated one. This is unexported and used only by the router (`id+".path"`), `LocalStore` (localStorage key as ID), and `List.Len()` (`listID+".len"`), where a predictable ID is needed for lookup.
 
-### Derived Stores (User Pattern)
+### Derived Stores
 
-The framework doesn't include a built-in `Derived` type — it's not needed. Users can write their own helpers using `New` + `OnChange`:
+Two ways to derive a store from others:
 
 ```go
-// User-defined helpers (in your app code)
-func Derived1[A, R any](a *p.Store[A], fn func(A) R) *p.Store[R] {
-    out := p.New(fn(a.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
-    return out
-}
+// Map (method on Store): one source
+uppercase := name.Map(strings.ToUpper)               // *Store[string]
+adult := age.Map(func(a int) bool { return a >= 18 }) // *Store[bool]
 
-func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
-    out := p.New(fn(a.Get(), b.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
-    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
-    return out
-}
-
-func Derived3[A, B, C, R any](a *p.Store[A], b *p.Store[B], c *p.Store[C], fn func(A, B, C) R) *p.Store[R] {
-    out := p.New(fn(a.Get(), b.Get(), c.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-    c.OnChange(func(_ C) { out.Set(fn(a.Get(), b.Get(), c.Get())) })
-    return out
-}
-
-// Usage
-uppercase := Derived1(name, strings.ToUpper)
-fullName := Derived2(first, last, func(f, l string) string { return f + " " + l })
-summary := Derived3(first, last, age, func(f, l string, a int) string {
-    return f + " " + l + ", age " + p.Itoa(a)
-})
+// Computed: any number of sources, tracked automatically
+fullName := p.Computed(func() string { return first.Get() + " " + last.Get() })
 ```
+
+### Dependency Tracking
+
+Conditions (`p.If`, `ElseIf`, `AttrIf`) and `p.Computed` take plain functions and need no list of dependencies. While the framework runs such a function, every `Store.Get()` (and `List.Get()`/`At()`) records its store; the function is then subscribed to exactly those stores. The stores are recorded again on every run, so dependencies that change with the data are followed (`a.Get() && b.Get()` only reads `b` once `a` is true). Reads that don't go through `Get()` — e.g. a plain variable — are not reactive.
 
 The resulting store is a regular `Store[R]` — it works with typed elements, `Bind`, conditions, and everything else.
 
@@ -254,9 +236,9 @@ p.Slot()                                                 // slot placeholder in 
 ### Conditions
 
 ```go
-p.Cond(func() bool { return store.Get() >= 90 }, store)         // any comparison
-p.Cond(func() bool { return a.Get() > 0 && b.Get() != "" }, a, b) // multi-store
-p.Cond(func() bool { return boolStore.Get() }, boolStore)        // bool store
+func() bool { return store.Get() >= 90 }         // any comparison
+func() bool { return a.Get() > 0 && b.Get() != "" } // multi-store
+boolStore.Get        // bool store
 ```
 
 ### Attributes
@@ -356,9 +338,9 @@ Conditional rendering with reactive branch switching.
 ### How It Works
 
 ```go
-p.If(p.Cond(func() bool { return score.Get() >= 90 }, score),
+p.If(func() bool { return score.Get() >= 90 },
     p.P(p.Attr("class", "a"), "Grade: A"),
-).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),
+).ElseIf(func() bool { return score.Get() >= 80 },
     p.P(p.Attr("class", "b"), "Grade: B"),
 ).Else(
     p.P(p.Attr("class", "f"), "Grade: F"),
@@ -376,7 +358,7 @@ SSR renders ALL branches to advance counters, but only outputs the active branch
 1. Advances `NextIfMarker()` to get `markerID`
 2. **Counter-advance pass**: Walks ALL branches (active and inactive) to advance ID counters in sync with SSR. Saves the `IDCounter` state at the start of each branch in `branchCounters`.
 3. **Bind pass**: Restores the saved counter state for the active branch and calls `wasmWalkAndBind` on it to wire up its nested bindings.
-4. **Reactive updates**: Subscribes to condition stores. On change:
+4. **Reactive updates**: Subscribes to the stores the conditions read (automatic dependency tracking: while a condition is evaluated, every `Store.Get()` records its store; the subscriptions follow these on every evaluation). On change:
    - Evaluates conditions to find new active branch
    - Generates new HTML via `nodeToHTML`
    - Calls `replaceMarkerContent(markerID, newHTML)` to swap DOM content
@@ -471,7 +453,7 @@ p.A(p.Attr("href", "/user/", userIDStore, "/post/", postIDStore), "View Post")
 ### Conditional Attributes
 
 ```go
-p.Div("content").AttrIf("class", p.Cond(func() bool { return score.Get() >= 90 }, score), "excellent")
+p.Div("content").AttrIf("class", func() bool { return score.Get() >= 90 }, "excellent")
 ```
 
 **SSR Output** (score=95):

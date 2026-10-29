@@ -78,20 +78,20 @@ func (r *Routing) Render() p.Node {
 			p.P("Simple tab-based navigation pattern:"),
 
 			p.Div(p.Attr("class", "tabs"),
-				p.Button("Home").AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "home" }, r.CurrentTab), "active").On("click", func() { r.GoHome() }),
-				p.Button("Profile").AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "profile" }, r.CurrentTab), "active").On("click", func() { r.GoProfile() }),
-				p.Button("Settings").AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "settings" }, r.CurrentTab), "active").On("click", func() { r.GoSettings() }),
-				p.Button("Notifications").AttrIf("class", p.Cond(func() bool { return r.CurrentTab.Get() == "notifications" }, r.CurrentTab), "active").On("click", func() { r.GoNotifications() }),
+				p.Button("Home").AttrIf("class", func() bool { return r.CurrentTab.Get() == "home" }, "active").On("click", func() { r.GoHome() }),
+				p.Button("Profile").AttrIf("class", func() bool { return r.CurrentTab.Get() == "profile" }, "active").On("click", func() { r.GoProfile() }),
+				p.Button("Settings").AttrIf("class", func() bool { return r.CurrentTab.Get() == "settings" }, "active").On("click", func() { r.GoSettings() }),
+				p.Button("Notifications").AttrIf("class", func() bool { return r.CurrentTab.Get() == "notifications" }, "active").On("click", func() { r.GoNotifications() }),
 			),
 
 			p.Div(p.Attr("class", "tab-content"),
-				p.If(p.Cond(func() bool { return r.CurrentTab.Get() == "home" }, r.CurrentTab),
+				p.If(func() bool { return r.CurrentTab.Get() == "home" },
 					p.Div(p.Attr("class", "tab-panel"), p.H3("Home"), p.P("Welcome to the home tab! This is the default view.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "profile" }, r.CurrentTab),
+				).ElseIf(func() bool { return r.CurrentTab.Get() == "profile" },
 					p.Div(p.Attr("class", "tab-panel"), p.H3("Profile"), p.P("View and edit your profile information here.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "settings" }, r.CurrentTab),
+				).ElseIf(func() bool { return r.CurrentTab.Get() == "settings" },
 					p.Div(p.Attr("class", "tab-panel"), p.H3("Settings"), p.P("Configure your application settings.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentTab.Get() == "notifications" }, r.CurrentTab),
+				).ElseIf(func() bool { return r.CurrentTab.Get() == "notifications" },
 					p.Div(p.Attr("class", "tab-panel"), p.H3("Notifications"), p.P("View your recent notifications.")),
 				),
 			),
@@ -106,60 +106,60 @@ func (r *Routing) Render() p.Node {
 					p.Button("1"),
 					p.Span("Details"),
 				).
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 1 }, r.CurrentStep), "completed").
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep), "active").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() > 1 }, "completed").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 1 }, "active").
 					On("click", func() { r.Step1() }),
-				p.Div(p.Attr("class", "step-line")).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 1 }, r.CurrentStep), "completed"),
+				p.Div(p.Attr("class", "step-line")).AttrIf("class", func() bool { return r.CurrentStep.Get() > 1 }, "completed"),
 				p.Div(p.Attr("class", "step"),
 					p.Button("2"),
 					p.Span("Address"),
 				).
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 2 }, r.CurrentStep), "completed").
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 2 }, r.CurrentStep), "active").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() > 2 }, "completed").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 2 }, "active").
 					On("click", func() { r.Step2() }),
-				p.Div(p.Attr("class", "step-line")).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 2 }, r.CurrentStep), "completed"),
+				p.Div(p.Attr("class", "step-line")).AttrIf("class", func() bool { return r.CurrentStep.Get() > 2 }, "completed"),
 				p.Div(p.Attr("class", "step"),
 					p.Button("3"),
 					p.Span("Payment"),
 				).
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 3 }, r.CurrentStep), "completed").
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 3 }, r.CurrentStep), "active").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() > 3 }, "completed").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 3 }, "active").
 					On("click", func() { r.Step3() }),
-				p.Div(p.Attr("class", "step-line")).AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() > 3 }, r.CurrentStep), "completed"),
+				p.Div(p.Attr("class", "step-line")).AttrIf("class", func() bool { return r.CurrentStep.Get() > 3 }, "completed"),
 				p.Div(p.Attr("class", "step"),
 					p.Button("4"),
 					p.Span("Confirm"),
 				).
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep), "active").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 4 }, "active").
 					On("click", func() { r.Step4() }),
 			),
 
 			p.Div(p.Attr("class", "step-content"),
-				p.If(p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep),
+				p.If(func() bool { return r.CurrentStep.Get() == 1 },
 					p.Div(p.Attr("class", "step-panel"), p.H3("Step 1: Personal Details"), p.P("Enter your name and email address.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 2 }, r.CurrentStep),
+				).ElseIf(func() bool { return r.CurrentStep.Get() == 2 },
 					p.Div(p.Attr("class", "step-panel"), p.H3("Step 2: Shipping Address"), p.P("Enter your shipping address.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 3 }, r.CurrentStep),
+				).ElseIf(func() bool { return r.CurrentStep.Get() == 3 },
 					p.Div(p.Attr("class", "step-panel"), p.H3("Step 3: Payment Method"), p.P("Choose your payment method.")),
-				).ElseIf(p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep),
+				).ElseIf(func() bool { return r.CurrentStep.Get() == 4 },
 					p.Div(p.Attr("class", "step-panel"), p.H3("Step 4: Confirmation"), p.P("Review and confirm your order.")),
 				),
 			),
 
 			p.Div(p.Attr("class", "step-buttons"),
 				p.Button("Previous").
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 1 }, r.CurrentStep), "disabled").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 1 }, "disabled").
 					On("click", func() { r.PrevStep() }),
 				p.Span("Step ", r.CurrentStep, " of 4"),
 				p.Button("Next").
-					AttrIf("class", p.Cond(func() bool { return r.CurrentStep.Get() == 4 }, r.CurrentStep), "disabled").
+					AttrIf("class", func() bool { return r.CurrentStep.Get() == 4 }, "disabled").
 					On("click", func() { r.NextStep() }),
 			),
 
 			p.Pre(p.Attr("class", "code"), `// AttrIf: conditionally add classes (additive for same attribute)
 p.Div(p.Attr("class", "step"), ...).
-    AttrIf("class", p.Cond(func() bool { return Step.Get() > 2 }, Step), "completed").
-    AttrIf("class", p.Cond(func() bool { return Step.Get() == 2 }, Step), "active").
+    AttrIf("class", func() bool { return Step.Get() > 2 }, "completed").
+    AttrIf("class", func() bool { return Step.Get() == 2 }, "active").
     On("click", GoToStep2)
 
 // chain multiple AttrIf + On calls on same node`),

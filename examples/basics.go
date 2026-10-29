@@ -89,13 +89,13 @@ p.Button("+1").On("click", Increment)`),
 		p.Section(
 			p.H2("Conditionals — If / ElseIf / Else"),
 			p.P("Score: ", b.Score),
-			p.If(p.Cond(func() bool { return b.Score.Get() >= 90 }, b.Score),
+			p.If(func() bool { return b.Score.Get() >= 90 },
 				p.P(p.Attr("class", "grade a"), "Grade: A - Excellent!"),
-			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 80 }, b.Score),
+			).ElseIf(func() bool { return b.Score.Get() >= 80 },
 				p.P(p.Attr("class", "grade b"), "Grade: B - Good"),
-			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 70 }, b.Score),
+			).ElseIf(func() bool { return b.Score.Get() >= 70 },
 				p.P(p.Attr("class", "grade c"), "Grade: C - Average"),
-			).ElseIf(p.Cond(func() bool { return b.Score.Get() >= 60 }, b.Score),
+			).ElseIf(func() bool { return b.Score.Get() >= 60 },
 				p.P(p.Attr("class", "grade d"), "Grade: D - Below Average"),
 			).Else(
 				p.P(p.Attr("class", "grade f"), "Grade: F - Failing"),
@@ -107,15 +107,15 @@ p.Button("+1").On("click", Increment)`),
 				p.Button("D").On("click", func() { b.SetScore(65) }),
 				p.Button("F").On("click", func() { b.SetScore(50) }),
 			),
-			p.Pre(p.Attr("class", "code"), `p.If(p.Cond(func() bool { return Score.Get() >= 90 }, Score),
+			p.Pre(p.Attr("class", "code"), `p.If(func() bool { return Score.Get() >= 90 },
     p.P("Grade: A"),
-).ElseIf(p.Cond(func() bool { return Score.Get() >= 80 }, Score),
+).ElseIf(func() bool { return Score.Get() >= 80 },
     p.P("Grade: B"),
 ).Else(
     p.P("Grade: F"),
 )
 
-// p.Cond(func() bool, ...stores) — any logic you want`),
+// any func() bool — the stores it reads (with Get) are tracked automatically`),
 		),
 
 		// Two-Way Binding — String
@@ -140,12 +140,12 @@ p.Input(p.Attr("type", "text")).Bind(Age) // *Store[int] binding`),
 		p.Section(
 			p.H2("Checkbox Binding — Bool"),
 			p.Label(p.Input(p.Attr("type", "checkbox")).Bind(b.DarkMode), " Dark Mode"),
-			p.Div("This box uses dark mode styling when checked.").AttrIf("class", p.Cond(func() bool { return b.DarkMode.Get() }, b.DarkMode), "dark"),
+			p.Div("This box uses dark mode styling when checked.").AttrIf("class", b.DarkMode.Get, "dark"),
 			p.Pre(p.Attr("class", "code"), `DarkMode := p.New(false)
 p.Input(p.Attr("type", "checkbox")).Bind(DarkMode) // *Store[bool]
 
 // AttrIf: conditionally add a class
-p.Div("...").AttrIf("class", p.Cond(func() bool { return DarkMode.Get() }, DarkMode), "dark")`),
+p.Div("...").AttrIf("class", DarkMode.Get, "dark")`),
 		),
 
 		// Form — PreventDefault

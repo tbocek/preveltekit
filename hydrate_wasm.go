@@ -166,18 +166,17 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 		return
 	}
 
-	// Extract condition stores for subscription
-	var condStores []any
-	if fc, ok := ac.Cond.(*FuncCondition); ok {
-		condStores = fc.Stores
-	}
-
-	updateAttr := func() {
-		active := ac.Cond.Eval()
+	// The condition is tracked: updateAttr runs again when a store it reads changes
+	deps := &dependencies{}
+	cleanup.AddDestroy(deps.stop)
+	var updateAttr func()
+	updateAttr = func() {
+		var active bool
+		deps.track(func() { active = ac.Cond() }, updateAttr)
+		trueVal := evalAttrValue(ac.TrueValue)
+		falseVal := evalAttrValue(ac.FalseValue)
 		if ac.Name == "class" {
 			classList := el.Get("classList")
-			trueVal := evalAttrValue(ac.TrueValue)
-			falseVal := evalAttrValue(ac.FalseValue)
 			if active && trueVal != "" {
 				classList.Call("add", trueVal)
 			} else if trueVal != "" {
@@ -189,7 +188,11 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 				classList.Call("remove", falseVal)
 			}
 		} else {
-			if value := ac.value(); value != "" {
+			value := falseVal
+			if active {
+				value = trueVal
+			}
+			if value != "" {
 				el.Call("setAttribute", ac.Name, value)
 			} else {
 				el.Call("removeAttribute", ac.Name)
@@ -199,9 +202,6 @@ func wasmBindAttrCond(elementID string, ac *AttrCond, cleanup *cleanupBag) {
 
 	updateAttr()
 
-	for _, cs := range condStores {
-		subscribeToStore(cs, updateAttr, cleanup)
-	}
 	// Also subscribe to the values if they are stores (no-op for strings)
 	subscribeToStore(ac.TrueValue, updateAttr, cleanup)
 	subscribeToStore(ac.FalseValue, updateAttr, cleanup)
@@ -249,7 +249,7 @@ func (i *IfNode) bodies() [][]Node {
 // branch whose condition holds, else the else branch, or -1 for none.
 func (i *IfNode) active() int {
 	for idx, branch := range i.Branches {
-		if branch.Cond.Eval() {
+		if branch.Cond() {
 			return idx
 		}
 	}
@@ -292,9 +292,17 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 		}
 	}
 
-	active := ifNode.active()
-	update := func() {
-		idx := ifNode.active()
+	// The conditions are tracked: update runs again when a store they read changes
+	deps := &dependencies{}
+	cleanup.AddDestroy(deps.stop)
+	var update func()
+	evaluate := func() (idx int) {
+		deps.track(func() { idx = ifNode.active() }, update)
+		return idx
+	}
+	var active int
+	update = func() {
+		idx := evaluate()
 		if idx == active {
 			return
 		}
@@ -312,25 +320,8 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 		wire(idx, true)
 	}
 
-	// Subscribe to the condition stores (each once)
-	seen := make(map[string]bool)
-	for _, branch := range ifNode.Branches {
-		fc, ok := branch.Cond.(*FuncCondition)
-		if !ok {
-			continue
-		}
-		for _, store := range fc.Stores {
-			if id, ok := store.(HasID); ok {
-				if seen[id.ID()] {
-					continue
-				}
-				seen[id.ID()] = true
-			}
-			subscribeToStore(store, update, cleanup)
-		}
-	}
-
 	// Wire the initially active branch (the DOM already has its SSR HTML)
+	active = evaluate()
 	wire(active, false)
 }
 
@@ -528,18 +519,6 @@ func replaceMarkerContent(markerID string, html string) {
 		frag := tmpl.Get("content")
 		parent.Call("insertBefore", frag, endMarker)
 	}
-}
-
-// subscriber is implemented by Store and List: subscribe without knowing the
-// value type, with a function to unsubscribe again. Hydration uses it to
-// remove the subscriptions of blocks that are re-rendered.
-type subscriber interface {
-	subscribeAny(func()) (unsubscribe func())
-}
-
-// subscribeAny is subscribe without the value (see subscriber).
-func (s *Store[T]) subscribeAny(fn func()) func() {
-	return s.subscribe(func(T) { fn() })
 }
 
 // shownComponent returns the name of the component that the SSR HTML shows

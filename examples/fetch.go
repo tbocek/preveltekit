@@ -174,7 +174,7 @@ func (f *Fetch) Render() p.Node {
 				p.Button("GET Post").On("click", f.FetchPost),
 			),
 
-			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
+			p.If(func() bool { return f.RawData.Get() != "" },
 				p.Pre(f.RawData),
 			).Else(
 				p.Pre("Click a button to fetch data"),
@@ -192,7 +192,7 @@ func (f *Fetch) Render() p.Node {
 				p.Button("PATCH Title").On("click", f.PatchPost),
 				p.Button("DELETE Post").On("click", f.DeletePost),
 			),
-			p.If(p.Cond(func() bool { return f.RawData.Get() != "" }, f.RawData),
+			p.If(func() bool { return f.RawData.Get() != "" },
 				p.Pre(f.RawData),
 			),
 		),

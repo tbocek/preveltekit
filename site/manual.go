@@ -51,14 +51,17 @@ count.OnChange(func(v int) {
     // called whenever count changes
 })
 
-// Derived store: updates whenever count changes
-doubled := count.Map(func(v int) int { return v * 2 }) // *Store[int]`),
+// Derived stores: update whenever their sources change
+doubled := count.Map(func(v int) int { return v * 2 }) // *Store[int]
+label := p.Computed(func() string {                    // any number of sources,
+    return name.Get() + ": " + p.Itoa(count.Get())     // tracked automatically
+})`),
 			),
 
 			p.Section(p.Attr("id", "elements-and-binding"),
 				p.H2("Elements & Binding"),
 				p.P(p.RawHTML("Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.")),
-				codeBlock("// Typed element functions with reactive store interpolation\np.P(\"Count: \", p.Strong(count))\n\n// Two-way binding for inputs\np.Input(p.Attr(\"type\", \"text\")).Bind(name)       // *Store[string]\np.Input(p.Attr(\"type\", \"text\")).Bind(age)        // *Store[int]\np.Input(p.Attr(\"type\", \"checkbox\")).Bind(dark)    // *Store[bool]\np.Textarea().Bind(notes)                         // *Store[string]\n\n// Dynamic attributes (strings and stores can be mixed)\np.Div(p.Attr(\"data-theme\", theme), \"content\")\np.Div(p.Attr(\"class\", \"card \", theme), \"content\")\n\n// Conditional attributes (additive for same attribute name)\np.Div(\"content\").AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)\n\n// Static raw HTML (entities, inline markup)\np.RawHTML(\"&copy; 2024\")"),
+				codeBlock("// Typed element functions with reactive store interpolation\np.P(\"Count: \", p.Strong(count))\n\n// Two-way binding for inputs\np.Input(p.Attr(\"type\", \"text\")).Bind(name)       // *Store[string]\np.Input(p.Attr(\"type\", \"text\")).Bind(age)        // *Store[int]\np.Input(p.Attr(\"type\", \"checkbox\")).Bind(dark)    // *Store[bool]\np.Textarea().Bind(notes)                         // *Store[string]\n\n// Dynamic attributes (strings and stores can be mixed)\np.Div(p.Attr(\"data-theme\", theme), \"content\")\np.Div(p.Attr(\"class\", \"card \", theme), \"content\")\n\n// Conditional attributes (additive for same attribute name)\np.Div(\"content\").AttrIf(\"class\",\n    dark.Get, \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)\n\n// Static raw HTML (entities, inline markup)\np.RawHTML(\"&copy; 2024\")"),
 			),
 
 			p.Section(p.Attr("id", "events"),
@@ -70,7 +73,7 @@ doubled := count.Map(func(v int) int { return v * 2 }) // *Store[int]`),
 			p.Section(p.Attr("id", "conditionals"),
 				p.H2("Conditionals"),
 				p.P(p.RawHTML("Show or hide content reactively with <code>p.If()</code>. Supports <code>ElseIf</code> and <code>Else</code> chains.")),
-				codeBlock("// Simple if\np.If(p.Cond(func() bool { return count.Get() > 0 }, count),\n    p.P(\"Positive\"),\n)\n\n// If / ElseIf / Else\np.If(p.Cond(func() bool { return score.Get() >= 90 }, score),\n    p.P(\"Grade: A\"),\n).ElseIf(p.Cond(func() bool { return score.Get() >= 80 }, score),\n    p.P(\"Grade: B\"),\n).Else(\n    p.P(\"Grade: F\"),\n)\n\n// p.Cond(predicateFn, ...dependencyStores)"),
+				codeBlock("// Simple if\np.If(func() bool { return count.Get() > 0 },\n    p.P(\"Positive\"),\n)\n\n// If / ElseIf / Else\np.If(func() bool { return score.Get() >= 90 },\n    p.P(\"Grade: A\"),\n).ElseIf(func() bool { return score.Get() >= 80 },\n    p.P(\"Grade: B\"),\n).Else(\n    p.P(\"Grade: F\"),\n)\n\n// Conditions are plain func() bool: the stores they read with Get\n// are tracked automatically, no need to list them\np.If(loading.Get, p.P(\"Loading...\"))  // a *Store[bool]'s Get is a func() bool"),
 			),
 
 			p.Section(p.Attr("id", "lists"),

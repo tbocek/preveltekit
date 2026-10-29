@@ -2,6 +2,8 @@
 // WebAssembly hydration.
 package preveltekit
 
+import "slices"
+
 // Component is the interface that all declarative components must implement.
 type Component interface {
 	Render() Node
@@ -49,11 +51,6 @@ type HasOnDestroy interface {
 	OnDestroy()
 }
 
-// HasID is implemented by stores that have a user-defined ID.
-type HasID interface {
-	ID() string
-}
-
 // AnyGetter is implemented by stores to return their value as any.
 type AnyGetter interface {
 	GetAny() any
@@ -68,7 +65,7 @@ type AnySubscriber interface {
 type Store[T any] struct {
 	id        string
 	value     T
-	callbacks []func(T)
+	callbacks callbackList[func(T)]
 	options   []any // possible values for pre-baked rendering (used by Store[Component])
 }
 
@@ -208,6 +205,7 @@ func (s *Store[T]) ID() string {
 
 // Get returns the current value
 func (s *Store[T]) Get() T {
+	read(s)
 	return s.value
 }
 
@@ -240,9 +238,7 @@ func (s *Store[T]) OnChange(cb func(T)) {
 
 // subscribe adds a callback and returns a function that removes it again.
 func (s *Store[T]) subscribe(cb func(T)) (unsubscribe func()) {
-	s.callbacks = append(s.callbacks, cb)
-	i := len(s.callbacks) - 1
-	return func() { s.callbacks[i] = nil }
+	return s.callbacks.add(cb)
 }
 
 // GetAny returns the current value as any.
@@ -252,11 +248,32 @@ func (s *Store[T]) GetAny() any { return s.value }
 func (s *Store[T]) OnChangeAny(fn func()) { s.OnChange(func(_ T) { fn() }) }
 
 func (s *Store[T]) notify() {
-	for _, cb := range s.callbacks {
-		if cb != nil {
-			cb(s.value)
+	for _, e := range s.callbacks {
+		if !e.removed {
+			e.fn(s.value)
 		}
 	}
+}
+
+// callbackList is a list of callbacks that can be removed again.
+type callbackList[F any] []*callbackEntry[F]
+
+type callbackEntry[F any] struct {
+	fn      F
+	removed bool
+}
+
+// add appends fn and returns a function that removes it. Removed entries
+// are dropped on the next add, into a new slice, so a notify loop running
+// over the old one is not disturbed.
+func (l *callbackList[F]) add(fn F) (remove func()) {
+	isRemoved := func(e *callbackEntry[F]) bool { return e.removed }
+	if slices.ContainsFunc(*l, isRemoved) {
+		*l = slices.DeleteFunc(slices.Clone(*l), isRemoved)
+	}
+	e := &callbackEntry[F]{fn: fn}
+	*l = append(*l, e)
+	return func() { e.removed = true }
 }
 
 // List is a reactive slice with methods that trigger updates
@@ -264,7 +281,7 @@ type List[T comparable] struct {
 	id       string
 	items    []T
 	lenStore *Store[int] // cached length store for reactive conditions
-	onChange []func()
+	onChange callbackList[func()]
 }
 
 // NewList creates a reactive list with an auto-generated ID.
@@ -287,6 +304,7 @@ func (l *List[T]) ID() string {
 
 // Get returns a copy of the slice (safe, no mutation leaks)
 func (l *List[T]) Get() []T {
+	read(l)
 	cp := make([]T, len(l.items))
 	copy(cp, l.items)
 	return cp
@@ -306,6 +324,7 @@ func (l *List[T]) Len() *Store[int] {
 
 // At returns item at index
 func (l *List[T]) At(i int) T {
+	read(l)
 	return l.items[i]
 }
 
@@ -340,15 +359,13 @@ func (l *List[T]) OnChange(cb func([]T)) {
 
 // subscribeAny adds a callback and returns a function that removes it again.
 func (l *List[T]) subscribeAny(fn func()) (unsubscribe func()) {
-	l.onChange = append(l.onChange, fn)
-	i := len(l.onChange) - 1
-	return func() { l.onChange[i] = nil }
+	return l.onChange.add(fn)
 }
 
 func (l *List[T]) notify() {
-	for _, fn := range l.onChange {
-		if fn != nil {
-			fn()
+	for _, e := range l.onChange {
+		if !e.removed {
+			e.fn()
 		}
 	}
 }

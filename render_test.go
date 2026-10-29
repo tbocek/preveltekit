@@ -29,7 +29,7 @@ func TestEachStructList(t *testing.T) {
 type slotWrapper struct{}
 
 func (w *slotWrapper) Render() Node {
-	return Div(If(Cond(func() bool { return true }), Slot()), Slot())
+	return Div(If(func() bool { return true }, Slot()), Slot())
 }
 
 // Slot content is also rendered inside if-branches of the component.
