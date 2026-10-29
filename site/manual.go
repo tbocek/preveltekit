@@ -55,7 +55,7 @@ count.OnChange(func(v int) {
 			p.Section(p.Attr("id", "elements-and-binding"),
 				p.H2("Elements & Binding"),
 				p.P(p.RawHTML("Build DOM trees with typed element functions. Embed stores directly — they become live text nodes.")),
-				codeBlock("// Typed element functions with reactive store interpolation\np.P(\"Count: \", p.Strong(count))\n\n// Two-way binding for inputs\np.Input(p.Attr(\"type\", \"text\")).Bind(name)       // *Store[string]\np.Input(p.Attr(\"type\", \"text\")).Bind(age)        // *Store[int]\np.Input(p.Attr(\"type\", \"checkbox\")).Bind(dark)    // *Store[bool]\np.Textarea().Bind(notes)                         // *Store[string]\n\n// Dynamic attributes\np.Div(\"content\").Attr(\"data-theme\", theme)\n\n// Conditional attributes (additive for same attribute name)\np.Div(\"content\").AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)\n\n// Static raw HTML (entities, inline markup)\np.RawHTML(\"&copy; 2024\")"),
+				codeBlock("// Typed element functions with reactive store interpolation\np.P(\"Count: \", p.Strong(count))\n\n// Two-way binding for inputs\np.Input(p.Attr(\"type\", \"text\")).Bind(name)       // *Store[string]\np.Input(p.Attr(\"type\", \"text\")).Bind(age)        // *Store[int]\np.Input(p.Attr(\"type\", \"checkbox\")).Bind(dark)    // *Store[bool]\np.Textarea().Bind(notes)                         // *Store[string]\n\n// Dynamic attributes (strings and stores can be mixed)\np.Div(p.Attr(\"data-theme\", theme), \"content\")\np.Div(p.Attr(\"class\", \"card \", theme), \"content\")\n\n// Conditional attributes (additive for same attribute name)\np.Div(\"content\").AttrIf(\"class\",\n    p.Cond(func() bool { return dark.Get() }, dark), \"active\")\n\n// Raw HTML rendering (not escaped)\np.BindAsHTML(rawHTML)\n\n// Static raw HTML (entities, inline markup)\np.RawHTML(\"&copy; 2024\")"),
 			),
 
 			p.Section(p.Attr("id", "events"),
@@ -73,7 +73,7 @@ count.OnChange(func(v int) {
 			p.Section(p.Attr("id", "lists"),
 				p.H2("Lists"),
 				p.P(p.RawHTML("Reactive lists with <code>p.NewList()</code>. Render with <code>p.Each()</code>.")),
-				codeBlock("// Create a reactive list\nitems := p.NewList[string](\"Apple\", \"Banana\", \"Cherry\")\n\n// Mutate — triggers re-render\nitems.Append(\"Date\")\nitems.RemoveAt(0)\nitems.Set([]string{\"Mango\", \"Papaya\"})\nitems.Clear()\n\n// Reactive length\nitems.Len()  // *Store[int] — updates automatically\n\n// Render each item\np.Each(items, func(item string, i int) p.Node {\n    return p.Li(p.Itoa(i), \": \", item)\n}).Else(\n    p.P(\"No items\"),\n)"),
+				codeBlock("// Create a reactive list\nitems := p.NewList[string](\"Apple\", \"Banana\", \"Cherry\")\n\n// Mutate — triggers re-render\nitems.Append(\"Date\")\nitems.RemoveAt(0)\nitems.Set([]string{\"Mango\", \"Papaya\"})\nitems.Clear()\n\n// Reactive length\nitems.Len()  // *Store[int] — updates automatically\n\n// Render each item\np.Each(items, func(item string, i int) p.Node {\n    return p.Li(p.Itoa(i), \": \", item)\n}).Else(\n    p.P(\"No items\"),\n)\n\n// Items can be of any comparable type, e.g. structs\ntodos := p.NewList(Todo{Title: \"Write docs\"})\np.Each(todos, func(t Todo, i int) p.Node {\n    return p.Li(t.Title)\n})"),
 			),
 
 			p.Section(p.Attr("id", "components"),

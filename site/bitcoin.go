@@ -72,7 +72,7 @@ func (b *BitcoinDemo) Render() p.Node {
 	return p.Div(p.Attr("class", "btc-page page"),
 		p.Div(p.Attr("class", "container"),
 			p.H1("Bitcoin Price"),
-			p.P(p.Attr("class", "page-intro"), "Live price fetched from CryptoCompare API with auto-refresh every 60 seconds."),
+			p.P(p.Attr("class", "page-intro"), "Live price fetched from the Coinbase API with auto-refresh every 60 seconds."),
 
 			p.Div(p.Attr("class", "btc-card"),
 				p.If(p.Cond(func() bool { return b.Loading.Get() }, b.Loading),
@@ -92,8 +92,17 @@ func (b *BitcoinDemo) Render() p.Node {
 			p.Div(p.Attr("class", "btc-code"),
 				p.H2("How it works"),
 				p.P(p.RawHTML("This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.")),
-				codeBlock(`type BitcoinDemo struct {
+				codeBlock(`type PriceResponse struct {
+    Data struct {
+        Amount   string `+"`"+`js:"amount"`+"`"+`
+        Base     string `+"`"+`js:"base"`+"`"+`
+        Currency string `+"`"+`js:"currency"`+"`"+`
+    } `+"`"+`js:"data"`+"`"+`
+}
+
+type BitcoinDemo struct {
     Price       *p.Store[string]
+    Symbol      *p.Store[string]
     Loading     *p.Store[bool]
     Error       *p.Store[string]
     stopRefresh func()
@@ -115,14 +124,16 @@ func (b *BitcoinDemo) OnDestroy() {
 
 func (b *BitcoinDemo) FetchPrice() {
     b.Loading.Set(true)
+    b.Error.Set("")
     go func() {
         resp, err := p.Get[PriceResponse](url)
         if err != nil {
-            b.Error.Set(err.Error())
+            b.Error.Set("Failed to fetch: " + err.Error())
             b.Loading.Set(false)
             return
         }
-        b.Price.Set(formatPrice(resp.RAW.PRICE))
+        b.Price.Set(resp.Data.Currency + " " + resp.Data.Amount)
+        b.Symbol.Set(resp.Data.Base)
         b.Loading.Set(false)
     }()
 }`),

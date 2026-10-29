@@ -19,7 +19,7 @@ func (h *Home) Render() p.Node {
 					p.Span(p.Attr("class", "badge"), "SSR"),
 					p.Span(p.Attr("class", "badge"), "WebAssembly"),
 				),
-				p.P(p.Attr("class", "hero-size"), p.RawHTML("This entire site (3 pages, routing, live Bitcoin API) is <strong>~44 kB</strong> brotli-compressed.")),
+				p.P(p.Attr("class", "hero-size"), p.RawHTML("The WebAssembly and JavaScript of this entire site (3 pages, routing, live Bitcoin API, syntax highlighting) are <strong>~44 kB</strong> brotli-compressed (~51 kB gzip).")),
 			),
 		),
 
