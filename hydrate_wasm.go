@@ -389,113 +389,45 @@ func wasmBindEachNode(eachNode *EachNode, ctx *WASMRenderContext, cleanup *clean
 
 	scopeAttr := ctx.ScopeAttr
 
-	// Render and bind items helper
-	renderAndBindItems := func(renderItems func(body func(any, int) Node) string) {
-		// Render all items to HTML
-		html := renderItems(eachNode.Body)
-		replaceMarkerContent(markerID, html)
+	// renderItems renders the current items (or the else content) to HTML.
+	renderItems := func() string {
+		items := eachNode.items()
+		if len(items) == 0 {
+			return wasmChildrenToHTML(eachNode.ElseNode, &WASMRenderContext{ScopeAttr: scopeAttr})
+		}
+		var html string
+		for i, item := range items {
+			html += wasmNodeToHTML(eachNode.Body(item, i), &WASMRenderContext{ScopeAttr: scopeAttr})
+		}
+		return html
+	}
 
-		// Re-walk each item's nodes to wire bindings
-		bindCleanup := &cleanupBag{}
-		switch list := eachNode.ListRef.(type) {
-		case *List[string]:
-			items := list.Get()
-			if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-				bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-				for _, child := range eachNode.ElseNode {
-					wasmWalkAndBind(child, bindCtx, bindCleanup)
-				}
-			} else {
-				for i, item := range items {
-					bodyNode := eachNode.Body(item, i)
-					bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					wasmWalkAndBind(bodyNode, bindCtx, bindCleanup)
-				}
+	// bindItems wires the current items (or the else content) to the DOM.
+	bindItems := func(c *cleanupBag) {
+		items := eachNode.items()
+		if len(items) == 0 {
+			bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
+			for _, child := range eachNode.ElseNode {
+				wasmWalkAndBind(child, bindCtx, c)
 			}
-		case *List[int]:
-			items := list.Get()
-			if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-				bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-				for _, child := range eachNode.ElseNode {
-					wasmWalkAndBind(child, bindCtx, bindCleanup)
-				}
-			} else {
-				for i, item := range items {
-					bodyNode := eachNode.Body(item, i)
-					bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					wasmWalkAndBind(bodyNode, bindCtx, bindCleanup)
-				}
-			}
+			return
+		}
+		for i, item := range items {
+			wasmWalkAndBind(eachNode.Body(item, i), &WASMRenderContext{ScopeAttr: scopeAttr}, c)
 		}
 	}
 
-	// Subscribe to list changes
-	switch list := eachNode.ListRef.(type) {
-	case *List[string]:
-		list.OnChange(func(items []string) {
-			renderItems := func(body func(any, int) Node) string {
-				if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-					renderCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					return wasmChildrenToHTML(eachNode.ElseNode, renderCtx)
-				}
-				var html string
-				for i, item := range items {
-					renderCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					html += wasmNodeToHTML(body(item, i), renderCtx)
-				}
-				return html
-			}
-			renderAndBindItems(renderItems)
-		})
-	case *List[int]:
-		list.OnChange(func(items []int) {
-			renderItems := func(body func(any, int) Node) string {
-				if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-					renderCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					return wasmChildrenToHTML(eachNode.ElseNode, renderCtx)
-				}
-				var html string
-				for i, item := range items {
-					renderCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-					html += wasmNodeToHTML(body(item, i), renderCtx)
-				}
-				return html
-			}
-			renderAndBindItems(renderItems)
-		})
-	}
+	// On change: re-render, release the bindings of the previous render, wire the new items
+	current := &cleanupBag{}
+	eachNode.onChange(func() {
+		replaceMarkerContent(markerID, renderItems())
+		current.Release()
+		current = &cleanupBag{}
+		bindItems(current)
+	})
 
 	// Wire bindings for initially rendered items (DOM already has SSR content)
-	switch list := eachNode.ListRef.(type) {
-	case *List[string]:
-		items := list.Get()
-		if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-			bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-			for _, child := range eachNode.ElseNode {
-				wasmWalkAndBind(child, bindCtx, cleanup)
-			}
-		} else {
-			for i, item := range items {
-				bodyNode := eachNode.Body(item, i)
-				bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-				wasmWalkAndBind(bodyNode, bindCtx, cleanup)
-			}
-		}
-	case *List[int]:
-		items := list.Get()
-		if len(items) == 0 && len(eachNode.ElseNode) > 0 {
-			bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-			for _, child := range eachNode.ElseNode {
-				wasmWalkAndBind(child, bindCtx, cleanup)
-			}
-		} else {
-			for i, item := range items {
-				bodyNode := eachNode.Body(item, i)
-				bindCtx := &WASMRenderContext{ScopeAttr: scopeAttr}
-				wasmWalkAndBind(bodyNode, bindCtx, cleanup)
-			}
-		}
-	}
+	bindItems(cleanup)
 }
 
 // wasmBindStoreComponent wires a Store[Component] binding.

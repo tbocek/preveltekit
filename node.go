@@ -424,9 +424,12 @@ func (i *IfNode) Else(children ...Node) *IfNode {
 
 // EachNode represents list iteration with optional else for empty list.
 type EachNode struct {
-	ListRef  any                            // The actual list reference
 	Body     func(item any, index int) Node // Template function for each item
 	ElseNode []Node                         // Content for empty list
+
+	// Type-erased access to the List[T], set by Each
+	items    func() []any // current items
+	onChange func(func()) // subscribe to list changes
 }
 
 func (e *EachNode) nodeType() string { return "each" }
@@ -435,9 +438,18 @@ func (e *EachNode) nodeType() string { return "each" }
 // The body function receives each item and its index.
 func Each[T comparable](list *List[T], body func(item T, index int) Node) *EachNode {
 	return &EachNode{
-		ListRef: list,
 		Body: func(item any, index int) Node {
 			return body(item.(T), index)
+		},
+		items: func() []any {
+			items := make([]any, len(list.items))
+			for i, item := range list.items {
+				items[i] = item
+			}
+			return items
+		},
+		onChange: func(fn func()) {
+			list.OnChange(func([]T) { fn() })
 		},
 	}
 }

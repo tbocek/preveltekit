@@ -404,26 +404,12 @@ func (e *EachNode) ToHTML(ctx *BuildContext) string {
 	markerID := ctx.NextEachMarker()
 
 	var itemsHTML strings.Builder
-
-	switch list := e.ListRef.(type) {
-	case *List[string]:
-		items := list.Get()
-		if len(items) == 0 && len(e.ElseNode) > 0 {
-			itemsHTML.WriteString(childrenToHTML(e.ElseNode, ctx))
-		} else {
-			for i, item := range items {
-				itemsHTML.WriteString(nodeToHTML(e.Body(item, i), ctx))
-			}
-		}
-	case *List[int]:
-		items := list.Get()
-		if len(items) == 0 && len(e.ElseNode) > 0 {
-			itemsHTML.WriteString(childrenToHTML(e.ElseNode, ctx))
-		} else {
-			for i, item := range items {
-				itemsHTML.WriteString(nodeToHTML(e.Body(item, i), ctx))
-			}
-		}
+	items := e.items()
+	if len(items) == 0 {
+		itemsHTML.WriteString(childrenToHTML(e.ElseNode, ctx))
+	}
+	for i, item := range items {
+		itemsHTML.WriteString(nodeToHTML(e.Body(item, i), ctx))
 	}
 
 	return fmt.Sprintf("<!--%ss-->%s<!--%s-->", markerID, itemsHTML.String(), markerID)

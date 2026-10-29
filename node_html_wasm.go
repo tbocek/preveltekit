@@ -349,25 +349,12 @@ func wasmEachNodeToHTML(e *EachNode, ctx *WASMRenderContext) string {
 	markerID := ctx.NextEachMarker()
 
 	var itemsHTML string
-	switch list := e.ListRef.(type) {
-	case *List[string]:
-		items := list.Get()
-		if len(items) == 0 && len(e.ElseNode) > 0 {
-			itemsHTML = wasmChildrenToHTML(e.ElseNode, ctx)
-		} else {
-			for i, item := range items {
-				itemsHTML += wasmNodeToHTML(e.Body(item, i), ctx)
-			}
-		}
-	case *List[int]:
-		items := list.Get()
-		if len(items) == 0 && len(e.ElseNode) > 0 {
-			itemsHTML = wasmChildrenToHTML(e.ElseNode, ctx)
-		} else {
-			for i, item := range items {
-				itemsHTML += wasmNodeToHTML(e.Body(item, i), ctx)
-			}
-		}
+	items := e.items()
+	if len(items) == 0 {
+		itemsHTML = wasmChildrenToHTML(e.ElseNode, ctx)
+	}
+	for i, item := range items {
+		itemsHTML += wasmNodeToHTML(e.Body(item, i), ctx)
 	}
 
 	return "<!--" + markerID + "s-->" + itemsHTML + "<!--" + markerID + "-->"
