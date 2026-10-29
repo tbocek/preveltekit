@@ -49,7 +49,10 @@ count.Update(func(v int) int { // transform current value
 // Subscribe to changes
 count.OnChange(func(v int) {
     // called whenever count changes
-})`),
+})
+
+// Derived store: updates whenever count changes
+doubled := count.Map(func(v int) int { return v * 2 }) // *Store[int]`),
 			),
 
 			p.Section(p.Attr("id", "elements-and-binding"),

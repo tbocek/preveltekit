@@ -6,13 +6,6 @@ import (
 	p "github.com/tbocek/preveltekit/v2"
 )
 
-// Derived1 creates a store computed from one source store.
-func Derived1[A, R any](a *p.Store[A], fn func(A) R) *p.Store[R] {
-	out := p.New(fn(a.Get()))
-	a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
-	return out
-}
-
 // Derived2 creates a store computed from two source stores.
 func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
 	out := p.New(fn(a.Get(), b.Get()))
@@ -44,7 +37,7 @@ type Derived struct {
 
 func (d *Derived) New() p.Component {
 	name := p.New("hello")
-	uppercase := Derived1(name, strings.ToUpper)
+	uppercase := name.Map(strings.ToUpper)
 
 	first := p.New("John")
 	last := p.New("Doe")
@@ -81,8 +74,8 @@ func (d *Derived) Render() p.Node {
 		p.H1("Derived Stores"),
 
 		p.Section(
-			p.H2("Derived1 — Single Source"),
-			p.P(p.Attr("class", "hint"), "A store computed from one source. Type below to see the uppercase transform."),
+			p.H2("Map — Single Source"),
+			p.P(p.Attr("class", "hint"), "A store computed from one source with Map. Type below to see the uppercase transform."),
 			p.Label("Input: ", p.Input(p.Attr("type", "text")).Bind(d.Name)),
 			p.P("Uppercase: ", p.Strong(d.Uppercase)),
 		),
@@ -107,8 +100,8 @@ func (d *Derived) Render() p.Node {
 		p.Section(
 			p.H2("Code"),
 			p.Pre(p.Attr("class", "code"),
-				`// Derived1: one source store -> computed store
-uppercase := Derived1(name, strings.ToUpper)
+				`// Map: one source store -> computed store (method on Store)
+uppercase := name.Map(strings.ToUpper)
 
 // Derived2: two source stores -> computed store
 fullName := Derived2(first, last, func(f, l string) string {
@@ -120,10 +113,11 @@ summary := Derived3(first, last, age, func(f, l string, a int) string {
     return f + " " + l + ", age " + p.Itoa(a)
 })
 
-// implementation pattern (using OnChange):
-func Derived1[A, R any](a *Store[A], fn func(A) R) *Store[R] {
-    out := p.New(fn(a.Get()))
-    a.OnChange(func(_ A) { out.Set(fn(a.Get())) })
+// implementation pattern for several sources (using OnChange):
+func Derived2[A, B, R any](a *p.Store[A], b *p.Store[B], fn func(A, B) R) *p.Store[R] {
+    out := p.New(fn(a.Get(), b.Get()))
+    a.OnChange(func(_ A) { out.Set(fn(a.Get(), b.Get())) })
+    b.OnChange(func(_ B) { out.Set(fn(a.Get(), b.Get())) })
     return out
 }`),
 		),

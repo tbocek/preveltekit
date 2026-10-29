@@ -222,6 +222,17 @@ func (s *Store[T]) Update(fn func(T) T) {
 	s.Set(fn(s.value))
 }
 
+// Map returns a store derived from s: it holds fn of s's value and updates
+// whenever s changes.
+//
+//	upper := name.Map(strings.ToUpper)              // *Store[string]
+//	adult := age.Map(func(a int) bool { return a >= 18 }) // *Store[bool]
+func (s *Store[T]) Map[R any](fn func(T) R) *Store[R] {
+	out := New(fn(s.value))
+	s.OnChange(func(v T) { out.Set(fn(v)) })
+	return out
+}
+
 // OnChange adds a callback that runs whenever the value changes
 func (s *Store[T]) OnChange(cb func(T)) {
 	s.subscribe(cb)
