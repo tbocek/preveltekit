@@ -7,11 +7,11 @@
     </head>
     <body>
         <!--body-->
-        <script src="wasm_exec.js"></script>
+        <script src="/wasm_exec.js"></script>
         <script>
             const go = new Go();
             WebAssembly.instantiateStreaming(
-                fetch("main.wasm"),
+                fetch("/main.wasm"),
                 go.importObject,
             ).then((result) => go.run(result.instance));
         </script>

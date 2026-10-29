@@ -396,64 +396,54 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 
 	updateBlock := func() {
 		comp := v.Get()
-		if comp == nil {
-			return
-		}
 		name := componentName(comp)
-
-		if name == currentName && !firstCall {
-			return
-		}
 
 		if firstCall {
 			firstCall = false
-			currentName = name
-
-			// Wire bindings for initial component (DOM has SSR content).
-			// Reuse the tree from the counter-advance pass to avoid
-			// re-registering handlers with new IDs.
-			var tree Node
-			var scopeAttr string
-			for _, r := range rendered {
-				if r.comp == comp {
-					tree = r.tree
-					scopeAttr = r.scopeAttr
-					break
+			if shown, known := shownComponent(markerID); !known || shown == name {
+				// The DOM shows comp: wire it, reusing the tree from the
+				// counter-advance pass so handlers keep their IDs.
+				currentName = name
+				for _, r := range rendered {
+					if r.comp == comp {
+						if om, ok := comp.(HasOnMount); ok {
+							om.OnMount()
+						}
+						if od, ok := comp.(HasOnDestroy); ok {
+							currentCleanup.AddDestroy(od.OnDestroy)
+						}
+						wasmWalkAndBind(r.tree, ctx.component(ctx.FullID(name), r.scopeAttr, nil), currentCleanup)
+						break
+					}
 				}
-			}
-			if tree == nil {
 				return
 			}
-
-			bindCtx := ctx.component(ctx.FullID(name), scopeAttr, nil)
-			if om, ok := comp.(HasOnMount); ok {
-				om.OnMount()
-			}
-			if od, ok := comp.(HasOnDestroy); ok {
-				currentCleanup.AddDestroy(od.OnDestroy)
-			}
-			wasmWalkAndBind(tree, bindCtx, currentCleanup)
+			// The SSR HTML shows another component: render comp like on a change
+		} else if name == currentName {
 			return
 		}
-
 		currentName = name
+
+		if comp == nil {
+			replaceMarkerContent(markerID, "")
+			currentCleanup.Release()
+			currentCleanup = &cleanupBag{}
+			return
+		}
 
 		// Call OnMount on the new active component
 		if om, ok := comp.(HasOnMount); ok {
 			om.OnMount()
 		}
 
-		// Render new component to HTML (subsequent changes, not initial)
+		// Render the new component to HTML
 		renderTree := comp.Render()
 		scopeAttr := ctx.componentScope(name, comp)
-		html := nodeToHTML(renderTree, ctx.component(ctx.FullID(name), scopeAttr, nil))
-		replaceMarkerContent(markerID, html)
+		replaceMarkerContent(markerID, nodeToHTML(renderTree, ctx.component(ctx.FullID(name), scopeAttr, nil)))
 
-		// Release old bindings (fires OnDestroy), wire new ones
+		// Release old bindings (fires OnDestroy), wire new ones on the same tree
 		currentCleanup.Release()
 		currentCleanup = &cleanupBag{}
-
-		// Walk the same tree we just rendered (don't call Render() again)
 		if od, ok := comp.(HasOnDestroy); ok {
 			currentCleanup.AddDestroy(od.OnDestroy)
 		}
@@ -550,6 +540,25 @@ type subscriber interface {
 // subscribeAny is subscribe without the value (see subscriber).
 func (s *Store[T]) subscribeAny(fn func()) func() {
 	return s.subscribe(func(T) { fn() })
+}
+
+// shownComponent returns the name of the component that the SSR HTML shows
+// in the Store[Component] block markerID (from the <!--=name--> note), and
+// false if there is no note (HTML rendered in the browser).
+func shownComponent(markerID string) (name string, known bool) {
+	start := findComment(markerID + "s")
+	if start.IsNull() {
+		return "", false
+	}
+	note := start.Get("nextSibling")
+	if note.IsNull() || note.Get("nodeType").Int() != 8 { // 8: comment node
+		return "", false
+	}
+	text := note.Get("nodeValue").String()
+	if len(text) == 0 || text[0] != '=' {
+		return "", false
+	}
+	return text[1:], true
 }
 
 // subscribeToStore subscribes a callback to store changes until cleanup is

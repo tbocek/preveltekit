@@ -256,8 +256,14 @@ func writeAttr(sb *strings.Builder, name, value string) {
 // options rendered (to advance the counters), showing the current one.
 func storeComponentToHTML(v *Store[Component], ctx *renderContext) string {
 	markerID := ctx.NextRouteMarker()
+	shown := componentName(v.Get())
 	active, cached := renderStoreOptions(v, ctx)
-	if !IsBuildTime {
+	if IsBuildTime {
+		// Note which component the HTML shows. When hydrating, WASM compares
+		// it with the current one: the router may pick another, e.g. on a path
+		// without its own page, where the server delivered index.html.
+		active = "<!--=" + shown + "-->" + active
+	} else {
 		renderedTrees[markerID] = cached
 	}
 	return markedHTML(markerID, active)

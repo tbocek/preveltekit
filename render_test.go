@@ -46,15 +46,16 @@ type hello struct{}
 func (h *hello) Render() Node { return H1("hi") }
 
 // A Store[Component] always gets a block marker, also without WithOptions
-// and when empty, so WASM can find and update it.
+// and when empty, so WASM can find and update it. In SSR the block notes
+// which component it shows (<!--=name-->).
 func TestStoreComponentMarker(t *testing.T) {
 	tests := []struct {
 		name  string
 		store *Store[Component]
 		want  string
 	}{
-		{"no options", New[Component](&hello{}), "<div><!--r0s--><h1>hi</h1><!--r0--></div>"},
-		{"empty", New[Component](nil), "<div><!--r0s--><!--r0--></div>"},
+		{"no options", New[Component](&hello{}), "<div><!--r0s--><!--=hello--><h1>hi</h1><!--r0--></div>"},
+		{"empty", New[Component](nil), "<div><!--r0s--><!--=--><!--r0--></div>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
