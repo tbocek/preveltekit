@@ -70,7 +70,8 @@ func minify(js string) string {
 		if line == "" || comment && !header {
 			continue
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

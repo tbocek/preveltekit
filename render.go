@@ -148,18 +148,19 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 	}
 
 	if elementID != "" {
-		sb.WriteString(` id="` + elementID + `"`)
+		writeAttr(&sb, "id", elementID)
 	} else if bindID != "" {
-		sb.WriteString(` id="` + bindID + `"`)
+		writeAttr(&sb, "id", bindID)
 	}
 	if len(classFragments) > 0 {
-		sb.WriteString(` class="` + strings.Join(classFragments, " ") + `"`)
+		writeAttr(&sb, "class", strings.Join(classFragments, " "))
 	}
 
-	// Non-class static attrs
+	// Non-class static attrs (already formatted as name="value")
 	for _, attr := range h.Attrs {
 		if !strings.HasPrefix(attr, `class="`) {
-			sb.WriteString(" " + attr)
+			sb.WriteByte(' ')
+			sb.WriteString(attr)
 		}
 	}
 
@@ -167,7 +168,7 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 	for _, ac := range h.AttrConds {
 		if ac.Name != "class" {
 			if val := ac.value(); val != "" {
-				sb.WriteString(" " + ac.Name + `="` + escapeHTML(val) + `"`)
+				writeAttr(&sb, ac.Name, escapeHTML(val))
 			}
 		}
 	}
@@ -177,10 +178,10 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 		switch s := h.BoundStore.(type) {
 		case *Store[string]:
 			if h.Tag != "textarea" {
-				sb.WriteString(` value="` + escapeHTML(s.Get()) + `"`)
+				writeAttr(&sb, "value", escapeHTML(s.Get()))
 			}
 		case *Store[int]:
-			sb.WriteString(` value="` + itoa(s.Get()) + `"`)
+			writeAttr(&sb, "value", itoa(s.Get()))
 		case *Store[bool]:
 			if s.Get() {
 				sb.WriteString(` checked`)
@@ -189,7 +190,8 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 	}
 
 	for _, das := range dynAttrHTML {
-		sb.WriteString(" " + das)
+		sb.WriteByte(' ')
+		sb.WriteString(das)
 	}
 	sb.WriteByte('>')
 
@@ -215,9 +217,20 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 
 	// --- Closing tag ---
 	if !h.IsVoid {
-		sb.WriteString("</" + h.Tag + ">")
+		sb.WriteString("</")
+		sb.WriteString(h.Tag)
+		sb.WriteByte('>')
 	}
 	return sb.String()
+}
+
+// writeAttr writes ` name="value"`; value must already be escaped.
+func writeAttr(sb *strings.Builder, name, value string) {
+	sb.WriteByte(' ')
+	sb.WriteString(name)
+	sb.WriteString(`="`)
+	sb.WriteString(value)
+	sb.WriteByte('"')
 }
 
 // storeComponentToHTML renders a Store[Component] as a block with all its

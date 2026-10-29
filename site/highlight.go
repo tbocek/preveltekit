@@ -26,7 +26,9 @@ const (
 func highlightGo(src string) string {
 	var b strings.Builder
 	span := func(class, text string) {
-		b.WriteString(`<span class="` + class + `">`)
+		b.WriteString(`<span class="`)
+		b.WriteString(class)
+		b.WriteString(`">`)
 		escapeTo(&b, text)
 		b.WriteString("</span>")
 	}
