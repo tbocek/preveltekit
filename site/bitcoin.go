@@ -1,10 +1,6 @@
 package main
 
-import (
-	"time"
-
-	p "github.com/tbocek/preveltekit/v2"
-)
+import p "github.com/tbocek/preveltekit/v2"
 
 type PriceResponse struct {
 	Data struct {
@@ -17,7 +13,6 @@ type PriceResponse struct {
 type BitcoinDemo struct {
 	Price       *p.Store[string]
 	Symbol      *p.Store[string]
-	UpdateTime  *p.Store[string]
 	Loading     *p.Store[bool]
 	Error       *p.Store[string]
 	stopRefresh func()
@@ -25,11 +20,10 @@ type BitcoinDemo struct {
 
 func (b *BitcoinDemo) New() p.Component {
 	return &BitcoinDemo{
-		Price:      p.New(""),
-		Symbol:     p.New(""),
-		UpdateTime: p.New(""),
-		Loading:    p.New(true),
-		Error:      p.New(""),
+		Price:   p.New(""),
+		Symbol:  p.New(""),
+		Loading: p.New(true),
+		Error:   p.New(""),
 	}
 }
 
@@ -66,24 +60,12 @@ func (b *BitcoinDemo) FetchPrice() {
 		data := resp.Data
 		b.Price.Set(data.Currency + " " + data.Amount)
 		b.Symbol.Set(data.Base)
-
-		secs := int(time.Now().Unix() % 86400)
-		h, m, s := secs/3600, (secs%3600)/60, secs%60
-		b.UpdateTime.Set(btcPad2(h) + ":" + btcPad2(m) + ":" + btcPad2(s))
-
 		b.Loading.Set(false)
 	}()
 }
 
 func (b *BitcoinDemo) Retry() {
 	b.FetchPrice()
-}
-
-func btcPad2(n int) string {
-	if n < 10 {
-		return "0" + p.Itoa(n)
-	}
-	return p.Itoa(n)
 }
 
 func (b *BitcoinDemo) Render() p.Node {
@@ -101,7 +83,6 @@ func (b *BitcoinDemo) Render() p.Node {
 				).Else(
 					p.Div(p.Attr("class", "price-header"),
 						p.Span(p.Attr("class", "symbol"), b.Symbol),
-						p.Span(p.Attr("class", "update-time"), "Updated: ", b.UpdateTime, " UTC"),
 					),
 					p.P(p.Attr("class", "price"), b.Price),
 					p.Small(p.Attr("class", "disclaimer"), "Prices are volatile and for reference only."),
@@ -155,7 +136,6 @@ func (b *BitcoinDemo) Style() string {
 .btc-card{background:#fff;padding:24px;border-radius:8px;border:1px solid #e5e7eb;text-align:center;max-width:500px;margin-bottom:32px}
 .price-header{display:flex;justify-content:space-between;margin-bottom:16px;color:#666}
 .symbol{font-weight:600;color:#f7931a;font-size:1.1em}
-.update-time{font-size:14px}
 .price{font-size:2.5em;font-weight:700;margin:16px 0;color:#1a1a2e}
 .disclaimer{display:block;color:#999;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;font-size:.8em}
 .loading{color:#666;font-size:1.1em;padding:32px 0}
