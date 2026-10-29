@@ -11,8 +11,26 @@ import "strings"
 type renderContext struct {
 	IDCounter
 	ScopeAttr string           // CSS scope class of the current component (e.g. "v0"), added to every tag
-	slot      func() string    // returns the HTML rendered in place of Slot() (nil: none)
+	slot      *slotContent     // content rendered in place of Slot() (nil: none)
 	styles    *collectedStyles // SSR: CSS of the rendered components (nil in WASM)
+	fresh     bool             // WASM bind pass: the DOM below was just inserted by a re-render
+}
+
+// slotContent is the content passed to a component, rendered in place of Slot().
+type slotContent struct {
+	nodes       []Node
+	ctx         *renderContext // context the content is rendered and bound with
+	html        string         // pre-rendered HTML, if prerendered
+	prerendered bool
+}
+
+// render returns the slot's HTML: the pre-rendered HTML, or the nodes
+// rendered now (so they show the current store values).
+func (s *slotContent) render() string {
+	if s.prerendered {
+		return s.html
+	}
+	return childrenToHTML(s.nodes, s.ctx.with(s.ctx.IDCounter))
 }
 
 // collectedStyles holds the CSS of the rendered components by component name.
@@ -36,11 +54,11 @@ var renderedTrees = make(map[string][]cachedOption)
 // with returns a context in the same component (scope, slot, styles) with
 // the given counters.
 func (ctx *renderContext) with(c IDCounter) *renderContext {
-	return &renderContext{IDCounter: c, ScopeAttr: ctx.ScopeAttr, slot: ctx.slot, styles: ctx.styles}
+	return &renderContext{IDCounter: c, ScopeAttr: ctx.ScopeAttr, slot: ctx.slot, styles: ctx.styles, fresh: ctx.fresh}
 }
 
 // component returns the context for rendering a component's own tree.
-func (ctx *renderContext) component(prefix, scopeAttr string, slot func() string) *renderContext {
+func (ctx *renderContext) component(prefix, scopeAttr string, slot *slotContent) *renderContext {
 	return &renderContext{IDCounter: IDCounter{Prefix: prefix}, ScopeAttr: scopeAttr, slot: slot, styles: ctx.styles}
 }
 
@@ -88,7 +106,7 @@ func nodeToHTML(n Node, ctx *renderContext) string {
 		return componentNodeToHTML(node, ctx)
 	case *SlotNode:
 		if ctx.slot != nil {
-			return ctx.slot()
+			return ctx.slot.render()
 		}
 	case *TextNode:
 		return escapeHTML(node.Text)
@@ -364,9 +382,9 @@ func componentNodeToHTML(c *ComponentNode, ctx *renderContext) string {
 			om.OnMount()
 		}
 	}
-	slot := childrenToHTML(c.Children, ctx)
+	slot := &slotContent{html: childrenToHTML(c.Children, ctx), prerendered: true}
 
 	// Cache the tree so the WASM bind pass doesn't call Render() again
 	c.renderCache = comp.Render()
-	return nodeToHTML(c.renderCache, ctx.component(prefix, scopeAttr, func() string { return slot }))
+	return nodeToHTML(c.renderCache, ctx.component(prefix, scopeAttr, slot))
 }

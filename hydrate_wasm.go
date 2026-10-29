@@ -67,7 +67,16 @@ func wasmWalkAndBind(n Node, ctx *renderContext, cleanup *cleanupBag) {
 		wasmBindComponentNode(node, ctx, cleanup)
 
 	case *SlotNode:
-		// Slot content was already rendered, nothing to bind
+		// Initially the slot content is wired by the outer component. After a
+		// re-render it is new DOM: wire it again, with the counters it was
+		// rendered with.
+		if ctx.fresh && ctx.slot != nil && ctx.slot.ctx != nil {
+			bindCtx := ctx.slot.ctx.with(ctx.slot.ctx.IDCounter)
+			bindCtx.fresh = true
+			for _, child := range ctx.slot.nodes {
+				wasmWalkAndBind(child, bindCtx, cleanup)
+			}
+		}
 
 	case *TextNode:
 		// Static text, no bindings needed
@@ -240,11 +249,12 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 
 	base := ctx.with(IDCounter{})
 	current := &cleanupBag{}
-	wire := func(idx int) {
+	wire := func(idx int, rerendered bool) {
 		if idx < 0 {
 			return
 		}
 		bindCtx := base.with(counters[idx])
+		bindCtx.fresh = bindCtx.fresh || rerendered
 		for _, child := range bodies[idx] {
 			wasmWalkAndBind(child, bindCtx, current)
 		}
@@ -267,7 +277,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 		// Release old bindings, wire the new branch
 		current.Release()
 		current = &cleanupBag{}
-		wire(idx)
+		wire(idx, true)
 	}
 
 	// Subscribe to the condition stores (each once)
@@ -289,7 +299,7 @@ func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 	}
 
 	// Wire the initially active branch (the DOM already has its SSR HTML)
-	wire(active)
+	wire(active, false)
 }
 
 // wasmBindEachNode wires an each-block with reactive list rendering.
@@ -306,9 +316,10 @@ func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBa
 
 	// bindItems wires the current items (or the else content) to the DOM,
 	// with the same counters the renderer used for them.
-	bindItems := func(c *cleanupBag) {
+	bindItems := func(c *cleanupBag, rerendered bool) {
 		eachNode.forEach(markerID, func(nodes []Node, counter IDCounter) {
 			bindCtx := base.with(counter)
+			bindCtx.fresh = bindCtx.fresh || rerendered
 			for _, child := range nodes {
 				wasmWalkAndBind(child, bindCtx, c)
 			}
@@ -321,11 +332,11 @@ func wasmBindEachNode(eachNode *EachNode, ctx *renderContext, cleanup *cleanupBa
 		replaceMarkerContent(markerID, eachItemsHTML(eachNode, markerID, base))
 		current.Release()
 		current = &cleanupBag{}
-		bindItems(current)
+		bindItems(current, true)
 	})
 
 	// Wire bindings for initially rendered items (DOM already has SSR content)
-	bindItems(cleanup)
+	bindItems(cleanup, false)
 }
 
 // wasmBindStoreComponent wires a Store[Component] binding.
@@ -449,18 +460,9 @@ func wasmBindComponentNode(c *ComponentNode, ctx *renderContext, cleanup *cleanu
 	fullCompPrefix := ctx.NextCompMarker()
 	scopeAttr := ctx.componentScope(c.Name, c.Instance)
 
-	// Slot content for blocks inside the component that re-render. It is
-	// rendered on first use, with the counters the slot had: rendering it now
-	// would call Render() of nested components again and re-register handlers.
-	slotCtx := ctx.with(ctx.IDCounter)
-	var slotHTML *string
-	slot := func() string {
-		if slotHTML == nil {
-			html := childrenToHTML(c.Children, slotCtx)
-			slotHTML = &html
-		}
-		return *slotHTML
-	}
+	// Slot content for blocks inside the component that re-render: rendered
+	// and wired again on each re-render, with the counters the slot had here.
+	slot := &slotContent{nodes: c.Children, ctx: ctx.with(ctx.IDCounter)}
 
 	// Walk slot children with parent context
 	for _, child := range c.Children {
