@@ -110,7 +110,6 @@ func Fragment(children ...Node) *FragmentNode {
 	return &FragmentNode{Children: children}
 }
 
-
 // =============================================================================
 // Typed Element Functions
 // =============================================================================
@@ -288,9 +287,9 @@ func Ins(parts ...any) *HtmlNode      { return element("ins", parts...) }
 //
 // Examples:
 //
-//	Html(`<button>`).AttrIf("class", cond, "active")              // adds "active" when true
-//	Html(`<button>`).AttrIf("class", cond, "active", "inactive")  // "active" when true, "inactive" when false
-//	Html(`<a>`).AttrIf("href", cond, urlStore, "/fallback")       // reactive value with fallback
+//	Button("Save").AttrIf("class", cond, "active")             // adds "active" when true
+//	Button("Save").AttrIf("class", cond, "active", "inactive") // "active" when true, "inactive" when false
+//	A("Link").AttrIf("href", cond, urlStore, "/fallback")      // reactive value with fallback
 func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode {
 	ac := &AttrCond{Name: name, Cond: cond}
 	if len(values) >= 1 {
@@ -309,8 +308,8 @@ func (h *HtmlNode) AttrIf(name string, cond Condition, values ...any) *HtmlNode 
 //
 // Example:
 //
-//	Html(`<button>Click</button>`).On("click", handler)
-//	Html(`<form>`).On("submit", handler).PreventDefault()
+//	Button("Click").On("click", handler)
+//	Form(...).On("submit", handler).PreventDefault()
 func (h *HtmlNode) On(event string, handler func()) *HtmlNode {
 	// Register handler in global registry for WASM hydration
 	id := RegisterHandler(handler)
@@ -350,8 +349,8 @@ func (h *HtmlNode) StopPropagation() *HtmlNode {
 //
 // Example:
 //
-//	Html(`<input type="text">`).Bind(nameStore)
-//	Html(`<input type="checkbox">`).Bind(darkModeStore)
+//	Input(Attr("type", "text")).Bind(nameStore)
+//	Input(Attr("type", "checkbox")).Bind(darkModeStore)
 func (h *HtmlNode) Bind(store any) *HtmlNode {
 	h.BoundStore = store
 	return h
@@ -370,7 +369,6 @@ type BindNode struct {
 func (b *BindNode) nodeType() string { return "bind" }
 
 // Bind creates a reactive text binding to a store.
-// The store must implement bindable[T].
 func Bind[T any](store *Store[T]) *BindNode {
 	return &BindNode{
 		StoreRef: store,

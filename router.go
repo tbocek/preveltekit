@@ -287,13 +287,3 @@ func resolvePath(href string) string {
 
 	return path
 }
-
-func cleanDoubleSlash(s string) string {
-	if !strings.Contains(s, "//") {
-		return s
-	}
-	for strings.Contains(s, "//") {
-		s = strings.ReplaceAll(s, "//", "/")
-	}
-	return s
-}

@@ -12,7 +12,7 @@ var setupEachBlocks = make(map[string]bool)
 var setupComponentBlocks = make(map[string]bool)
 
 // Hydrate sets up DOM bindings for reactivity.
-// Walks the Render() tree to discover all bindings directly — no bindings.bin needed.
+// Walks the Render() tree to discover all bindings directly.
 func Hydrate(app ComponentRoot) {
 	// Create fresh app instance with initialized stores
 	if hn, ok := app.(HasNew); ok {
@@ -42,7 +42,6 @@ func Hydrate(app ComponentRoot) {
 }
 
 // wasmWalkAndBind walks a Node tree, discovering bindings and wiring them to the DOM.
-// This replaces both walkNodeForComponents and the bindings.bin-based applyBindings.
 // The ctx IDCounter must advance in the same order as SSR's nodeToHTML.
 func wasmWalkAndBind(n Node, ctx *WASMRenderContext, cleanup *cleanupBag) {
 	if n == nil {

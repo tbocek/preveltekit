@@ -324,7 +324,6 @@ func renderStoreComponent(v *Store[Component], ctx *BuildContext) string {
 	return ""
 }
 
-
 // attrToHTMLString renders a NodeAttr as an HTML attribute string.
 func attrToHTMLString(attr NodeAttr, ctx *BuildContext) string {
 	switch a := attr.(type) {

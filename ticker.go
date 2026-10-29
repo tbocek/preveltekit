@@ -16,8 +16,8 @@ func nowMs() int64 {
 //
 // Example:
 //
-//	stop := reactive.SetInterval(1000, func() {
-//	    fmt.Println("tick")
+//	stop := p.SetInterval(1000, func() {
+//	    ticks.Update(func(n int) int { return n + 1 })
 //	})
 //	// Later:
 //	stop()
@@ -40,8 +40,8 @@ func SetInterval(ms int, callback func()) func() {
 //
 // Example:
 //
-//	cancel := reactive.SetTimeout(5000, func() {
-//	    fmt.Println("5 seconds passed")
+//	cancel := p.SetTimeout(5000, func() {
+//	    message.Set("5 seconds passed")
 //	})
 //	// To cancel before it fires:
 //	cancel()
@@ -67,7 +67,7 @@ func SetTimeout(ms int, callback func()) func() {
 //
 // Example:
 //
-//	search, cleanup := reactive.Debounce(300, func() {
+//	search, cleanup := p.Debounce(300, func() {
 //	    // This runs 300ms after the last keystroke
 //	    performSearch(input.Get())
 //	})
@@ -112,7 +112,7 @@ func Debounce(ms int, callback func()) (func(), func()) {
 //
 // Example:
 //
-//	onScroll := reactive.Throttle(100, func() {
+//	onScroll := p.Throttle(100, func() {
 //	    // This runs at most every 100ms during scrolling
 //	    updateScrollPosition()
 //	})

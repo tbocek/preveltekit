@@ -12,8 +12,6 @@ import (
 
 // Hydrate is the main entry point for declarative components.
 // In SSR mode (native build), it generates static HTML files.
-// WASM discovers all bindings by walking the Render() tree directly,
-// so no bindings.bin is needed.
 func Hydrate(app ComponentRoot) {
 	// First pass: discover all SSR paths
 	if hn, ok := app.(HasNew); ok {

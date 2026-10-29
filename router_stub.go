@@ -48,8 +48,8 @@ func (r *Router) CurrentPath() *Store[string] {
 
 // Start initializes the router and handles the current URL (from SSRPath)
 func (r *Router) Start() {
-	// Get path from fake js.Global (set via SetSSRPath)
-	path := jsGlobalFunc().Get("location").Get("pathname").String()
+	// Path set by Hydrate via SetSSRPath
+	path := ssrPath
 	if path == "" {
 		path = "/"
 	}

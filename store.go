@@ -1,4 +1,5 @@
-// Package reactive provides generic reactive stores for Go WebAssembly applications.
+// Package preveltekit is a Go web framework with server-side rendering and
+// WebAssembly hydration.
 package preveltekit
 
 // Component is the interface that all declarative components must implement.
