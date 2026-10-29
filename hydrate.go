@@ -92,12 +92,21 @@ func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[s
 	return result
 }
 
-// minifyHTML collapses whitespace between tags.
+// minifyHTML collapses whitespace between tags. <pre> and <textarea>
+// elements are copied as-is, since whitespace is significant inside them.
 func minifyHTML(s string) string {
-	// Collapse whitespace between tags
 	var result strings.Builder
 	i := 0
 	for i < len(s) {
+		if tag := whitespaceTag(s[i:]); tag != "" {
+			end := strings.Index(s[i:], "</"+tag+">")
+			if end < 0 {
+				end = len(s) - i
+			}
+			result.WriteString(s[i : i+end])
+			i += end
+			continue
+		}
 		if s[i] == '>' {
 			result.WriteByte('>')
 			i++
@@ -118,6 +127,17 @@ func minifyHTML(s string) string {
 		}
 	}
 	return strings.TrimSpace(result.String())
+}
+
+// whitespaceTag returns "pre" or "textarea" if s starts with such an
+// opening tag, else "".
+func whitespaceTag(s string) string {
+	for _, tag := range []string{"pre", "textarea"} {
+		if strings.HasPrefix(s, "<"+tag) && len(s) > len(tag)+1 && (s[len(tag)+1] == '>' || s[len(tag)+1] == ' ') {
+			return tag
+		}
+	}
+	return ""
 }
 
 // minifyCSS removes comments, collapses whitespace, and trims unnecessary characters.

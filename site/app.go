@@ -80,6 +80,12 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 
 pre{background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6}
 pre code{background:transparent;padding:0;font-size:inherit}
+pre .k{color:#c792ea}
+pre .t{color:#ffcb6b}
+pre .f{color:#82aaff}
+pre .s{color:#c3e88d}
+pre .n{color:#f78c6c}
+pre .c{color:#7f848e;font-style:italic}
 code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:.85em}
 
 .footer{padding:32px 0;background:#1a1a2e;color:#999;text-align:center;font-size:.9em}

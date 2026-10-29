@@ -92,7 +92,7 @@ func (b *BitcoinDemo) Render() p.Node {
 			p.Div(p.Attr("class", "btc-code"),
 				p.H2("How it works"),
 				p.P(p.RawHTML("This demo uses <code>p.Get[T]()</code> to fetch JSON, <code>p.SetInterval()</code> for auto-refresh, and lifecycle hooks for setup/teardown.")),
-				p.Pre(p.Code(`type BitcoinDemo struct {
+				codeBlock(`type BitcoinDemo struct {
     Price       *p.Store[string]
     Loading     *p.Store[bool]
     Error       *p.Store[string]
@@ -125,7 +125,7 @@ func (b *BitcoinDemo) FetchPrice() {
         b.Price.Set(formatPrice(resp.RAW.PRICE))
         b.Loading.Set(false)
     }()
-}`)),
+}`),
 			),
 		),
 	)
