@@ -65,18 +65,31 @@ func Hydrate(app ComponentRoot) {
 	}
 }
 
+// resetRegistries resets all global counters and registries to initial state.
+// Called before each SSR iteration so IDs start from s0, matching WASM.
+func resetRegistries() {
+	storeCounter = 0
+	handlerCounter = 0
+	scopeCounter = 0
+	storeRegistry = make(map[string]any)
+	handlerRegistry = make(map[string]func())
+	handlerModifiers = make(map[string][]string)
+	scopeRegistry = make(map[string]string)
+}
+
 func buildHTMLDocument(body string, collectedGlobalStyles, collectedStyles map[string]string) string {
 	// Global styles first (unscoped), then scoped styles, each sorted by component name
-	var allStyles string
+	var allStyles strings.Builder
 	for _, styles := range []map[string]string{collectedGlobalStyles, collectedStyles} {
 		for _, k := range slices.Sorted(maps.Keys(styles)) {
-			allStyles += styles[k] + "\n"
+			allStyles.WriteString(styles[k])
+			allStyles.WriteByte('\n')
 		}
 	}
 
 	var styles string
-	if allStyles != "" {
-		styles = "<style>" + minifyCSS(allStyles) + "</style>"
+	if allStyles.Len() > 0 {
+		styles = "<style>" + minifyCSS(allStyles.String()) + "</style>"
 	}
 
 	// Read template from assets/index.html

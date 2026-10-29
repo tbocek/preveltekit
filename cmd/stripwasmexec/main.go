@@ -63,7 +63,7 @@ func run(wasmFile, jsFile string) error {
 func minify(js string) string {
 	var b strings.Builder
 	header := true
-	for _, line := range strings.Split(js, "\n") {
+	for line := range strings.SplitSeq(js, "\n") {
 		line = strings.TrimSpace(line)
 		comment := strings.HasPrefix(line, "//")
 		header = header && comment

@@ -8,7 +8,7 @@ type Lists struct {
 }
 
 func (l *Lists) New() p.Component {
-	items := p.NewList[string]("Apple", "Banana", "Cherry")
+	items := p.NewList("Apple", "Banana", "Cherry")
 	return &Lists{
 		Items:   items,
 		NewItem: p.New(""),

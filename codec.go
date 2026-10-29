@@ -64,7 +64,7 @@ func decodeValue(v js.Value, dst reflect.Value) {
 			}
 		}
 
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if !codecflags.Ptr {
 			codecDisabled("ptr")
 			return
@@ -171,7 +171,7 @@ func Encode(src any) js.Value {
 // encodeValue recursively encodes a reflect.Value to js.Value
 func encodeValue(v reflect.Value) js.Value {
 	// Handle pointers
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if !codecflags.Ptr {
 			codecDisabled("ptr")
 			return js.Undefined()

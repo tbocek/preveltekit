@@ -1,6 +1,9 @@
 package preveltekit
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
 
 // Node represents a node in the declarative UI tree.
 // Nodes are constructed at build-time and walked to generate:
@@ -439,33 +442,6 @@ func (i *IfNode) Else(children ...Node) *IfNode {
 	return i
 }
 
-// bodies returns the children of every branch, followed by the else
-// children if there are any.
-func (i *IfNode) bodies() [][]Node {
-	bodies := make([][]Node, 0, len(i.Branches)+1)
-	for _, branch := range i.Branches {
-		bodies = append(bodies, branch.Children)
-	}
-	if len(i.ElseNode) > 0 {
-		bodies = append(bodies, i.ElseNode)
-	}
-	return bodies
-}
-
-// active returns the index into bodies() of the branch to show: the first
-// branch whose condition holds, else the else branch, or -1 for none.
-func (i *IfNode) active() int {
-	for idx, branch := range i.Branches {
-		if branch.Cond.Eval() {
-			return idx
-		}
-	}
-	if len(i.ElseNode) > 0 {
-		return len(i.Branches)
-	}
-	return -1
-}
-
 // =============================================================================
 // Each Node (list rendering)
 // =============================================================================
@@ -553,7 +529,7 @@ func Slot() *SlotNode {
 // typeName returns the name of v's type, dereferencing pointers.
 func typeName(v any) string {
 	t := reflect.TypeOf(v)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t.Name()
@@ -598,31 +574,31 @@ func (d *DynAttrAttr) isAttr() {}
 // value returns the current attribute value: the string parts and the
 // current store values concatenated.
 func (d *DynAttrAttr) value() string {
-	var value string
+	var sb strings.Builder
 	for _, part := range d.Parts {
 		switch v := part.(type) {
 		case string:
-			value += v
+			sb.WriteString(v)
 		case AnyGetter:
-			value += anyToString(v.GetAny())
+			sb.WriteString(anyToString(v.GetAny()))
 		}
 	}
-	return value
+	return sb.String()
 }
 
 // Attr creates an attribute. Parts can be strings and stores.
 // With only string parts, it's static (no reactive binding).
 // With any store parts, it becomes a dynamic attribute that updates reactively.
 func Attr(name string, parts ...any) NodeAttr {
-	var value string
+	var sb strings.Builder
 	for _, p := range parts {
 		s, ok := p.(string)
 		if !ok {
 			return &DynAttrAttr{Name: name, Parts: parts}
 		}
-		value += s
+		sb.WriteString(s)
 	}
-	return &StaticAttr{Name: name, Value: value}
+	return &StaticAttr{Name: name, Value: sb.String()}
 }
 
 // =============================================================================
@@ -696,20 +672,20 @@ func ftoa(f float64) string {
 	}
 	intPart := int(f)
 	fracPart := f - float64(intPart)
-	result := itoa(intPart)
+	result := []byte(itoa(intPart))
 	if fracPart > 0.0000001 {
-		result += "."
+		result = append(result, '.')
 		for i := 0; i < 6 && fracPart > 0.0000001; i++ {
 			fracPart *= 10
 			digit := int(fracPart)
-			result += string(byte('0' + digit))
+			result = append(result, byte('0'+digit))
 			fracPart -= float64(digit)
 		}
 	}
 	if neg {
-		return "-" + result
+		return "-" + string(result)
 	}
-	return result
+	return string(result)
 }
 
 // escapeHTML escapes HTML special characters, in text and attribute values.

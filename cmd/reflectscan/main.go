@@ -257,8 +257,8 @@ func (s *scanner) walk(t types.Type, encode bool, where string) {
 		s.use("map", at)
 		s.walk(u.Elem(), encode, where)
 	case *types.Struct:
-		for i := range u.NumFields() {
-			if f := u.Field(i); f.Exported() {
+		for f := range u.Fields() {
+			if f.Exported() {
 				s.walk(f.Type(), encode, where)
 			}
 		}
@@ -308,9 +308,8 @@ func isFetchOptions(t types.Type) bool {
 }
 
 func hasMethod(t types.Type, name string) bool {
-	ms := types.NewMethodSet(t)
-	for i := range ms.Len() {
-		if ms.At(i).Obj().Name() == name {
+	for sel := range types.NewMethodSet(t).Methods() {
+		if sel.Obj().Name() == name {
 			return true
 		}
 	}

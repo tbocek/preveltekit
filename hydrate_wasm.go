@@ -232,6 +232,33 @@ func wasmBindDynAttr(da *DynAttrAttr, ctx *renderContext, cleanup *cleanupBag) {
 	}
 }
 
+// bodies returns the children of every branch, followed by the else
+// children if there are any.
+func (i *IfNode) bodies() [][]Node {
+	bodies := make([][]Node, 0, len(i.Branches)+1)
+	for _, branch := range i.Branches {
+		bodies = append(bodies, branch.Children)
+	}
+	if len(i.ElseNode) > 0 {
+		bodies = append(bodies, i.ElseNode)
+	}
+	return bodies
+}
+
+// active returns the index into bodies() of the branch to show: the first
+// branch whose condition holds, else the else branch, or -1 for none.
+func (i *IfNode) active() int {
+	for idx, branch := range i.Branches {
+		if branch.Cond.Eval() {
+			return idx
+		}
+	}
+	if len(i.ElseNode) > 0 {
+		return len(i.Branches)
+	}
+	return -1
+}
+
 // wasmBindIfNode wires an if-block with reactive condition evaluation.
 func wasmBindIfNode(ifNode *IfNode, ctx *renderContext, cleanup *cleanupBag) {
 	markerID := ctx.NextIfMarker()
@@ -398,10 +425,7 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 				return
 			}
 
-			bindCtx := &renderContext{
-				IDCounter: IDCounter{Prefix: ctx.FullID(name)},
-				ScopeAttr: scopeAttr,
-			}
+			bindCtx := ctx.component(ctx.FullID(name), scopeAttr, nil)
 			if om, ok := comp.(HasOnMount); ok {
 				om.OnMount()
 			}
@@ -421,13 +445,8 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 
 		// Render new component to HTML (subsequent changes, not initial)
 		renderTree := comp.Render()
-		renderCtx := &renderContext{
-			IDCounter: IDCounter{Prefix: ctx.FullID(name)},
-		}
-		if _, ok := comp.(HasStyle); ok {
-			renderCtx.ScopeAttr = GetOrCreateScope(name)
-		}
-		html := nodeToHTML(renderTree, renderCtx)
+		scopeAttr := ctx.componentScope(name, comp)
+		html := nodeToHTML(renderTree, ctx.component(ctx.FullID(name), scopeAttr, nil))
 		replaceMarkerContent(markerID, html)
 
 		// Release old bindings (fires OnDestroy), wire new ones
@@ -435,16 +454,10 @@ func wasmBindStoreComponent(v *Store[Component], ctx *renderContext, cleanup *cl
 		currentCleanup = &cleanupBag{}
 
 		// Walk the same tree we just rendered (don't call Render() again)
-		bindCtx := &renderContext{
-			IDCounter: IDCounter{Prefix: ctx.FullID(name)},
-		}
-		if _, ok := comp.(HasStyle); ok {
-			bindCtx.ScopeAttr = GetOrCreateScope(name)
-		}
 		if od, ok := comp.(HasOnDestroy); ok {
 			currentCleanup.AddDestroy(od.OnDestroy)
 		}
-		wasmWalkAndBind(renderTree, bindCtx, currentCleanup)
+		wasmWalkAndBind(renderTree, ctx.component(ctx.FullID(name), scopeAttr, nil), currentCleanup)
 	}
 
 	cleanup.AddDestroy(v.subscribe(func(Component) { updateBlock() }))
@@ -525,6 +538,18 @@ func replaceMarkerContent(markerID string, html string) {
 		frag := tmpl.Get("content")
 		parent.Call("insertBefore", frag, endMarker)
 	}
+}
+
+// subscriber is implemented by Store and List: subscribe without knowing the
+// value type, with a function to unsubscribe again. Hydration uses it to
+// remove the subscriptions of blocks that are re-rendered.
+type subscriber interface {
+	subscribeAny(func()) (unsubscribe func())
+}
+
+// subscribeAny is subscribe without the value (see subscriber).
+func (s *Store[T]) subscribeAny(fn func()) func() {
+	return s.subscribe(func(T) { fn() })
 }
 
 // subscribeToStore subscribes a callback to store changes until cleanup is

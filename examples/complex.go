@@ -21,7 +21,7 @@ type Complex struct {
 
 func (c *Complex) New() p.Component {
 	theme := p.New("light")
-	log := p.NewList[string]("App started")
+	log := p.NewList("App started")
 
 	dashboard := &Dashboard{Theme: theme, Log: log, Stats: p.New(42)}
 	settings := &Settings{Theme: theme, Log: log, FontSize: p.New(14)}

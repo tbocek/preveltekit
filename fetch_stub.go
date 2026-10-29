@@ -28,12 +28,12 @@ func Fetch[T any](url string, opts *FetchOptions) (T, error) {
 	return zero, errWasmOnly
 }
 
-func request[T any](method, url string) (T, error) {
+func request[T any](_, _ string) (T, error) {
 	var zero T
 	return zero, errWasmOnly
 }
 
-func requestBody[T any](method, url string, body any) (T, error) {
+func requestBody[T any](_, _ string, _ any) (T, error) {
 	var zero T
 	return zero, errWasmOnly
 }

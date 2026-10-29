@@ -85,9 +85,10 @@ func blockEnd(css string, start int) int {
 	depth := 1
 	k := start
 	for k < len(css) && depth > 0 {
-		if css[k] == '{' {
+		switch css[k] {
+		case '{':
 			depth++
-		} else if css[k] == '}' {
+		case '}':
 			depth--
 		}
 		k++

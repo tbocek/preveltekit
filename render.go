@@ -60,7 +60,7 @@ func (ctx *renderContext) with(c IDCounter) *renderContext {
 
 // component returns the context for rendering a component's own tree.
 func (ctx *renderContext) component(prefix, scopeAttr string, slot *slotContent) *renderContext {
-	return &renderContext{IDCounter: IDCounter{Prefix: prefix}, ScopeAttr: scopeAttr, slot: slot, styles: ctx.styles}
+	return &renderContext{Prefix: prefix, ScopeAttr: scopeAttr, slot: slot, styles: ctx.styles}
 }
 
 // componentScope returns the CSS scope class of a component ("" if it has no

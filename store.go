@@ -64,13 +64,6 @@ type AnySubscriber interface {
 	OnChangeAny(func())
 }
 
-// subscriber is implemented by Store and List: subscribe without knowing the
-// value type, with a function to unsubscribe again. Hydration uses it to
-// remove the subscriptions of blocks that are re-rendered.
-type subscriber interface {
-	subscribeAny(func()) (unsubscribe func())
-}
-
 // Store is a generic reactive container that calls callbacks on mutation
 type Store[T any] struct {
 	id        string
@@ -105,18 +98,6 @@ func nextStoreID() string {
 	id := "s" + itoa(storeCounter)
 	storeCounter++
 	return id
-}
-
-// resetRegistries resets all global counters and registries to initial state.
-// Called before each SSR iteration so IDs start from s0, matching WASM.
-func resetRegistries() {
-	storeCounter = 0
-	handlerCounter = 0
-	scopeCounter = 0
-	storeRegistry = make(map[string]any)
-	handlerRegistry = make(map[string]func())
-	handlerModifiers = make(map[string][]string)
-	scopeRegistry = make(map[string]string)
 }
 
 // handlerRegistry holds all registered event handlers by ID for hydration lookup
@@ -251,11 +232,6 @@ func (s *Store[T]) subscribe(cb func(T)) (unsubscribe func()) {
 	s.callbacks = append(s.callbacks, cb)
 	i := len(s.callbacks) - 1
 	return func() { s.callbacks[i] = nil }
-}
-
-// subscribeAny is subscribe without the value (see subscriber).
-func (s *Store[T]) subscribeAny(fn func()) func() {
-	return s.subscribe(func(T) { fn() })
 }
 
 // GetAny returns the current value as any.
