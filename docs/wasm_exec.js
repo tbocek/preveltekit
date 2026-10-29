@@ -199,6 +199,10 @@
           },
         },
         gojs: {
+          "runtime.ticks": () => {
+            return BigInt((timeOrigin + performance.now()) * 1e6);
+          },
+          // end
 
 
           "syscall/js.finalizeRef": (v_ref) => {
