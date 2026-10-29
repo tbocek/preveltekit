@@ -1,6 +1,8 @@
 // Command stripwasmexec removes the runtime.* and syscall/js.* functions from
 // wasm_exec.js that the WASM module does not import. Each function in
 // wasm_exec.js starts at its "name": key and ends at the next "// end" line.
+// Afterwards it drops indentation, blank lines and comment lines (except
+// the license header at the top).
 //
 // Usage: stripwasmexec <main.wasm> <wasm_exec.js>
 package main
@@ -47,14 +49,30 @@ func run(wasmFile, jsFile string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", jsFile, err)
 	}
-	if removed == 0 {
-		return nil
-	}
-	if err := os.WriteFile(jsFile, []byte(out), 0o644); err != nil {
+	if err := os.WriteFile(jsFile, []byte(minify(out)), 0o644); err != nil {
 		return err
 	}
 	fmt.Printf("  Stripped %d unused functions (kept %d)\n", removed, kept)
 	return nil
+}
+
+// minify removes indentation, blank lines and comment lines from js, keeping
+// the leading comment block (license header). Line breaks are kept, so
+// automatic semicolon insertion is unaffected. Only safe for code without
+// multi-line strings, like wasm_exec.js.
+func minify(js string) string {
+	var b strings.Builder
+	header := true
+	for _, line := range strings.Split(js, "\n") {
+		line = strings.TrimSpace(line)
+		comment := strings.HasPrefix(line, "//")
+		header = header && comment
+		if line == "" || comment && !header {
+			continue
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String()
 }
 
 // strip removes every function block whose name is not in imports.

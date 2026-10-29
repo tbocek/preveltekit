@@ -304,7 +304,7 @@ p.Button("+1").On("click", c.Increment)
 
 **SSR Output:**
 ```html
-<button id="h0" data-on="click">+1</button>
+<button id="h0">+1</button>
 ```
 
 **WASM Tree Walk:**

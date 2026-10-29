@@ -188,15 +188,6 @@ func htmlNodeToHTML(h *HtmlNode, ctx *renderContext) string {
 		}
 	}
 
-	// Event names
-	if len(h.Events) > 0 {
-		events := make([]string, len(h.Events))
-		for i, ev := range h.Events {
-			events[i] = ev.Event
-		}
-		sb.WriteString(` data-on="` + strings.Join(events, ",") + `"`)
-	}
-
 	for _, das := range dynAttrHTML {
 		sb.WriteString(" " + das)
 	}

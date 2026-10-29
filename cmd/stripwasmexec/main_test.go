@@ -77,3 +77,11 @@ func TestStrip(t *testing.T) {
 		t.Error("missing // end: want error")
 	}
 }
+
+func TestMinify(t *testing.T) {
+	in := "// Copyright\n// License\n\n(() => {\n  // a comment\n  const x = 1;\n\n    foo(\"http://x\"); // inline stays\n})();\n"
+	want := "// Copyright\n// License\n(() => {\nconst x = 1;\nfoo(\"http://x\"); // inline stays\n})();\n"
+	if got := minify(in); got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
