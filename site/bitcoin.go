@@ -1,14 +1,17 @@
 package main
 
-import p "github.com/tbocek/preveltekit/v2"
+import (
+	"time"
+
+	p "github.com/tbocek/preveltekit/v2"
+)
 
 type PriceResponse struct {
-	RAW struct {
-		PRICE      float64 `js:"PRICE"`
-		FROMSYMBOL string  `js:"FROMSYMBOL"`
-		TOSYMBOL   string  `js:"TOSYMBOL"`
-		LASTUPDATE int     `js:"LASTUPDATE"`
-	} `js:"RAW"`
+	Data struct {
+		Amount   string `js:"amount"`
+		Base     string `js:"base"`
+		Currency string `js:"currency"`
+	} `js:"data"`
 }
 
 type BitcoinDemo struct {
@@ -53,18 +56,18 @@ func (b *BitcoinDemo) FetchPrice() {
 	b.Error.Set("")
 
 	go func() {
-		resp, err := p.Get[PriceResponse]("https://min-api.cryptocompare.com/data/generateAvg?fsym=BTC&tsym=USD&e=coinbase")
+		resp, err := p.Get[PriceResponse]("https://api.coinbase.com/v2/prices/BTC-USD/spot")
 		if err != nil {
 			b.Error.Set("Failed to fetch: " + err.Error())
 			b.Loading.Set(false)
 			return
 		}
 
-		raw := resp.RAW
-		b.Price.Set(raw.TOSYMBOL + " " + btcFormatPrice(raw.PRICE))
-		b.Symbol.Set(raw.FROMSYMBOL)
+		data := resp.Data
+		b.Price.Set(data.Currency + " " + data.Amount)
+		b.Symbol.Set(data.Base)
 
-		secs := raw.LASTUPDATE % 86400
+		secs := int(time.Now().Unix() % 86400)
 		h, m, s := secs/3600, (secs%3600)/60, secs%60
 		b.UpdateTime.Set(btcPad2(h) + ":" + btcPad2(m) + ":" + btcPad2(s))
 
@@ -81,21 +84,6 @@ func btcPad2(n int) string {
 		return "0" + p.Itoa(n)
 	}
 	return p.Itoa(n)
-}
-
-func btcFormatPrice(f float64) string {
-	neg := f < 0
-	if neg {
-		f = -f
-	}
-	cents := int(f*100 + 0.5)
-	dollars := cents / 100
-	rem := cents % 100
-	s := p.Itoa(dollars) + "." + btcPad2(rem)
-	if neg {
-		return "-" + s
-	}
-	return s
 }
 
 func (b *BitcoinDemo) Render() p.Node {

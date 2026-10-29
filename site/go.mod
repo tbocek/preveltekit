@@ -1,6 +1,6 @@
 module site
 
-go 1.25
+go 1.27
 
 require github.com/tbocek/preveltekit/v2 v2.1.14
 
